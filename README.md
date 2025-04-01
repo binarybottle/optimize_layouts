@@ -48,7 +48,6 @@ Branch and Bound Optimization:
   - Detailed progress tracking and statistics
   - Comprehensive validation of input configurations
   - Optional constraints for a subset of items
-  - Specialized single-solution optimization when nlayouts=1
 
 ## Setup
 The code expects four input files with the following column names,
@@ -141,6 +140,10 @@ chmod +x slurm_submit_batches.sh
 # In the code below, replace abc123 with your allocation ID
 # (you can find this using the 'projects' command):
 sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
+
+# Update the number of config files in:
+#   slurm_batchmaking.sh: MAX_CONFIG
+#   slurm_submit_batches.sh: TOTAL_CONFIGS
 
 # Submit the job to the scheduler
 sbatch slurm_submit_batches.sh

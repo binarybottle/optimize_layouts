@@ -8,7 +8,7 @@
 #SBATCH --output=output/outputs/layouts_%A_%a.out # Output file with job and array IDs
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file with job and array IDs
 #SBATCH -p RM-shared               # Partition (queue) - use shared to save SUs
-#SBATCH -A <YOUR_ALLOCATION_ID>    # Replace with your allocation ID
+#SBATCH -A med250002p              # Replace with your allocation ID
 
 # NOTE: Set MAX_CONFIG below to the total number of config files!
 

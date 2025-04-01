@@ -2,8 +2,8 @@
 """
 Memory-efficient item-to-position layout optimization using branch and bound search.
 
-This script uses a branch and bound (single- or multi-solution) algorithm 
-to find optimal positions for items and item pairs by jointly considering two scores: 
+This script uses a branch and bound algorithm to find optimal positions 
+for items and item pairs by jointly considering two scores: 
 item/item_pair scores and position/position_pair scores.
 
 See README for more details.
@@ -1646,6 +1646,8 @@ def optimize_layout(config: dict) -> None:
     weights = (item_weight, item_pair_weight)
 
     # Choose optimization strategy based on nlayouts
+    """
+    # Specialized single-solution optimization for nlayouts=1 completes, but has not been fully tested
     if n_layouts == 1:
         print("\nUsing specialized single-solution optimization")
         
@@ -1685,36 +1687,37 @@ def optimize_layout(config: dict) -> None:
                 'unweighted_item_pair_score': score1,
                 'unweighted_item_score': score2
             }}
-        )]
-        
+        )]    
     else:
-        print(f"\nFinding top {n_layouts} solutions using branch and bound:")
-        if items_to_constrain:
-            print(f"  - {len(items_to_constrain)} constrained items: {items_to_constrain}")
-            print(f"  - {len(positions_to_constrain)} constrained positions: {positions_to_constrain}")
+    """
 
-        # Run multi-solution optimization
-        results, processed_perms = branch_and_bound_optimal_nsolutions(
-            arrays=arrays,
-            weights=weights,
-            config=config,
-            n_solutions=n_layouts,
-            norm_item_pair_scores=norm_item_pair_scores,
-            norm_position_pair_scores=norm_position_pair_scores,
-            missing_item_pair_norm_score=missing_item_pair_norm_score,
-            missing_position_pair_norm_score=missing_position_pair_norm_score
-        )
-        
-        # Sort results
-        results = sorted(
-            results,
-            key=lambda x: (
-                x[0],  # total_score
-                x[2]['total']['unweighted_item_score'],
-                x[2]['total']['unweighted_item_pair_score']
-            ),
-            reverse=True
-        )
+    print(f"\nFinding top {n_layouts} solutions using branch and bound:")
+    if items_to_constrain:
+        print(f"  - {len(items_to_constrain)} constrained items: {items_to_constrain}")
+        print(f"  - {len(positions_to_constrain)} constrained positions: {positions_to_constrain}")
+
+    # Run multi-solution optimization
+    results, processed_perms = branch_and_bound_optimal_nsolutions(
+        arrays=arrays,
+        weights=weights,
+        config=config,
+        n_solutions=n_layouts,
+        norm_item_pair_scores=norm_item_pair_scores,
+        norm_position_pair_scores=norm_position_pair_scores,
+        missing_item_pair_norm_score=missing_item_pair_norm_score,
+        missing_position_pair_norm_score=missing_position_pair_norm_score
+    )
+    
+    # Sort results
+    results = sorted(
+        results,
+        key=lambda x: (
+            x[0],  # total_score
+            x[2]['total']['unweighted_item_score'],
+            x[2]['total']['unweighted_item_pair_score']
+        ),
+        reverse=True
+    )
 
     # Print results
     print_top_results(
