@@ -1,6 +1,6 @@
 #!/bin/bash
-# Script to submit batches of keyboard layout optimization jobs with persistence
-# Save the current batch number in a file for resuming later
+# SLURM Submission Manager with Checkpoint
+# This script submits a small chunk of batches and schedules itself to continue
 
 # Total number of configurations
 TOTAL_CONFIGS=65520
@@ -11,54 +11,45 @@ BATCH_SIZE=1000
 # Calculate number of batches needed (ceiling division)
 NUM_BATCHES=$(( (TOTAL_CONFIGS + BATCH_SIZE - 1) / BATCH_SIZE ))
 
-# Maximum number of concurrent batches to submit
-MAX_CONCURRENT_BATCHES=5
+# Number of batches to submit in each manager run (small enough to complete quickly)
+CHUNK_SIZE=5
 
-# File to store progress
+# Create a log directory if it doesn't exist
+mkdir -p submission_logs
+
+# Progress file
 PROGRESS_FILE="batch_submission_progress.txt"
 
-# Check if progress file exists and we're resuming
+# Read the current batch from the progress file
 if [ -f "$PROGRESS_FILE" ]; then
-    batch=$(cat "$PROGRESS_FILE")
-    echo "Resuming from batch $batch"
+    START_BATCH=$(cat "$PROGRESS_FILE")
 else
-    batch=0
-    echo "Starting new submission from batch 0"
+    START_BATCH=0
 fi
 
-echo "Submitting $NUM_BATCHES batches for $TOTAL_CONFIGS configurations"
-echo "Maximum concurrent batches: $MAX_CONCURRENT_BATCHES"
-echo "Current batch: $batch"
+# Log file for this run
+LOG_FILE="submission_logs/batch_submission_$(date +%Y%m%d_%H%M%S)_chunk${START_BATCH}.log"
 
-# Array to store job IDs
-declare -a JOB_IDS
+echo "=== SLURM Submission Manager ===" | tee -a "$LOG_FILE"
+echo "Total configurations: $TOTAL_CONFIGS" | tee -a "$LOG_FILE"
+echo "Total batches: $NUM_BATCHES" | tee -a "$LOG_FILE"
+echo "Starting from batch: $START_BATCH" | tee -a "$LOG_FILE"
+echo "Chunk size: $CHUNK_SIZE" | tee -a "$LOG_FILE"
+echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 
-# Create a log file
-LOG_FILE="batch_submission_log_$(date +%Y%m%d_%H%M%S).txt"
-echo "Detailed log in: $LOG_FILE"
+# Calculate end batch for this chunk
+END_BATCH=$((START_BATCH + CHUNK_SIZE - 1))
+if [ $END_BATCH -ge $NUM_BATCHES ]; then
+    END_BATCH=$((NUM_BATCHES - 1))
+fi
 
-# Function to log messages
-log_message() {
-    local message="$1"
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $message" | tee -a "$LOG_FILE"
-}
+echo "This run will submit batches $START_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
 
-log_message "Starting submission process for batches $batch to $((NUM_BATCHES-1))"
+# Array to store job IDs from this chunk
+declare -a CHUNK_JOB_IDS
 
-while [ $batch -lt $NUM_BATCHES ]; do
-    # Save progress
-    echo $batch > "$PROGRESS_FILE"
-    
-    # Check number of currently running/pending jobs
-    CURRENT_JOBS=$(squeue -u $USER -h | wc -l)
-    
-    # If we're at the concurrent job limit, wait and check again
-    if [ $CURRENT_JOBS -ge $MAX_CONCURRENT_BATCHES ]; then
-        log_message "Current job count: $CURRENT_JOBS - Waiting for jobs to complete before submitting more..."
-        sleep 300  # Wait 5 minutes before checking again
-        continue
-    fi
-    
+# Submit batches for this chunk
+for ((batch=START_BATCH; batch<=END_BATCH; batch++)); do
     # Calculate start and end indices for this batch
     START_IDX=$((batch * BATCH_SIZE + 1))
     END_IDX=$((START_IDX + BATCH_SIZE - 1))
@@ -71,7 +62,7 @@ while [ $batch -lt $NUM_BATCHES ]; do
     # Calculate array size for this batch
     ARRAY_SIZE=$((END_IDX - START_IDX + 1))
     
-    log_message "Submitting batch $((batch+1))/$NUM_BATCHES: configs $START_IDX-$END_IDX"
+    echo "Submitting batch $((batch+1))/$NUM_BATCHES: configs $START_IDX-$END_IDX" | tee -a "$LOG_FILE"
     
     # Submit with appropriate array range for the last batch
     if [ $batch -eq $((NUM_BATCHES-1)) ] && [ $ARRAY_SIZE -lt $BATCH_SIZE ]; then
@@ -85,21 +76,40 @@ while [ $batch -lt $NUM_BATCHES ]; do
     
     # Check if job submission was successful
     if [[ -n $JOB_ID && $JOB_ID =~ ^[0-9]+$ ]]; then
-        log_message "  Submitted job $JOB_ID"
-        JOB_IDS+=($JOB_ID)
-        batch=$((batch+1))
+        echo "  Submitted job $JOB_ID" | tee -a "$LOG_FILE"
+        CHUNK_JOB_IDS+=($JOB_ID)
     else
-        log_message "  Job submission failed, will retry in 60 seconds..."
-        sleep 60
-        continue
+        echo "  Job submission failed for batch $batch" | tee -a "$LOG_FILE"
     fi
     
-    # Optional: add small delay between submissions
-    sleep 5
+    # Add a small delay between submissions
+    sleep 2
 done
 
-log_message "All batches submitted!"
-log_message "Job IDs: ${JOB_IDS[@]}"
+# Update the progress file for the next run
+NEXT_BATCH=$((END_BATCH + 1))
+echo $NEXT_BATCH > "$PROGRESS_FILE"
 
-# Remove progress file once completed
-rm -f "$PROGRESS_FILE"
+# Check if we've completed all batches
+if [ $NEXT_BATCH -ge $NUM_BATCHES ]; then
+    echo "All batches have been submitted. Submission complete!" | tee -a "$LOG_FILE"
+    echo "Final job IDs: ${CHUNK_JOB_IDS[@]}" | tee -a "$LOG_FILE"
+else
+    # Schedule the next chunk with a short delay to avoid overwhelming the scheduler
+    echo "Scheduling next chunk (batches $NEXT_BATCH to $((NEXT_BATCH+CHUNK_SIZE-1)))" | tee -a "$LOG_FILE"
+    
+    # Submit this script as a job that depends on the completion of this chunk's jobs
+    if [ ${#CHUNK_JOB_IDS[@]} -gt 0 ]; then
+        # Use afterany dependency to continue even if some jobs fail
+        DEPENDENCY_LIST=$(IFS=:; echo "afterany:${CHUNK_JOB_IDS[*]}")
+        NEXT_MANAGER=$(sbatch --dependency=$DEPENDENCY_LIST --time=00:10:00 "$0" | awk '{print $4}')
+        echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
+    else
+        # If no jobs were submitted in this chunk, continue anyway with a short delay
+        echo "No jobs were submitted in this chunk. Scheduling next manager immediately." | tee -a "$LOG_FILE"
+        NEXT_MANAGER=$(sbatch --time=00:10:00 "$0" | awk '{print $4}')
+        echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
+    fi
+fi
+
+echo "This submission manager completed at $(date)" | tee -a "$LOG_FILE"

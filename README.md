@@ -145,8 +145,11 @@ sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
 #   slurm_batchmaking.sh: MAX_CONFIG
 #   slurm_submit_batches.sh: TOTAL_CONFIGS
 
-# Submit the job to the scheduler
-sbatch slurm_submit_batches.sh
+# Use screen
+screen -S submission
+
+# Submit as a SLURM job to start the process
+sbatch --time=00:10:00 slurm_submit_batches.sh
 
 # Alternatively, if you want to run just one batch (1001-2000) manually:
 sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
@@ -154,6 +157,12 @@ sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
 
 ### Monitoring jobs
 ```
+# See the current progress
+cat batch_submission_progress.txt
+
+# Check the log files
+ls -la submission_logs/
+
 # Check all your running jobs
 squeue -u $USER
 
