@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "optimize_layouts"
+version = "0.1.0"
+description = "Keyboard layout optimization tool"
+authors = ["Arno Klein"]
+package-mode = false
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+pandas = "^2.2.3"
+pyyaml = "^6.0.2"
+tqdm = "^4.67.1"
+psutil = "^6.1.1"
+matplotlib = "^3.10.0"
+seaborn = "^0.13.2"
+factorial = "^1.0.0"
+numba = "^0.61.0"
+openpyxl = "^3.1.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

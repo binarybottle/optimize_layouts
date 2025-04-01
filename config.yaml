@@ -1,0 +1,42 @@
+# optimize_layouts/config.yaml
+# Configuration file for item-to-position layout optimization.
+
+#-----------------------------------------------------------------------
+# Paths
+#-----------------------------------------------------------------------
+paths:
+  input:
+    item_scores_file:          "input/letter_frequencies_english.csv"
+    item_pair_scores_file:     "input/letter_pair_frequencies_english.csv"
+    position_scores_file:      "input/key_comfort_estimates.csv"
+    position_pair_scores_file: "input/key_pair_comfort_estimates.csv"
+  output:
+    layout_results_folder:     "output/layouts"
+
+#-----------------------------------------------------------------------
+# Optimization Settings
+#-----------------------------------------------------------------------
+optimization:  # etaoinsrhldcumfpgwybvkxjqz in FDSVERAWCQXZ JKLMIU;O,P./
+
+  items_assigned:      "etaoi"               # Items already assigned to positions
+  positions_assigned:  "FJDSV"               # Positions that are already filled 
+
+  items_to_assign:      "nsrhldcumfpgwyb"    # items to arrange in positions
+  positions_to_assign:  "ERAWCQKLMIU;O,P"    # available positions
+
+  items_to_constrain:      ""                # Subset of items_to_assign to arrange within positions_to_constrain
+  positions_to_constrain:  ""                # Subset of positions_to_assign to constrain arrangement of items_to_constrain
+
+  scoring:  
+    item_weight: 0.5                         # Weight for single-item scoring
+    item_pair_weight: 0.5                    # Weight for item_pair scoring
+    missing_item_pair_norm_score: 1.0
+    missing_position_pair_norm_score: 1.0
+
+  nlayouts: 100                              # Number of top layouts to display and save
+
+#-----------------------------------------------------------------------
+# Visualization Settings
+#-----------------------------------------------------------------------
+visualization: 
+  print_keyboard: True
