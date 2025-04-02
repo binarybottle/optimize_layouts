@@ -12,7 +12,7 @@ for items by jointly considering two scoring components:
 item/item_pair scores and position/position_pair scores (see "Layout scoring").
 
 The initial intended use-case is keyboard layout optimization for touch typing
-(see **README_keyboard_application.md**):
+(see **README_keyboards.md**):
   - Items and item-pairs correspond to letters and bigrams.
   - Positions and position-pairs correspond to keys and key-pairs.  
   - Item scores and item-pair scores correspond to frequency of occurrence 
@@ -89,7 +89,7 @@ as well as text strings that represent items/positions to arrange or constrain:
     - ASCII art visualization of the layout
     - Clear marking of constrained positions
 
-## Running parallel processes on an NSF ACCESS cluster
+## Run parallel processes on an NSF ACCESS cluster
 
 ### Set up the code environment on Bridges-2
 ```
@@ -103,7 +103,7 @@ cd keyboard_optimizer
 # Clone the repository if git is available
 git clone https://github.com/binarybottle/optimize_layouts.git
 
-# If git is not available, create the file structure manually
+# Make output directories if they don't exist
 mkdir -p optimize_layouts
 mkdir -p optimize_layouts/input
 mkdir -p optimize_layouts/output/layouts
@@ -116,25 +116,26 @@ mkdir -p optimize_layouts/output/errors
 # Load Python module on Bridges-2
 module load python/3.8.6
 
-# Create a virtual environment
+# Create a virtual environment and make the activate script executable
 python -m venv keyboard_env
 source keyboard_env/bin/activate
+chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
 
 # Install required packages
 pip install pyyaml numpy pandas tqdm numba psutil matplotlib
 ```
 
-### Run the scripts on Bridges-2
+### Set up the scripts on Bridges-2
 ```
 cd ~/keyboard_optimizer/optimize_layouts
 
 # Make the scripts executable
-#chmod +x generate_configs.py
+chmod +x generate_configs.py
 chmod +x slurm_batchmaking.sh
 chmod +x slurm_submit_batches.sh
 
 # Generate configuration files
-#python generate_configs.py
+python generate_configs.py
 
 # Replace <YOUR_ALLOCATION_ID> with your actual allocation ID
 # In the code below, replace abc123 with your allocation ID
@@ -144,9 +145,19 @@ sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
 # Update the number of config files in:
 #   slurm_batchmaking.sh: MAX_CONFIG
 #   slurm_submit_batches.sh: TOTAL_CONFIGS
+```
 
+### Run the scripts on Bridges-2
+```
 # Use screen
 screen -S submission
+
+# Run a single test job
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# Check the output files to see if any error messages are generated
+ls -la output/outputs/
+cat output/outputs/layouts_*.out
 
 # Submit as a SLURM job to start the process
 sbatch --time=00:10:00 slurm_submit_batches.sh
@@ -155,7 +166,7 @@ sbatch --time=00:10:00 slurm_submit_batches.sh
 sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
 ```
 
-### Monitoring jobs
+### Monitor jobs
 ```
 # See the current progress
 cat batch_submission_progress.txt

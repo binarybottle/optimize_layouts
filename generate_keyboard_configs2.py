@@ -8,9 +8,9 @@ This is one step in a process to optimally arrange the 24 most frequent letters
 in the 24 keys of the home block of a keyboard. 
 
 There are two versions of this script:
-  1. generate_configs1.py generates an initial set of sparse layouts as config files.
-     optimize_layout.py generates optimal layouts for a given config file.
-  2. generate_configs2.py generates a new set of config files based on the optimal layouts.
+  - generate_keyboard_configs1.py generates an initial set of sparse keyboard layouts as config files.
+  - optimize_layout.py generates optimal keyboard layouts for a given config file.
+  - generate_keyboard_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
 Here we fill the 14 least comfortable keys:
 - positions_assigned: 10 most comfortable keys
@@ -18,7 +18,7 @@ Here we fill the 14 least comfortable keys:
 - items_assigned: letters assigned in Step 1 to the 10 most comfortable keys
 - items_to_assign: 10 letters assigned to the least comfortable keys + 4 least frequent letters
 
-See **README_keyboard_application.md** for a full description.
+See **README_keyboards.md** for a full description.
 
 See **README.md** for instructions to run batches of config files in parallel.
 

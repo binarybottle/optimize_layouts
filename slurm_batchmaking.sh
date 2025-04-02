@@ -34,8 +34,9 @@ fi
 module purge
 module load python/3.8.6
 
-# Activate virtual environment
-source $HOME/keyboard_optimizer/keyboard_env/bin/activate
+# Use the Python directly from the virtual environment
+export PATH="$HOME/keyboard_optimizer/keyboard_env/bin:$PATH"
+export PYTHONPATH="$HOME/keyboard_optimizer:$PYTHONPATH"
 
 # Set working directory
 cd $HOME/keyboard_optimizer/optimize_layouts

@@ -1,4 +1,4 @@
-# README_keyboard_application
+# README_keyboards
 
 # Optimizing an English keyboard layout
 ===================================================================
@@ -17,15 +17,15 @@ For the following, we:
     3. Optimize the arrangement of remaining characters keys.
 
 ## Overview of Steps
-1. Generate 65,520 configuration files corresponding to arrangements 
-   of the 5 most frequent letters in the 16 most comfortable keys.
-2. Optimally arrange 15 more letters in 20 keys for each configuration.
+1. Generate 720,720 configuration files corresponding to arrangements 
+   of the 6 most frequent letters in the 16 most comfortable keys.
+2. Optimally arrange 12 more letters to fill 18 keys for each configuration.
 3. Generate a new configuration file from each optimal layout,
-   removing letters from the 10 least comfortable keys.
-4. Optimally arrange the 14 least frequent letters in remaining keys.
-5. Select the highest scoring layout from the 65,520 complete layouts.
+   removing letters from the 8 least comfortable keys.
+4. Optimally arrange the 12 least frequent letters in remaining keys.
+5. Select the highest scoring layout from the 720,720 complete layouts.
 
-### Step 1. Generate 65,520 configuration files 
+### Step 1. Generate 720,720 configuration files 
 
   ``python generate_configs1.py``
 
@@ -42,12 +42,12 @@ For the following, we:
   │     │     │     │     ║     │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  #### Assign the next 4 letters to any available top-16 keys
-  We then allow the next 4 letters (t, a, o, i) to be placed in any
+  #### Assign the next 5 letters to any available top-16 keys
+  We then allow the next 5 letters (t, a, o, i, n) to be placed in any
   available key of the 16 most comfortable keys.
-  There are 32,760 permutations (4 letters in any of 15 keys):
-    - 1,365 ways to choose 4 keys from 15 keys
-    - 24 ways to arrange 4 letters in those 4 keys
+  There are 360,360 permutations (5 letters in any of 15 available keys):
+    - 3,003 ways to choose 5 keys from 15 keys
+    - 120 ways to arrange 5 letters in those 5 keys
 
   ╭───────────────────────────────────────────────╮
   │     │  W  │  E  │  R  ║  U  │  I  │  O  │     │
@@ -61,14 +61,14 @@ For the following, we:
 
   ``python optimize_layout.py``
 
-  #### Assign the next 15 letters to the 15 remaining top-20 keys
-  For each of Step 1's 65,520 configuration files, a branch-and-bound 
-  algorithm efficiently probes the 1.3 trillion (15!) possible permutations, 
-  to optimally arrange the next 15 letters for that configuration.
-  This results in 20 filled positions:
+  #### Assign the next 12 letters to the 12 remaining top-18 keys
+  For each of Step 1's 720,720 configuration files, a branch-and-bound 
+  algorithm efficiently probes the 479 million (12!) possible permutations, 
+  to optimally arrange the next 12 letters for that configuration.
+  This results in 18 filled positions:
 
   ╭───────────────────────────────────────────────╮
-  │  Q  │  W  │  E  │  R  ║  U  │  I  │  O  │  P  │
+  │     │  W  │  E  │  R  ║  U  │  I  │  O  │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  A  │  S  │  D  │  F  ║  J  │  K  │  L  │  ;  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -99,8 +99,8 @@ For the following, we:
   Across-all approach (top 100 layouts across all config files):
   ``python generate_configs2.py --top-across-all 100``
 
-  We run optimize_layout.py again on each new configuration file 
-  to optimally arrange the 14 least frequent letters in the 
+  We run optimize_layout.py again on each new unique configuration 
+  file to optimally arrange the 14 least frequent letters in the 
   14 remaining least comfortable keys:
 
   ╭───────────────────────────────────────────────╮
@@ -113,7 +113,7 @@ For the following, we:
 
 ### Step 5. Select the layout with the highest score
 
-  Each of the 65,520 configuration files leads to an optimal layout 
+  Each of the 720,720 configuration files leads to an optimal layout 
   based on its initial constraints. A score is computed for each layout,
   based on the same scoring logic used to evaluate layouts during the
   optimization process. For this final step, we select the layout 
