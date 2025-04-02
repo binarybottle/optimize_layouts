@@ -23,7 +23,7 @@ import itertools
 
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = 'configs'
-nlayouts = 10
+nlayouts = 100
 
 # Items in configurations (18 letters to be assigned to keys)
 items_assigned  = "etaoin"       # 6 most frequent letters (etaoin in English)

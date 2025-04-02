@@ -24,7 +24,7 @@ BATCH_SIZE=1000
 CONFIG_ID=$((BATCH_NUM * BATCH_SIZE + SLURM_ARRAY_TASK_ID + 1))  # +1 to convert from 0-based to 1-based
 
 # Check if the CONFIG_ID is within valid range
-MAX_CONFIG=65520  # Total number of config files
+MAX_CONFIG=720720  # Total number of config files
 if [ $CONFIG_ID -gt $MAX_CONFIG ]; then
     echo "Warning: CONFIG_ID $CONFIG_ID exceeds maximum of $MAX_CONFIG. Exiting."
     exit 0

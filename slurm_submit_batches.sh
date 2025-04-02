@@ -3,7 +3,7 @@
 # This script submits a small chunk of batches and schedules itself to continue
 
 # Total number of configurations
-TOTAL_CONFIGS=65520
+TOTAL_CONFIGS=720720
 
 # SLURM array limit per batch
 BATCH_SIZE=1000

@@ -12,12 +12,6 @@ There are two versions of this script:
   - optimize_layout.py generates optimal keyboard layouts for a given config file.
   - generate_keyboard_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
-Here we fill the 14 least comfortable keys:
-- positions_assigned: 10 most comfortable keys
-- positions_to_assign: 14 least comfortable keys
-- items_assigned: letters assigned in Step 1 to the 10 most comfortable keys
-- items_to_assign: 10 letters assigned to the least comfortable keys + 4 least frequent letters
-
 See **README_keyboards.md** for a full description.
 
 See **README.md** for instructions to run batches of config files in parallel.
@@ -25,10 +19,13 @@ See **README.md** for instructions to run batches of config files in parallel.
 Usage:
 
     Per-config approach (default: 1 layout per config file):
-    ``python generate_configs2.py --layouts-per-config 100``
+    ``python generate_configs2.py --layouts-per-config 10``
 
-    Across-all approach (top 100 layouts across all config files):
-    ``python generate_configs2.py --top-across-all 100``
+    Across-all approach (top 1,000 layouts across all config files):
+    ``python generate_configs2.py --top-across-all 1000``
+
+    Both approaches together:
+    ``python generate_configs2.py --layouts-per-config 10 --top-across-all 1000``
 
 """
 import os
@@ -39,10 +36,13 @@ import glob
 from collections import defaultdict
 import sys
 
-# Configuration
+# Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = 'configs'
-MOST_COMFORTABLE_KEYS = "FDRSEJKULI"  # 10 most comfortable keys
-LEAST_COMFORTABLE_KEYS = "VAWCQXZM;O,P./"  # 14 least comfortable keys
+nlayouts = 100 
+
+# Positions
+MOST_COMFORTABLE_KEYS = "FDRSEVJKULIM"   # 12 most comfortable keys
+LEAST_COMFORTABLE_KEYS = "AWCQXZ;O,P./"  # 12 least comfortable keys
 
 # Base configuration from the original config file
 with open('config.yaml', 'r') as f:
@@ -289,8 +289,7 @@ def create_config_files(configs, output_subdir=""):
             if param not in ['source_config', 'source_rank', 'source_file']:
                 config['optimization'][param] = value
         
-        # Set nlayouts to 100
-        config['optimization']['nlayouts'] = 100
+        config['optimization']['nlayouts'] = nlayouts
         
         # Determine file naming based on approach
         if output_subdir == "per_config":
@@ -325,8 +324,10 @@ if __name__ == "__main__":
                         help='Directory containing existing layouts')
     parser.add_argument('--layouts-per-config', type=int, default=1,
                         help='Number of top layouts to take from each existing config (default: 1)')
-    parser.add_argument('--top-across-all', type=int, default=100,
-                        help='Number of top layouts to take across all existing configs (default: 100)')
+    parser.add_argument('--top-across-all', type=int, default=0,
+                        help='Number of top layouts to take across all existing configs (default: 0)')
+    parser.add_argument('--both-approaches', action='store_true',
+                        help='Run both per-config and across-all approaches')
     args = parser.parse_args()
 
     print("Step 2: Generating keyboard layout configurations for least comfortable keys...")
@@ -351,7 +352,7 @@ if __name__ == "__main__":
     os.makedirs(f"{OUTPUT_DIR}/across_all", exist_ok=True)
     
     # If using both approaches or just the per-config approach
-    if args.both_approaches or not args.top_across_all:
+    if args.both_approaches or (args.layouts_per_config > 0 and args.top_across_all == 0):
         # Create config files for per-config approach
         print("\nCreating configuration files for per-config approach...")
         create_config_files(configs_per_config, output_subdir="per_config")

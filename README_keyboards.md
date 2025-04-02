@@ -80,35 +80,37 @@ For the following, we:
   ``python generate_configs2.py``
 
   Generate a new configuration file from each optimal layout
-  from Step 2, removing letters from the 10 least comfortable keys.
+  from Step 2, removing letters from the 8 least comfortable keys.
   This will promote exploration of a wide range of permutations 
-  for the remaining 14 of the 24 keys in the next step.
+  for the remaining 12 of the 24 keys in the next step.
 
   ╭───────────────────────────────────────────────╮
   │     │     │  E  │  R  ║  U  │  I  │     │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │     │  S  │  D  │  F  ║  J  │  K  │  L  │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │     │     ║     │     │     │     │
+  │     │     │     │  V  ║  M  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ### Step 4. Optimally arrange the least frequent letters
 
   Per-config approach (default: 1 layout per config file):
   ``python generate_configs2.py --layouts-per-config 100``
-  Across-all approach (top 100 layouts across all config files):
-  ``python generate_configs2.py --top-across-all 100``
+  Across-all approach (top 1,000 layouts across all config files):
+  ``python generate_configs2.py --top-across-all 1000``
+  Both approaches together:
+  ``python generate_configs2.py --layouts-per-config 100 --top-across-all 1000``
 
   We run optimize_layout.py again on each new unique configuration 
-  file to optimally arrange the 14 least frequent letters in the 
-  14 remaining least comfortable keys:
+  file to optimally arrange the 12 least frequent letters in the 
+  12 remaining least comfortable keys:
 
   ╭───────────────────────────────────────────────╮
   │  Q  │  W  │     │     ║     │     │  O  │  P  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  A  │     │     │     ║     │     │     │  ;  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  Z  │  X  │  C  │  V  ║  M  │  ,  │  .  │  /  │
+  │  Z  │  X  │  C  │     ║     │  ,  │  .  │  /  │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ### Step 5. Select the layout with the highest score
