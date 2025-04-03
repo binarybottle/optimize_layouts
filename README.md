@@ -1,45 +1,105 @@
 # README
 Optimize layouts of items and item-pairs. 
 ===================================================================
-
 https://github.com/binarybottle/optimize_layouts.git
+Author: Arno Klein (arnoklein.info)
+License: MIT License (see LICENSE)
 
-Author: Arno Klein (binarybottle.com)
+## Usage
+
+  ```bash
+  python optimize_layout.py
+  python analyze_results.py --top 5 --config config.yaml
+  ```
+For running parallel processes, 
+see **Running parallel processes** below.
 
 ## Context
-This code uses a branch-and-bound algorithm to find optimal positions 
-for items by jointly considering two scoring components: 
-item/item_pair scores and position/position_pair scores (see "Layout scoring").
+This code optimizes a layout, an arrangement of items,
+and takes into account scores for individual items, 
+item-pairs (a,b and b,a), positions, and position-pairs.
+To efficiently prune vast combinatorial layouts, 
+it uses a branch-and-bound algorithm.
 
-The initial intended use-case is keyboard layout optimization for touch typing
-(see **README_keyboards.md**):
+The initial intended use-case is keyboard layout optimization 
+for touch typing (see **keyboards/README_keyboards.md**):
   - Items and item-pairs correspond to letters and bigrams.
   - Positions and position-pairs correspond to keys and key-pairs.  
-  - Item scores and item-pair scores correspond to frequency of occurrence 
+  - Item scores and item-pair scores correspond to frequency 
     of letters and frequency of bigrams in a given language.
-  - Position scores and position-pair scores correspond to a measure of comfort  
-    when typing single keys or pairs of keys (for any language).
+  - Position scores and position-pair scores correspond to a measure 
+    of comfort when typing single keys or pairs of keys (any language).
+
+## Inputs
+The input files are constructed as in the example below.
+The code will accept any set of letters (and special characters) 
+to represent items, item pairs, positions, and position pairs, 
+so long as item pair characters are composed of two item characters 
+and position pair characters are composed of two position characters.
+
+  - item_scores_file:           
+    ```
+    item, score
+    a, 0.1
+    b, 0.5
+    c, 0.2       
+    ```
+  - item_pair_scores_file:      
+    ```
+    item_pair, score
+    ab, 0.1
+    ba, 0.3
+    ac, 0.2       
+    ca, 0.1       
+    bc, 0.4       
+    cb, 0.2       
+    ```
+  - position_scores_file:       
+    ```
+    position, score
+    X, 0.4
+    Y, 0.3
+    Z, 0.1       
+    ```
+  - position_pair_scores_file:  
+    ```
+    position_pair, score
+    XY, 0.2
+    YX, 0.3
+    XZ, 0.2
+    ZX, 0.5
+    YZ, 0.4
+    ZY, 0.5
+    ```
+
+A configuration file (config.yaml) specifies input filenames,
+as well as text strings for the following variables:
+  - Required:
+    - items_to_assign: items to arrange in positions_to_assign
+    - positions_to_assign: available positions
+  - Optional:
+    - items_assigned: items already assigned to positions
+    - positions_assigned: positions that are already filled 
+    - items_to_constrain: subset of items_to_assign 
+      to arrange within positions_to_constrain
+    - positions_to_constrain: subset of positions_to_assign 
+      to constrain items_to_constrain
 
 ## Layout scoring
 Layouts are scored based on item and item_pair scores 
-and corresponding position and position_pair scores,
-where below, I is the number of items, and P is the number of item_pairs:
+and corresponding position and position_pair scores, 
+where direction (sequence of a given pair) matters.
+Below, I is the number of items, P is the number of item_pairs:
 
-    item_component = sum_i_I(item_score_i * position_score_i) / I
+    item_component = sum[i,I](item_score_i * position_score_i) / I
     
-    item_pair_component = sum_j_P(
+    item_pair_component = sum[j,P](
         item_pair_score_j_sequence1 * position_pair_score_j_sequence1 +
         item_pair_score_j_sequence2 * position_pair_score_j_sequence2) / P
  
     score = item_weight * item_component + item_pair_weight * item_pair_component
 
-Scoring System:
-  - Calculates separate item and item-pair scores
-  - Distribution detection and normalization of all scores to 0-1 range
-  - Considers both directions for each item-pair
-  - Provides detailed scoring breakdowns
-
-Branch and Bound Optimization:
+## Branch-and-bound optimization
   - Calculates exact scores for placed letters
   - Uses provable upper bounds for unplaced letters
   - Prunes branches that cannot exceed best known solution
@@ -48,30 +108,6 @@ Branch and Bound Optimization:
   - Detailed progress tracking and statistics
   - Comprehensive validation of input configurations
   - Optional constraints for a subset of items
-
-## Setup
-The code expects four input files with the following column names,
-where the 1st column is a letter or letter-pair, and the 2nd column is a number:
-  - item_scores_file:           item, score       
-  - item_pair_scores_file:      item_pair, score
-  - position_scores_file:       position, score
-  - position_pair_scores_file:  position_pair, score
-
-The code will accept any set of letters (and special characters) 
-to represent items, item pairs, positions, and position pairs, 
-so long as item pair characters are composed of two item characters 
-and position pair characters are composed of two position characters.
-
-A configuration file (config.yaml) specifies these filenames,
-as well as text strings that represent items/positions to arrange or constrain:
-  - Required:
-    - items_to_assign: items to arrange in positions_to_assign
-    - positions_to_assign: available positions
-  - Optional:
-    - items_assigned: items already assigned to positions
-    - positions_assigned: positions that are already filled 
-    - items_to_constrain: subset of items_to_assign to arrange within positions_to_constrain
-    - positions_to_constrain: subset of positions_to_assign to constrain items_to_constrain
 
 ## Output
   - Top-scoring layouts:
@@ -82,125 +118,130 @@ as well as text strings that represent items/positions to arrange or constrain:
     - Search space statistics
     - Pruning statistics
     - Complete scoring breakdown
-  - Progress updates during execution:
-    - Permutations processed per second
-    - Estimated time remaining
   - Optional visual mapping of layouts as a partial keyboard:
     - ASCII art visualization of the layout
     - Clear marking of constrained positions
 
-## Run parallel processes on an NSF ACCESS cluster
+## Running parallel processes on SLURM
+The examples below will use Pittsburgh Super Computing Bridges-2 resources.
+NSF ACCESS granted access for a keyboard layout optimization study 
+(see **README_keyboards**). 
 
-### Set up the code environment on Bridges-2
-```
-# Log in to Bridges-2
-ssh username@bridges2.psc.edu
+  ### Connect and set up the code environment
+    ```bash
+    # Log in
+    ssh username@bridges2.psc.edu
 
-# Create a directory for the project
-mkdir -p keyboard_optimizer
-cd keyboard_optimizer
+    # Create a directory for the project
+    mkdir -p keyboard_optimizer
+    cd keyboard_optimizer
 
-# Clone the repository if git is available
-git clone https://github.com/binarybottle/optimize_layouts.git
+    # Clone the repository
+    git clone https://github.com/binarybottle/optimize_layouts.git
+    cd optimize_layouts
 
-# Make output directories if they don't exist
-mkdir -p optimize_layouts
-mkdir -p optimize_layouts/input
-mkdir -p optimize_layouts/output/layouts
-mkdir -p optimize_layouts/output/outputs
-mkdir -p optimize_layouts/output/errors
-```
+    # Make the scripts executable
+    chmod +x generate_configs.py
+    chmod +x slurm_batchmaking.sh
+    chmod +x slurm_submit_batches.sh
 
-### Install required Python packages
-```
-# Load Python module on Bridges-2
-module load python/3.8.6
+    # Make output directories if they don't exist
+    mkdir -p output
+    mkdir -p output/layouts
+    mkdir -p output/outputs
+    mkdir -p output/errors
 
-# Create a virtual environment and make the activate script executable
-python -m venv keyboard_env
-source keyboard_env/bin/activate
-chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
+    # Load Python module
+    module load python/3.8.6
 
-# Install required packages
-pip install pyyaml numpy pandas tqdm numba psutil matplotlib
-```
+    # Create a virtual environment and make the activate script executable
+    python -m venv keyboard_env
+    source keyboard_env/bin/activate
+    chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
 
-### Set up the scripts on Bridges-2
-```
-cd ~/keyboard_optimizer/optimize_layouts
+    # Install required packages
+    pip install pyyaml numpy pandas tqdm numba psutil matplotlib
+    ```
 
-# Make the scripts executable
-chmod +x generate_configs.py
-chmod +x slurm_batchmaking.sh
-chmod +x slurm_submit_batches.sh
+  ### Generate config files and prepare to submit jobs
+    ```bash
+    # You can generate configuration files by creating your own
+    # generate_configs.py script, following the example in 
+    # generate_keyboard_configs1.py:
+    python generate_configs.py
 
-# Generate configuration files
-python generate_configs.py
+    # Replace <YOUR_ALLOCATION_ID> with your actual allocation ID
+    # In the code below, replace abc123 with your allocation ID
+    # (you can find this using the 'projects' command):
+    sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
 
-# Replace <YOUR_ALLOCATION_ID> with your actual allocation ID
-# In the code below, replace abc123 with your allocation ID
-# (you can find this using the 'projects' command):
-sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
+    # Make any other changes needed in the slurm scripts, 
+    # and don't forget to update the number of config files:
+    #   slurm_batchmaking.sh: MAX_CONFIG
+    #   slurm_submit_batches.sh: TOTAL_CONFIGS
+    ```
 
-# Update the number of config files in:
-#   slurm_batchmaking.sh: MAX_CONFIG
-#   slurm_submit_batches.sh: TOTAL_CONFIGS
-```
+  ### Run scripts in ```screen```
+    ```bash
+    # Use screen
+    screen -S submission
 
-### Run the scripts on Bridges-2
-```
-# Use screen
-screen -S submission
+    # Run a single test job
+    sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+    # Check the output files to see if any error messages are generated
+    ls -la output/outputs/
+    cat output/outputs/layouts_*.out
 
-# Run a single test job
-sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+    # Run just one batch (1001-2000) manually:
+    sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
 
-# Check the output files to see if any error messages are generated
-ls -la output/outputs/
-cat output/outputs/layouts_*.out
+    # Run all batches as a slurm job
+    sbatch --time=00:10:00 slurm_submit_batches.sh
+    ```
 
-# Submit as a SLURM job to start the process
-sbatch --time=00:10:00 slurm_submit_batches.sh
+  ### Monitor jobs
+    ```bash
+    # See the current progress
+    cat batch_submission_progress.txt
 
-# Alternatively, if you want to run just one batch (1001-2000) manually:
-sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
-```
+    # Check the log files
+    ls -la submission_logs/
 
-### Monitor jobs
-```
-# See the current progress
-cat batch_submission_progress.txt
+    # Check all your running jobs
+    squeue -u $USER
 
-# Check the log files
-ls -la submission_logs/
+    # Check a specific job array status
+    squeue -j <job_array_id>
 
-# Check all your running jobs
-squeue -u $USER
+    # See how many jobs are running vs. pending
+    squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 
-# Check a specific job array status
-squeue -j <job_array_id>
+    # Check if there are any failed jobs
+    ls -la output/layouts/config_*/job_failed.txt | wc -l
+    # For very large directories:
+    for i in {1..10}; do 
+      find output/layouts/config_${i}* -name "job_failed.txt" | wc -l
+    done | awk '{sum+=$1} END {print sum}'
 
-# See how many jobs are running vs. pending
-squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
+    # View detailed information about a job
+    scontrol show job <job_id>
 
-# View detailed information about a job
-scontrol show job <job_id>
-```
+    # Check the number of completed jobs
+    ls -la output/layouts/config_*/job_completed.txt | wc -l
+    # For very large directories:
+    for i in {1..10}; do 
+      find output/layouts/config_${i}* -name "job_completed.txt" | wc -l
+    done | awk '{sum+=$1} END {print sum}'
 
-### Cancel jobs
-```
-# Cancel a specific job ID
-scancel 29556406_1
+    # Check which specific jobs have completed
+    ls -la output/layouts/config_*/job_completed.txt | head -10
+    ```
 
-# Cancel all your jobs at once
-scancel -u $USER
-```
+  ### Cancel jobs
+    ```bash
+    # Cancel a specific job ID, such as:
+    scancel 29556406_1
 
-### Analyze the results
-```
-# Check if all jobs are done
-ls -l output/layouts/config_*/job_completed.txt | wc -l
-
-# Run the analysis
-python analyze_results.py --top 10
-```
+    # Cancel all your jobs at once
+    scancel -u $USER
+    ```

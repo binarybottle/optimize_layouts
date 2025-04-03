@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """
-Analyze the results of the keyboard layout optimization runs.
-Includes visual display of top layouts.
+Analyze the results of the layout optimization runs.
+Includes visual display of top layouts, if specified.
 
->> python analyze_results.py --top 5
+Usage:
+>> python analyze_results.py --top 5 --config config.yaml
 """
 import os
 import sys
@@ -12,18 +13,17 @@ import glob
 import matplotlib.pyplot as plt
 import csv
 import re
+import argparse
+import yaml
 
 # Import the original visualization functions
 sys.path.append('.')  # Ensure current directory is in path
 try:
-    from optimize_layout import print_top_results, visualize_keyboard_layout, load_config
+    from optimize_layout import visualize_keyboard_layout, load_config
     visualization_available = True
 except ImportError:
     print("Warning: Could not import functions from optimize_layout.py")
     visualization_available = False
-
-# Directory containing all layout results
-RESULTS_DIR = 'output/layouts'
 
 def parse_result_csv(filepath):
     """Parse a layout results CSV file and extract key metrics."""
@@ -114,8 +114,8 @@ def parse_result_csv(filepath):
                 file_id = os.path.basename(filepath)
                 
                 # Get assigned items/positions from the config_info if available
-                assigned_items = config_info.get('items_assigned', '')
-                assigned_positions = config_info.get('positions_assigned', '')
+                assigned_items = config_info.get('Assigned items', '')
+                assigned_positions = config_info.get('Assigned positions', '')
                 
                 result = {
                     'items': items,
@@ -151,13 +151,13 @@ def parse_result_csv(filepath):
         print(f"Error parsing {filepath}: {e}")
         return None
 
-def load_all_results():
+def load_all_results(results_dir):
     """Load all result files and return a dataframe."""
     all_results = []
     processed_files = set()  # Track processed files to avoid duplicates
     
     # Use a single pattern that makes sense for your directory structure
-    pattern = f"{RESULTS_DIR}/**/layout_results_*.csv"
+    pattern = f"{results_dir}/**/layout_results_*.csv"
     
     # Find all CSV result files
     all_files = glob.glob(pattern, recursive=True)
@@ -180,29 +180,47 @@ def load_all_results():
     print(f"Successfully parsed {len(processed_files)} result files")
     return pd.DataFrame(all_results) if all_results else pd.DataFrame()
 
-def create_visualization_config(row):
-    """Create a config dictionary for visualization based on a result row."""
-    # Get the assigned positions from the row
-    config = {
-        'optimization': {
-            'items_to_assign': row['items'],
-            'positions_to_assign': row['positions'].upper(),
-            'items_to_constrain': row.get('Items to constrain', ''),
-            'positions_to_constrain': row.get('Constraint positions', ''),
-            'items_assigned': row.get('assigned_items', ''),
-            'positions_assigned': row.get('assigned_positions', ''),
-            'scoring': {
-                'item_weight': float(row.get('Item weight', 0.5)),
-                'item_pair_weight': float(row.get('Item-pair weight', 0.5)),
-                'missing_item_pair_norm_score': 1.0,
-                'missing_position_pair_norm_score': 1.0
+def create_visualization_config(row, base_config=None):
+    """Create a config dictionary for visualization based on a result row and base config."""
+    # Start with the base config if available
+    if base_config:
+        config = base_config.copy()
+    else:
+        # Create a minimal config for visualization
+        config = {
+            'optimization': {
+                'items_to_assign': row['items'],
+                'positions_to_assign': row['positions'].upper(),
+                'items_to_constrain': row.get('Items to constrain', ''),
+                'positions_to_constrain': row.get('Constraint positions', ''),
+                'items_assigned': row.get('items_assigned', ''),
+                'positions_assigned': row.get('positions_assigned', ''),
+                'scoring': {
+                    'item_weight': float(row.get('Item weight', 0.5)),
+                    'item_pair_weight': float(row.get('Item-pair weight', 0.5)),
+                    'missing_item_pair_norm_score': 1.0,
+                    'missing_position_pair_norm_score': 1.0
+                },
+                'nlayouts': 10
             },
-            'nlayouts': 10
-        },
-        'visualization': {
-            'print_keyboard': True
+            'visualization': {
+                'print_keyboard': True
+            }
         }
-    }
+    
+    # Ensure the minimum required fields are set for visualization
+    if 'optimization' not in config:
+        config['optimization'] = {}
+    
+    # Override with result-specific data
+    config['optimization']['items_to_assign'] = row['items']
+    config['optimization']['positions_to_assign'] = row['positions'].upper()
+    
+    # Use row values if present, otherwise keep what's in the base config
+    if 'items_assigned' in row and row['items_assigned']:
+        config['optimization']['items_assigned'] = row['items_assigned']
+    if 'positions_assigned' in row and row['positions_assigned']:
+        config['optimization']['positions_assigned'] = row['positions_assigned']
     
     return config
 
@@ -218,7 +236,6 @@ def create_visualization_mapping(row):
             mapping[letter] = positions[i]
     
     # Include any assigned items if they're present in the data
-    # (not depending on filename pattern)
     if 'items_assigned' in row and 'positions_assigned' in row:
         items_assigned = row['items_assigned']
         positions_assigned = row['positions_assigned']
@@ -229,7 +246,7 @@ def create_visualization_mapping(row):
     
     return mapping
 
-def analyze_results(df, display_top=3):
+def analyze_results(df, display_top=3, base_config=None):
     """Analyze results and generate insights."""
     if df.empty:
         print("No results to analyze!")
@@ -270,8 +287,8 @@ def analyze_results(df, display_top=3):
     print(f"Source file: {best_layout.get('file_id', 'unknown')}")
     
     # Show the assigned positions from the filename
-    if best_layout.get('assigned_items') and best_layout.get('assigned_positions'):
-        print(f"Pre-assigned: {best_layout['assigned_items']} in positions {best_layout['assigned_positions']}")
+    if best_layout.get('items_assigned') and best_layout.get('positions_assigned'):
+        print(f"Pre-assigned: {best_layout['items_assigned']} in positions {best_layout['positions_assigned']}")
     
     # Try to identify the letters in better format
     try:
@@ -297,7 +314,7 @@ def analyze_results(df, display_top=3):
             print(f"Config ID: {row['config_id']}")
             
             # Create a custom config for this specific layout
-            config = create_visualization_config(row)
+            config = create_visualization_config(row, base_config)
             
             # Create the mapping
             mapping = create_visualization_mapping(row)
@@ -306,8 +323,8 @@ def analyze_results(df, display_top=3):
             print(f"File: {row['file_id']}")
             print(f"Items to assign: {row['items']}")
             print(f"Positions to assign: {row['positions'].upper()}")
-            if row.get('assigned_items'):
-                print(f"Pre-assigned: {row['assigned_items']} in positions {row['assigned_positions']}")
+            if row.get('items_assigned'):
+                print(f"Pre-assigned: {row['items_assigned']} in positions {row['positions_assigned']}")
             
             # Use the visualization function for this specific layout
             try:
@@ -367,14 +384,35 @@ def analyze_results(df, display_top=3):
         print(f"Error generating visualizations: {e}")
 
 if __name__ == "__main__":
-    import argparse
-    
     # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Analyze keyboard layout optimization results.')
+    parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
     parser.add_argument('--top', type=int, default=3, 
                         help='Number of top layouts to display (default: 3)')
+    parser.add_argument('--config', type=str, default='config.yaml',
+                        help='Path to configuration file (default: config.yaml)')
+    parser.add_argument('--results-dir', type=str, default=None,
+                        help='Directory containing result files (default: from config)')
     args = parser.parse_args()
     
-    print("Loading and analyzing keyboard optimization results...")
-    results_df = load_all_results()
-    analyze_results(results_df, display_top=args.top)
+    # Load the configuration file
+    try:
+        base_config = load_config(args.config)
+        print(f"Loaded configuration from {args.config}")
+        
+        # Get results directory from config if not specified
+        if args.results_dir is None:
+            results_dir = base_config['paths']['output']['layout_results_folder']
+        else:
+            results_dir = args.results_dir
+            
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        print("Using default settings")
+        base_config = None
+        results_dir = 'output/layouts' if args.results_dir is None else args.results_dir
+    
+    print(f"Using results directory: {results_dir}")
+    print("Loading and analyzing optimization results...")
+    
+    results_df = load_all_results(results_dir)
+    analyze_results(results_df, display_top=args.top, base_config=base_config)

@@ -19,13 +19,13 @@ See **README.md** for instructions to run batches of config files in parallel.
 Usage:
 
     Per-config approach (default: 1 layout per config file):
-    ``python generate_configs2.py --layouts-per-config 10``
+    ``python generate_keyboard_configs2.py --layouts-per-config 10``
 
     Across-all approach (top 1,000 layouts across all config files):
-    ``python generate_configs2.py --top-across-all 1000``
+    ``python generate_keyboard_configs2.py --top-across-all 1000``
 
     Both approaches together:
-    ``python generate_configs2.py --layouts-per-config 10 --top-across-all 1000``
+    ``python generate_keyboard_configs2.py --layouts-per-config 10 --top-across-all 1000``
 
 """
 import os
@@ -37,7 +37,8 @@ from collections import defaultdict
 import sys
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = 'configs'
+OUTPUT_DIR = '../output/configs'
+CONFIG_FILE = '../config.yaml'
 nlayouts = 100 
 
 # Positions
@@ -45,7 +46,7 @@ MOST_COMFORTABLE_KEYS = "FDRSEVJKULIM"   # 12 most comfortable keys
 LEAST_COMFORTABLE_KEYS = "AWCQXZ;O,P./"  # 12 least comfortable keys
 
 # Base configuration from the original config file
-with open('config.yaml', 'r') as f:
+with open(CONFIG_FILE, 'r') as f:
     base_config = yaml.safe_load(f)
 
 def parse_layout_results(results_path, top_n=1):

@@ -8,7 +8,7 @@ item/item_pair scores and position/position_pair scores.
 
 See README for more details.
 
-Usage: python optimize_layout.py
+>> python optimize_layout.py
 """
 import yaml
 import numpy as np
@@ -445,9 +445,9 @@ def save_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict[str, dic
                 arrangement,
                 positions,    
                 rank,
-                f"{score:.6f}",
-                f"{unweighted_item_score:.6f}",
-                f"{unweighted_item_pair_score:.6f}"
+                f"{score:.12f}",
+                f"{unweighted_item_score:.12f}",
+                f"{unweighted_item_pair_score:.12f}"
             ])
     
     print(f"\nResults saved to: {output_path}")
@@ -639,7 +639,7 @@ def print_top_results(results: List[Tuple[float, Dict[str, str], Dict[str, dict]
         print(f"\nTop-scoring layout:")
 
     for i, (score, mapping, detailed_scores) in enumerate(results[:n], 1):
-        print(f"\n#{i}: Score: {score:.6f}")
+        print(f"\n#{i}: Score: {score:.12f}")
 
         if print_keyboard:
             visualize_keyboard_layout(
@@ -1148,8 +1148,8 @@ def branch_and_bound_optimal_solution(
             
             if debug_print:
                 print(f"\nComplete solution found:")
-                print(f"  Score: {score:.6f}")
-                print(f"  Current best: {best_score:.6f}")
+                print(f"  Score: {score:.12f}")
+                print(f"  Current best: {best_score:.12f}")
                 print(f"  Final mapping: {[positions_to_assign[p] for p in mapping]}")
 
             # Update if better score found
@@ -1203,8 +1203,8 @@ def branch_and_bound_optimal_solution(
             margin = bound - (best_score - np.abs(best_score) * np.finfo(np.float32).eps)
             
             if debug_print and depth < 2:
-                print(f"    Bound: {bound:.6f}")
-                print(f"    Margin vs best_score ({best_score:.6f}): {margin:.6f}")
+                print(f"    Bound: {bound:.12f}")
+                print(f"    Margin vs best_score ({best_score:.12f}): {margin:.12f}")
                 print(f"    Decision: {'Explore' if margin > 0 else 'Prune'}")
                 
             if margin > 0:
@@ -1561,9 +1561,9 @@ def branch_and_bound_optimal_nsolutions(
     #if pruning_stats['margin']:  # Only if we have margins to report
     #    margins = np.array(pruning_stats['margin'])
     #    print("Pruning margins:")
-    #    print(f"  Min: {np.min(margins):.6f}")
-    #    print(f"  Max: {np.max(margins):.6f}")
-    #    print(f"  Mean: {np.mean(margins):.6f}")
+    #    print(f"  Min: {np.min(margins):.12f}")
+    #    print(f"  Max: {np.max(margins):.12f}")
+    #    print(f"  Mean: {np.mean(margins):.12f}")
 
     return return_solutions, processed_perms
 

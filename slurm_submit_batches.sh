@@ -1,18 +1,16 @@
 #!/bin/bash
-# SLURM Submission Manager with Checkpoint
+# SLURM Submission manager with checkpoint
 # This script submits a small chunk of batches and schedules itself to continue
 
-# Total number of configurations
-TOTAL_CONFIGS=720720
-
-# SLURM array limit per batch
-BATCH_SIZE=1000
+CONFIGURATION
+===================================================================
+TOTAL_CONFIGS=720720  # Total number of configurations
+BATCH_SIZE=1000       # SLURM array limit per batch
+CHUNK_SIZE=5          # Number of batches to submit in each manager run
+===================================================================
 
 # Calculate number of batches needed (ceiling division)
 NUM_BATCHES=$(( (TOTAL_CONFIGS + BATCH_SIZE - 1) / BATCH_SIZE ))
-
-# Number of batches to submit in each manager run (small enough to complete quickly)
-CHUNK_SIZE=5
 
 # Create a log directory if it doesn't exist
 mkdir -p submission_logs

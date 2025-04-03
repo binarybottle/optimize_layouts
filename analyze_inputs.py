@@ -1,111 +1,98 @@
+# optimize_layouts/analyze_inputs.py
+"""
+Analyze and plot item/item_pair frequencies and scores 
+and position/position_pair scores.
+
+Usage:
+>> python plots.py --config path/to/config.yaml
+
+"""
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+import sys
+import os
 
-# Create output directory
-PLOT_DIR = Path('output/plots')
-PLOT_DIR.mkdir(parents=True, exist_ok=True)
-print(f"Created/verified plot directory at: {PLOT_DIR.absolute()}")
+# Add parent directory to path to ensure imports work correctly
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import the exact normalization function from optimize_layout.py for consistency
-def detect_and_normalize_distribution(scores: np.ndarray, name: str = '') -> np.ndarray:
-    """
-    Automatically detect distribution type and apply appropriate normalization.
-    Returns scores normalized to [0,1] range.
-    
-    This is the exact same function used in optimize_layout.py
-    """
-    # Handle empty or constant arrays
-    if len(scores) == 0 or np.all(scores == scores[0]):
-        return np.zeros_like(scores)
+# Import configuration loading function from optimize_layout
+try:
+    from optimize_layout import load_config, detect_and_normalize_distribution
+except ImportError:
+    print("Error: Could not import from optimize_layout. Make sure the file exists and is accessible.")
+    print("Current directory:", os.getcwd())
+    print("Python path:", sys.path)
+    sys.exit(1)
 
-    # Get basic statistics
-    non_zeros = scores[scores != 0]
-    if len(non_zeros) == 0:
-        return np.zeros_like(scores)
-        
-    min_nonzero = np.min(non_zeros)
-    max_val = np.max(scores)
-    mean = np.mean(non_zeros)
-    median = np.median(non_zeros)
-    skew = np.mean(((non_zeros - mean) / np.std(non_zeros)) ** 3)
+def setup_paths(config):
+    """Set up all paths based on configuration."""
+    # Extract input paths from config
+    input_paths = {
+        'item_scores': config['paths']['input']['item_scores_file'],
+        'item_pair_scores': config['paths']['input']['item_pair_scores_file'],
+        'position_scores': config['paths']['input']['position_scores_file'],
+        'position_pair_scores': config['paths']['input']['position_pair_scores_file']
+    }
     
-    # Calculate ratio between consecutive sorted values
-    sorted_nonzero = np.sort(non_zeros)
-    ratios = sorted_nonzero[1:] / sorted_nonzero[:-1]
+    # Create output plot directory (next to layout results directory)
+    base_output_dir = os.path.dirname(config['paths']['output']['layout_results_folder'])
+    plot_dir = os.path.join(base_output_dir, 'plots')
+    os.makedirs(plot_dir, exist_ok=True)
     
-    # Detect distribution type
-    if len(scores[scores == 0]) / len(scores) > 0.3:
-        # Sparse distribution with many zeros
-        print(f"{name}: Sparse distribution detected")
-        #adjusted_scores = np.where(scores > 0, scores, min_nonzero / 10)
-        norm_scores = np.sqrt(scores)  #np.log10(adjusted_scores)
-        return (norm_scores - np.min(norm_scores)) / (np.max(norm_scores) - np.min(norm_scores))
+    print(f"Using input files from paths specified in config:")
+    for name, path in input_paths.items():
+        print(f"  - {name}: {path}")
+    print(f"Created/verified plot directory: {plot_dir}")
     
-    elif skew > 2 or np.median(ratios) > 1.5:
-        # Heavy-tailed/exponential/zipfian distribution
-        print(f"{name}: Heavy-tailed distribution detected")
-        norm_scores = np.sqrt(np.abs(scores))  #np.log10(scores + min_nonzero/10)
-        return (norm_scores - np.min(norm_scores)) / (np.max(norm_scores) - np.min(norm_scores))
-        
-    elif abs(mean - median) / mean < 0.1:
-        # Roughly symmetric distribution
-        print(f"{name}: Symmetric distribution detected")
-        return (scores - np.min(scores)) / (np.max(scores) - np.min(scores))
-        
-    else:
-        # Default to robust scaling
-        print(f"{name}: Using robust scaling")
-        q1, q99 = np.percentile(scores, [1, 99])
-        scaled = (scores - q1) / (q99 - q1)
-        return np.clip(scaled, 0, 1)
+    return input_paths, plot_dir
 
-def plot_letter_frequencies():
-    """Plot letter frequencies from CSV data"""
-    print("Generating letter frequencies plot...")
+def plot_item_frequencies(input_path, plot_dir):
+    """Plot item frequencies from CSV data"""
+    print("Generating item frequencies plot...")
     
-    # Load letter frequencies
-    df = pd.read_csv("input/letter_frequencies_english.csv")
+    # Load item frequencies
+    df = pd.read_csv(input_path)
     # Using correct column names based on the actual CSV structure
-    letters = df['item'].values
+    items = df['item'].values
     frequencies = df['score'].values / np.sum(df['score'].values)  # Normalize to get frequencies
     
     plt.figure(figsize=(15, 8))
     sns.set_style("whitegrid")
     
     # Create scatter plot
-    plt.scatter(range(len(letters)), frequencies * 100, s=100, alpha=0.6)
-    plt.plot(range(len(letters)), frequencies * 100, 'b-', alpha=0.3)
+    plt.scatter(range(len(items)), frequencies * 100, s=100, alpha=0.6)
+    plt.plot(range(len(items)), frequencies * 100, 'b-', alpha=0.3)
     
     # Add labels for each point
-    for i, (letter, freq) in enumerate(zip(letters, frequencies)):
-        plt.annotate(f'{letter.upper()}\n{freq*100:.1f}%',
+    for i, (item, freq) in enumerate(zip(items, frequencies)):
+        plt.annotate(f'{item.upper()}\n{freq*100:.1f}%',
                     (i, freq*100),
                     textcoords="offset points",
                     xytext=(0,10),
                     ha='center')
     
-    plt.title('Letter Frequencies in English Text', fontsize=14, pad=20)
+    plt.title('Item Frequencies Distribution', fontsize=14, pad=20)
     plt.xlabel('Rank', fontsize=12)
     plt.ylabel('Frequency (%)', fontsize=12)
     plt.xticks([])
     
     plt.tight_layout()
-    output_path = PLOT_DIR / 'letter_frequencies.png'
+    output_path = os.path.join(plot_dir, 'item_frequencies.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Saved letter frequencies plot to: {output_path.absolute()}")
+    print(f"Saved item frequencies plot to: {output_path}")
     plt.close()
 
-def plot_bigram_frequencies(n_bigrams=None, filename_suffix=''):
-    """Plot bigram frequencies from CSV data"""
-    print(f"Generating bigram frequencies plot{' (top ' + str(n_bigrams) + ')' if n_bigrams else ''}...")
+def plot_item_pair_frequencies(input_path, plot_dir, n_pairs=None, filename_suffix=''):
+    """Plot item pair frequencies from CSV data"""
+    print(f"Generating item pair frequencies plot{' (top ' + str(n_pairs) + ')' if n_pairs else ''}...")
     
-    # Load bigram frequencies
-    df = pd.read_csv("input/letter_pair_frequencies_english.csv")
+    # Load item pair frequencies
+    df = pd.read_csv(input_path)
     # Using correct column names based on the actual CSV structure
-    bigrams = df['item_pair'].values
+    pairs = df['item_pair'].values
     # Normalize scores to get frequencies
     total_score = np.sum(df['score'].values)
     frequencies = df['score'].values / total_score
@@ -113,20 +100,20 @@ def plot_bigram_frequencies(n_bigrams=None, filename_suffix=''):
     plt.figure(figsize=(15, 8))
     sns.set_style("whitegrid")
     
-    # Sort bigrams by frequency
+    # Sort pairs by frequency
     sorted_indices = np.argsort(frequencies)[::-1]
-    if n_bigrams:
-        sorted_indices = sorted_indices[:n_bigrams]
+    if n_pairs:
+        sorted_indices = sorted_indices[:n_pairs]
     sorted_freqs = frequencies[sorted_indices] * 100
-    sorted_bigrams = bigrams[sorted_indices]
+    sorted_pairs = pairs[sorted_indices]
     
     # Create scatter plot
     plt.scatter(range(len(sorted_freqs)), sorted_freqs, s=20, alpha=0.4)
     plt.plot(range(len(sorted_freqs)), sorted_freqs, 'b-', alpha=0.2)
     
     # Calculate indices for labels
-    if n_bigrams:
-        n_labels = min(20, n_bigrams)
+    if n_pairs:
+        n_labels = min(20, n_pairs)
     else:
         n_labels = 20
     label_indices = np.linspace(0, len(sorted_freqs) - 1, n_labels).astype(int)
@@ -134,8 +121,8 @@ def plot_bigram_frequencies(n_bigrams=None, filename_suffix=''):
     # Add labels
     for i in label_indices:
         if i < len(sorted_freqs):
-            bigram = sorted_bigrams[i]
-            label = f"{bigram.upper()}\n{sorted_freqs[i]:.2f}%"
+            pair = sorted_pairs[i]
+            label = f"{pair.upper()}\n{sorted_freqs[i]:.2f}%"
             plt.annotate(label,
                         (i, sorted_freqs[i]),
                         textcoords="offset points",
@@ -143,61 +130,65 @@ def plot_bigram_frequencies(n_bigrams=None, filename_suffix=''):
                         ha='center',
                         fontsize=8)
     
-    title_suffix = f" (Top {n_bigrams})" if n_bigrams else ""
-    plt.title(f'Bigram Frequencies in English Text{title_suffix}', fontsize=14, pad=20)
+    title_suffix = f" (Top {n_pairs})" if n_pairs else ""
+    plt.title(f'Item Pair Frequencies Distribution{title_suffix}', fontsize=14, pad=20)
     plt.xlabel('Rank', fontsize=12)
     plt.ylabel('Frequency (%)', fontsize=12)
     plt.yscale('log')
     
     plt.tight_layout()
-    output_path = PLOT_DIR / f'bigram_frequencies{filename_suffix}.png'
+    output_path = os.path.join(plot_dir, f'item_pair_frequencies{filename_suffix}.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Saved bigram frequencies plot to: {output_path.absolute()}")
+    print(f"Saved item pair frequencies plot to: {output_path}")
     plt.close()
 
-def load_and_normalize_scores():
+def load_and_normalize_scores(input_paths, config):
     """Load raw scores from data files and normalize them, returning both normalized scores and scaling methods"""
     print("\nLoading and analyzing CSV files...")
     
+    # Extract weights from config for reference
+    item_weight = config['optimization']['scoring']['item_weight']
+    item_pair_weight = config['optimization']['scoring']['item_pair_weight']
+    
     # Load raw scores
     try:
-        letter_df = pd.read_csv("input/letter_frequencies_english.csv")
-        print(f"Letter frequencies: {letter_df.shape[0]} rows with columns {letter_df.columns.tolist()}")
+        item_df = pd.read_csv(input_paths['item_scores'])
+        print(f"Item scores: {item_df.shape[0]} rows with columns {item_df.columns.tolist()}")
     except Exception as e:
-        print(f"Error loading letter frequencies: {e}")
+        print(f"Error loading item scores: {e}")
         raise
         
     try:
-        pair_df = pd.read_csv("input/letter_pair_frequencies_english.csv")
-        print(f"Letter pair frequencies: {pair_df.shape[0]} rows with columns {pair_df.columns.tolist()}")
+        item_pair_df = pd.read_csv(input_paths['item_pair_scores'])
+        print(f"Item pair scores: {item_pair_df.shape[0]} rows with columns {item_pair_df.columns.tolist()}")
     except Exception as e:
-        print(f"Error loading letter pair frequencies: {e}")
+        print(f"Error loading item pair scores: {e}")
         raise
         
     try:
-        position_df = pd.read_csv("input/key_comfort_estimates.csv")
-        print(f"Key comfort estimates: {position_df.shape[0]} rows with columns {position_df.columns.tolist()}")
+        position_df = pd.read_csv(input_paths['position_scores'])
+        print(f"Position scores: {position_df.shape[0]} rows with columns {position_df.columns.tolist()}")
     except Exception as e:
-        print(f"Error loading key comfort estimates: {e}")
+        print(f"Error loading position scores: {e}")
         raise
         
     try:
-        position_pair_df = pd.read_csv("input/key_pair_comfort_estimates.csv")
-        print(f"Key pair comfort estimates: {position_pair_df.shape[0]} rows with columns {position_pair_df.columns.tolist()}")
+        position_pair_df = pd.read_csv(input_paths['position_pair_scores'])
+        print(f"Position pair scores: {position_pair_df.shape[0]} rows with columns {position_pair_df.columns.tolist()}")
     except Exception as e:
-        print(f"Error loading key pair comfort estimates: {e}")
+        print(f"Error loading position pair scores: {e}")
         raise
     
     # Extract scores using correct column names
-    item_scores = letter_df['score'].values
-    item_pair_scores = pair_df['score'].values
+    item_scores = item_df['score'].values
+    item_pair_scores = item_pair_df['score'].values
     position_scores = position_df['score'].values
     position_pair_scores = position_pair_df['score'].values
     
     # Store original data for plotting
     original_scores = {
-        'item': {'data': item_scores, 'label': letter_df['item'].values},
-        'item_pair': {'data': item_pair_scores, 'label': pair_df['item_pair'].values},
+        'item': {'data': item_scores, 'label': item_df['item'].values},
+        'item_pair': {'data': item_pair_scores, 'label': item_pair_df['item_pair'].values},
         'position': {'data': position_scores, 'label': position_df['position'].values},
         'position_pair': {'data': position_pair_scores, 'label': position_pair_df['position_pair'].values}
     }
@@ -211,7 +202,6 @@ def load_and_normalize_scores():
     # Normalize all score types (using the same function as optimize_layout.py)
     print("\nNormalizing scores:")
     normalized_scores = {}
-    norm_data_items = []
     
     # Normalize item scores
     norm_scores_item = detect_and_normalize_distribution(item_scores, 'item scores')
@@ -239,10 +229,9 @@ def load_and_normalize_scores():
     
     return normalized_scores, original_scores
 
-def plot_score_distributions():
+def plot_score_distributions(normalized_scores, original_scores, plot_dir):
     """Plot distributions of both original and normalized scores"""
     print("\nGenerating score distribution plots...")
-    normalized_scores, original_scores = load_and_normalize_scores()
     
     # Create figure with 2 rows, 4 columns
     fig, axes = plt.subplots(2, 4, figsize=(20, 12))
@@ -274,26 +263,26 @@ def plot_score_distributions():
             ax.set_ylabel('Count')
             
     plt.tight_layout()
-    output_path = PLOT_DIR / 'score_distributions_comparison.png'
+    output_path = os.path.join(plot_dir, 'score_distributions_comparison.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Saved score distributions plot to: {output_path.absolute()}")
+    print(f"Saved score distributions plot to: {output_path}")
     plt.close()
 
-def plot_normalization_comparison():
+def plot_normalization_comparison(normalized_scores, original_scores, plot_dir):
     """Plot comparison of original vs normalized scores to visualize the normalization effect"""
     print("\nGenerating normalization comparison plots...")
-    normalized_scores, original_scores = load_and_normalize_scores()
     
     # Create figure with 2x2 subplots
     fig, axes = plt.subplots(2, 2, figsize=(20, 16))
     fig.suptitle('Normalization Effect on Scores', fontsize=16)
     
     score_types = ['item', 'item_pair', 'position', 'position_pair']
+    # Determine normalization approach based on detected distribution
     dist_types = {
-        'item': 'robust', 
-        'item_pair': 'log10',
-        'position': 'linear', 
-        'position_pair': 'linear'
+        'item': 'auto-detected', 
+        'item_pair': 'auto-detected',
+        'position': 'auto-detected', 
+        'position_pair': 'auto-detected'
     }
     
     for (score_type, ax) in zip(score_types, axes.flat):
@@ -331,7 +320,7 @@ def plot_normalization_comparison():
         ax2.set_ylabel('Normalized Score [0-1]', color='orange')
         
         # Set x-ticks as labels
-        if score_type in ['item', 'item_pair']:  # For single letters or pairs
+        if score_type in ['item', 'item_pair']:  # For single items or pairs
             ax.set_xticks(x)
             ax.set_xticklabels(sorted_labels[:n_show], rotation=45 if score_type.endswith('pair') else 0)
         else:
@@ -346,20 +335,19 @@ def plot_normalization_comparison():
         lines2, labels2 = ax2.get_legend_handles_labels()
         ax.legend(lines1 + lines2, labels1 + labels2, loc='upper right')
         
-        # Optional: logarithmic scale for original scores if heavy-tailed
-        if method == 'log10' and np.min(sorted_orig) > 0:
+        # Optional: logarithmic scale for original scores if they span many orders of magnitude
+        if np.max(orig_data) / np.min(orig_data) > 1000 and np.min(orig_data) > 0:
             ax.set_yscale('log')
     
     plt.tight_layout()
-    output_path = PLOT_DIR / 'normalization_comparison.png'
+    output_path = os.path.join(plot_dir, 'normalization_comparison.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Saved normalization comparison plot to: {output_path.absolute()}")
+    print(f"Saved normalization comparison plot to: {output_path}")
     plt.close()
 
-def plot_score_heatmaps():
+def plot_score_heatmaps(normalized_scores, original_scores, plot_dir):
     """Plot heatmaps of both original and normalized pair scores"""
     print("\nGenerating score heatmap plots...")
-    normalized_scores, original_scores = load_and_normalize_scores()
     
     # Create figure with 2 rows, 2 columns
     fig, axes = plt.subplots(2, 2, figsize=(20, 16))
@@ -369,42 +357,42 @@ def plot_score_heatmaps():
     item_pair_data = original_scores['item_pair']['data']
     item_pair_labels = original_scores['item_pair']['label']
     
-    # Get unique letters from bigrams
-    unique_letters = set()
-    for bigram in item_pair_labels:
-        if len(bigram) == 2:  # Ensure it's a valid bigram
-            unique_letters.update(bigram)
-    unique_letters = sorted(list(unique_letters))
-    n_letters = len(unique_letters)
+    # Get unique elements from pairs
+    unique_items = set()
+    for pair in item_pair_labels:
+        if len(pair) == 2:  # Ensure it's a valid pair
+            unique_items.update(pair)
+    unique_items = sorted(list(unique_items))
+    n_unique_items = len(unique_items)
     
-    if n_letters > 0:
-        # Create letter-to-index mapping
-        letter_to_idx = {letter: i for i, letter in enumerate(unique_letters)}
+    if n_unique_items > 0:
+        # Create item-to-index mapping
+        item_to_idx = {item: i for i, item in enumerate(unique_items)}
         
         # Initialize matrices
-        orig_matrix = np.full((n_letters, n_letters), np.nan)
-        norm_matrix = np.full((n_letters, n_letters), np.nan)
+        orig_matrix = np.full((n_unique_items, n_unique_items), np.nan)
+        norm_matrix = np.full((n_unique_items, n_unique_items), np.nan)
 
         # Fill matrices
         n_filled = 0
-        for bigram, orig_score, norm_score in zip(item_pair_labels, item_pair_data, normalized_scores['item_pair']):
-            if len(bigram) == 2:  # Ensure it's a valid bigram
-                i, j = letter_to_idx[bigram[0]], letter_to_idx[bigram[1]]
+        for pair, orig_score, norm_score in zip(item_pair_labels, item_pair_data, normalized_scores['item_pair']):
+            if len(pair) == 2:  # Ensure it's a valid pair
+                i, j = item_to_idx[pair[0]], item_to_idx[pair[1]]
                 orig_matrix[i, j] = orig_score
                 norm_matrix[i, j] = norm_score
                 n_filled += 1
         
-        print(f"Created item pair matrices ({n_letters}x{n_letters}) with {n_filled} filled cells")
+        print(f"Created item pair matrices ({n_unique_items}x{n_unique_items}) with {n_filled} filled cells")
         
         # Plot original matrix
         axes[0, 0].set_title('Original Item Pair Scores')
         im1 = sns.heatmap(orig_matrix, ax=axes[0, 0], cmap='viridis', 
-                           xticklabels=unique_letters, yticklabels=unique_letters)
+                           xticklabels=unique_items, yticklabels=unique_items)
         
         # Plot normalized matrix
         axes[1, 0].set_title(f'Normalized Item Pair Scores')
         im2 = sns.heatmap(norm_matrix, ax=axes[1, 0], cmap='viridis',
-                           xticklabels=unique_letters, yticklabels=unique_letters)
+                           xticklabels=unique_items, yticklabels=unique_items)
     else:
         # Fallback if creating a square matrix isn't possible
         axes[0, 0].set_title('Original Item Pair Scores')
@@ -456,22 +444,42 @@ def plot_score_heatmaps():
                         xticklabels=unique_positions, yticklabels=unique_positions)
     
     plt.tight_layout()
-    output_path = PLOT_DIR / 'pair_scores_heatmaps_comparison.png'
+    output_path = os.path.join(plot_dir, 'pair_scores_heatmaps.png')
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f"Saved pair scores heatmaps to: {output_path.absolute()}")
+    print(f"Saved pair scores heatmaps to: {output_path}")
     plt.close()
 
-if __name__ == "__main__":
+def main(config_path="config.yaml"):
+    """Main function to generate all plots."""
+    print(f"Loading configuration from {config_path}")
+    config = load_config(config_path)
+    
+    # Setup paths based on configuration
+    input_paths, plot_dir = setup_paths(config)
+    
     plt.rcParams.update({'font.size': 12})
     
     # Plot frequencies
-    plot_letter_frequencies()
-    plot_bigram_frequencies()
-    plot_bigram_frequencies(n_bigrams=100, filename_suffix='_top100')
+    plot_item_frequencies(input_paths['item_scores'], plot_dir)
+    plot_item_pair_frequencies(input_paths['item_pair_scores'], plot_dir)
+    plot_item_pair_frequencies(input_paths['item_pair_scores'], plot_dir, n_pairs=100, filename_suffix='_top100')
+    
+    # Load and normalize scores
+    normalized_scores, original_scores = load_and_normalize_scores(input_paths, config)
     
     # Plot score distributions and normalization comparison
-    plot_score_distributions()
-    plot_normalization_comparison()
-    plot_score_heatmaps()
+    plot_score_distributions(normalized_scores, original_scores, plot_dir)
+    plot_normalization_comparison(normalized_scores, original_scores, plot_dir)
+    plot_score_heatmaps(normalized_scores, original_scores, plot_dir)
     
     print("\nAll plots generated successfully!")
+
+if __name__ == "__main__":
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Generate data visualization plots for optimization")
+    parser.add_argument("--config", type=str, default="config.yaml", 
+                        help="Path to configuration file (default: config.yaml)")
+    
+    args = parser.parse_args()
+    main(args.config)

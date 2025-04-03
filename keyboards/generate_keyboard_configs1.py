@@ -11,7 +11,9 @@ There are two versions of this script:
   - generate_keyboard_configs1.py generates an initial set of sparse keyboard layouts as config files.
   - optimize_layout.py generates optimal keyboard layouts for a given config file.
   - generate_keyboard_configs2.py generates a new set of config files based on the optimal keyboard layouts.
-  
+
+Usage: ``python generate_keyboard_configs1.py``
+    
 See **README_keyboards.md** for a full description.
 
 See **README.md** for instructions to run batches of config files in parallel.
@@ -22,7 +24,8 @@ import yaml
 import itertools
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = 'configs'
+OUTPUT_DIR = '../output/configs'
+CONFIG_FILE = '../config.yaml'
 nlayouts = 100
 
 # Items in configurations (18 letters to be assigned to keys)
@@ -40,7 +43,7 @@ positions_for_items_2thru6 = ["F","D","R","S","E","V","A","W",
 ALL18KEYS = "FDRSEVAWCJKULIM;O,"  # 18 most comfortable keys
 
 # Base configuration from the original config file
-with open('config.yaml', 'r') as f:
+with open(CONFIG_FILE, 'r') as f:
     base_config = yaml.safe_load(f)
 
 def generate_constraint_sets():
