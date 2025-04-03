@@ -99,6 +99,9 @@ Below, I is the number of items, P is the number of item_pairs:
  
     score = item_weight * item_component + item_pair_weight * item_pair_component
 
+To calculate the score for a specific layout, you can use calculate_score.py:
+  `python calculate_score.py --items "etaoi" --positions "FJDSV"`
+
 ## Branch-and-bound optimization
   - Calculates exact scores for placed letters
   - Uses provable upper bounds for unplaced letters
