@@ -139,7 +139,18 @@ NSF ACCESS granted access for a keyboard layout optimization study
     mkdir -p keyboard_optimizer
     cd keyboard_optimizer
 
-    # Clone the repository
+    # Load Python module
+    module load python/3.8.6
+
+    # Create a virtual environment and make the activate script executable
+    python -m venv keyboard_env
+    source keyboard_env/bin/activate
+    chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
+
+    # Install required packages
+    pip install pyyaml numpy pandas tqdm numba psutil matplotlib
+  
+      # Clone the repository
     git clone https://github.com/binarybottle/optimize_layouts.git
     cd optimize_layouts
 
@@ -153,17 +164,6 @@ NSF ACCESS granted access for a keyboard layout optimization study
     mkdir -p output/layouts
     mkdir -p output/outputs
     mkdir -p output/errors
-
-    # Load Python module
-    module load python/3.8.6
-
-    # Create a virtual environment and make the activate script executable
-    python -m venv keyboard_env
-    source keyboard_env/bin/activate
-    chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
-
-    # Install required packages
-    pip install pyyaml numpy pandas tqdm numba psutil matplotlib
     ```
 
   ### Generate config files and prepare to submit jobs
@@ -179,9 +179,8 @@ NSF ACCESS granted access for a keyboard layout optimization study
     sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
 
     # Make any other changes needed in the slurm scripts, 
-    # and don't forget to update the number of config files:
-    #   slurm_batchmaking.sh: MAX_CONFIG
-    #   slurm_submit_batches.sh: TOTAL_CONFIGS
+    # and don't forget to update TOTAL_CONFIGS (number of config files) 
+    # in slurm_submit_batches.sh and slurm_batchmaking.sh
     ```
 
   ### Run scripts in ```screen```
