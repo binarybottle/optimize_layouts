@@ -26,21 +26,21 @@ import itertools
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = '../output/configs'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 100
+nlayouts = 10
 
 # Items in configurations (18 letters to be assigned to keys)
-items_assigned  = "etaoin"       # 6 most frequent letters (etaoin in English)
-items_to_assign = "srhldcumfpgw" # next 12 most frequent letters (srhldcumfpgw in English)
+items_assigned  = "etaoi"         # 5 most frequent letters (etaoi in English)
+items_to_assign = "nsrhldcumfpgw" # next 13 most frequent letters (nsrhldcumfpgw in English)
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
 # Position constraints for items_assigned
 positions_for_item1 = ["F","D"] # 2 most comfortable left qwerty keys for the most frequent letter
-positions_for_items_2thru6 = ["F","D","R","S","E","V","A","W",
-                              "J","K","U","L","I","M",";","O"] # 16 most comfortable qwerty keys
+positions_for_items_2thruN = ["F","D","R","S","E","V","A","W","C",
+                              "J","K","U","L","I","M",";","O",","] # 18 most comfortable qwerty keys
 
-# Keys
-ALL18KEYS = "FDRSEVAWCJKULIM;O,"  # 18 most comfortable keys
+# Keys to assign by the optimization process
+all_N_keys = "FDRSEVAWCJKULIM;O,"  # 18 most comfortable keys
 
 # Base configuration from the original config file
 with open(CONFIG_FILE, 'r') as f:
@@ -56,7 +56,7 @@ def generate_constraint_sets():
     for pos1 in positions_for_item1:
 
         # Find all available positions for remaining items in items_assigned
-        remaining_positions = [pos for pos in positions_for_items_2thru6 if pos not in [pos1]]
+        remaining_positions = [pos for pos in positions_for_items_2thruN if pos not in [pos1]]
 
         # Generate all combinations of n_assigned positions
         for comboN in itertools.combinations(remaining_positions, n_assigned-1):
@@ -70,15 +70,14 @@ def generate_constraint_sets():
                              items_assigned[1]: pos2, 
                              items_assigned[2]: pos3, 
                              items_assigned[3]: pos4, 
-                             items_assigned[4]: pos5,
-                             items_assigned[5]: pos6}
+                             items_assigned[4]: pos5}
                 
                 # Create the positions_assigned string (must match the order of items_assigned)
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])
                 
                 # Create positions_to_assign (keys not used in positions_assigned)
                 used_positions = set(positions_assigned)
-                positions_to_assign = ''.join([pos for pos in ALL18KEYS if pos not in used_positions])
+                positions_to_assign = ''.join([pos for pos in all_N_keys if pos not in used_positions])
                 
                 # Add to configs if valid and positions_to_assign has the correct number of positions
                 if len(positions_to_assign) == n_assign:
