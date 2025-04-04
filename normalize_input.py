@@ -132,11 +132,12 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     print("  - normalized:", min(norm_scores), "to", max(norm_scores))
     
     # Save normalized item scores
-    item_df['normalized_score'] = norm_scores
+    item_df['score'] = norm_scores
+    item_df = item_df.drop(columns=['normalized_score'], errors='ignore')
     item_output_path = os.path.join(output_dir, 'normalized_item_scores.csv')
     item_df.to_csv(item_output_path, index=False)
     print(f"  - saved to: {item_output_path}")
-    
+
     # Normalize position scores
     print("\nNormalizing position scores...")
     position_df = pd.read_csv(config['paths']['input']['raw_position_scores_file'], dtype={'position': str})
@@ -146,7 +147,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     print("  - normalized:", min(norm_scores), "to", max(norm_scores))
     
     # Save normalized position scores
-    position_df['normalized_score'] = norm_scores
+    position_df['score'] = norm_scores
     position_output_path = os.path.join(output_dir, 'normalized_position_scores.csv')
     position_df.to_csv(position_output_path, index=False)
     print(f"  - saved to: {position_output_path}")
@@ -160,7 +161,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     print("  - normalized:", min(norm_scores), "to", max(norm_scores))
     
     # Save normalized item pair scores
-    item_pair_df['normalized_score'] = norm_scores
+    item_pair_df['score'] = norm_scores
     item_pair_output_path = os.path.join(output_dir, 'normalized_item_pair_scores.csv')
     item_pair_df.to_csv(item_pair_output_path, index=False)
     print(f"  - saved to: {item_pair_output_path}")
@@ -174,7 +175,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     print("  - normalized:", min(norm_scores), "to", max(norm_scores))
     
     # Save normalized position pair scores
-    position_pair_df['normalized_score'] = norm_scores
+    position_pair_df['score'] = norm_scores
     position_pair_output_path = os.path.join(output_dir, 'normalized_position_pair_scores.csv')
     position_pair_df.to_csv(position_pair_output_path, index=False)
     print(f"  - saved to: {position_pair_output_path}")

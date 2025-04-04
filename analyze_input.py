@@ -152,7 +152,7 @@ def load_data(raw_paths, norm_paths):
                 norm_df = pd.read_csv(norm_paths[key])
                 
                 data[key]['norm']['df'] = norm_df
-                data[key]['norm']['scores'] = norm_df['normalized_score'].values
+                data[key]['norm']['scores'] = norm_df['score'].values
                 
                 # Add labels based on data type
                 if key == 'item_scores':
@@ -164,7 +164,7 @@ def load_data(raw_paths, norm_paths):
                 elif key == 'position_pair_scores':
                     data[key]['norm']['labels'] = safely_convert_to_uppercase(norm_df['position_pair'].values)
                 
-                print(f"  - Normalized: {len(norm_df)} rows, score range: {norm_df['normalized_score'].min():.6g} to {norm_df['normalized_score'].max():.6g}")
+                print(f"  - Normalized: {len(norm_df)} rows, score range: {norm_df['score'].min():.6g} to {norm_df['score'].max():.6g}")
             except Exception as e:
                 print(f"Error loading normalized {key}: {e}")
                 data[key]['norm'] = None
@@ -497,4 +497,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

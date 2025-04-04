@@ -6,11 +6,10 @@ Author: Arno Klein (arnoklein.info)
 License: MIT License (see LICENSE)
 
 ## Usage
-
   ```bash
   python normalize_input.py # Normalize input data
   python analyze_input.py   # Analyze and plot raw/normalized data
-  python optimize_layout.py # Optimizes layouts based on config file
+  python optimize_layout.py # Optimize layouts based on config file
   python analyze_results.py # Analyze resulting layouts
   ```
 For running parallel processes, 
@@ -39,14 +38,14 @@ to represent items, item pairs, positions, and position pairs,
 so long as item pair characters are composed of two item characters 
 and position pair characters are composed of two position characters.
 
-  - item_scores_file:           
+  - raw_item_scores_file:           
     ```
     item, score
     a, 0.1
     b, 0.5
     c, 0.2       
     ```
-  - item_pair_scores_file:      
+  - raw_item_pair_scores_file:      
     ```
     item_pair, score
     ab, 0.1
@@ -56,14 +55,14 @@ and position pair characters are composed of two position characters.
     bc, 0.4       
     cb, 0.2       
     ```
-  - position_scores_file:       
+  - raw_position_scores_file:       
     ```
     position, score
     X, 0.4
     Y, 0.3
     Z, 0.1       
     ```
-  - position_pair_scores_file:  
+  - raw_position_pair_scores_file:  
     ```
     position_pair, score
     XY, 0.2
@@ -74,8 +73,8 @@ and position pair characters are composed of two position characters.
     ZY, 0.5
     ```
 
-A configuration file (config.yaml) specifies input filenames,
-as well as text strings for the following variables:
+A configuration file (config.yaml) specifies input filenames
+(raw and normalized) as well as text strings for the variables:
   - Required:
     - items_to_assign: items to arrange in positions_to_assign
     - positions_to_assign: available positions
@@ -88,8 +87,8 @@ as well as text strings for the following variables:
       to constrain items_to_constrain
 
 ## Layout scoring
-Layouts are scored based on item and item_pair scores 
-and corresponding position and position_pair scores, 
+Layouts are scored based on normalized item and item_pair scores 
+and corresponding normalized position and position_pair scores, 
 where direction (sequence of a given pair) matters.
 Below, I is the number of items, P is the number of item_pairs:
 
@@ -127,7 +126,7 @@ To calculate the score for a specific layout, you can use calculate_score.py:
     - ASCII art visualization of the layout
     - Clear marking of constrained positions
 
-## Running parallel processes on SLURM
+## Optional: Running parallel processes on SLURM
 The examples below will use Pittsburgh Super Computing Bridges-2 resources.
 NSF ACCESS granted access for a keyboard layout optimization study 
 (see **README_keyboards**). 
@@ -185,7 +184,7 @@ NSF ACCESS granted access for a keyboard layout optimization study
     # in slurm_submit_batches.sh and slurm_batchmaking.sh
     ```
 
-  ### Run scripts in ```screen```
+  ### Run scripts in `screen`
     ```bash
     # Use screen
     screen -S submission
