@@ -4,7 +4,7 @@
 
 CONFIGURATION
 ===================================================================
-TOTAL_CONFIGS=720720  # Total number of configurations
+TOTAL_CONFIGS=114240  # Total number of configurations
 BATCH_SIZE=1000       # SLURM array limit per batch
 CHUNK_SIZE=5          # Number of batches to submit in each manager run
 ===================================================================

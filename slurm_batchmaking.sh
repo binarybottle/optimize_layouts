@@ -11,7 +11,7 @@
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file with job and array IDs
 #SBATCH -p RM-shared               # Partition (queue) - use shared to save SUs
 #SBATCH -A abc123                  # Replace abc123 with your allocation ID
-TOTAL_CONFIGS=720720  # Total number of configurations
+TOTAL_CONFIGS=114240  # Total number of configurations
 BATCH_SIZE=1000       # SLURM array limit per batch
 #===================================================================
 

@@ -63,7 +63,7 @@ def generate_constraint_sets():
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4, pos5, pos6 = permN
+                pos2, pos3, pos4, pos5 = permN
                 
                 # Create final position assignments
                 positions = {items_assigned[0]: pos1, 

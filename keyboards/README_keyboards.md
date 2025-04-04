@@ -25,19 +25,20 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
-1. Generate 228,480 configuration files.
+1. Generate 114,240 configuration files.
 2. Optimally arrange frequent letters for each configuration. 
 3. Generate a second set of configuration files, removing letters.
 4. Optimally arrange remaining letters.
 5. Select the layout with the highest score.
 
-### Step 1. Generate 228,480 configuration files 
+### Step 1. Generate 114,240 configuration files 
 
   `cd keyboards; python generate_keyboard_configs1.py`
 
   ##### Assign the most frequent letter to the 2 most comfortable left keys.
   We will start by constraining the placement of the most frequent letter 
-  (`e` in English, by a wide margin) to one of the 2 most comfortable keys.
+  (`e` in English, by a wide margin) to one of the 2 most comfortable keys
+  (again, by a considerable margin, according to typing data). 
   There are 2 permutations (1 letter in either of 2 keys): 
   ╭───────────────────────────────────────────────╮
   │     │     │     │     ║     │     │     │     │
@@ -47,7 +48,7 @@ For the following, we:
   │     │     │     │     ║     │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  We'll choose one key for our example:
+  We'll choose one key for our example going forward:
   ╭───────────────────────────────────────────────╮
   │     │     │     │     ║     │     │     │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -59,7 +60,7 @@ For the following, we:
   #### Assign the next 4 letters to any available top-18 keys
   We then allow the next 4 letters `taoi` to be placed 
   in any available of the 18 most comfortable keys.
-  There are 114,240 permutations (4 letters in any of 17 available keys):
+  There are 57,120 permutations (4 letters in any of 17 available keys):
     - 2,380 ways to choose 4 keys from 17 keys
     - 24 ways to arrange 4 letters in those 4 keys
 
@@ -68,7 +69,7 @@ For the following, we:
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  -  │  -  │  e  │  -  ║  -  │  -  │  -  │  -  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │     │  -  ║  -  │     │     │     │
+  │     │     │  -  │  -  ║  -  │  -  │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
   ╭───────────────────────────────────────────────╮
   │     │     │  o  │     ║     │     │     │     │
@@ -82,8 +83,8 @@ For the following, we:
 
   `python optimize_layout.py`
 
-  #### Assign the next 12 letters to the 12 remaining top-18 keys
-  For each of Step 1's 228,480 configuration files, a branch-and-bound 
+  #### Assign the next 13 letters to the 13 remaining top-18 keys
+  For each of Step 1's 114,240 configuration files, a branch-and-bound 
   algorithm efficiently probes the more than 6 billion (13!) possible 
   permutations, to optimally arrange the next 13 letters `nsrhldcumfpgw`
   for that configuration. This results in 18 filled positions:

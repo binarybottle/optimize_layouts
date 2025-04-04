@@ -6,29 +6,29 @@
 #-----------------------------------------------------------------------
 paths:
   input:
-    item_scores_file:          "input/letter_frequencies_english.csv"
-    item_pair_scores_file:     "input/letter_pair_frequencies_english.csv"
-    position_scores_file:      "input/key_comfort_estimates.csv"
-    position_pair_scores_file: "input/key_pair_comfort_estimates.csv"
+    raw_item_scores_file:          "input/letter_frequencies_english.csv"
+    raw_item_pair_scores_file:     "input/letter_pair_frequencies_english.csv"
+    raw_position_scores_file:      "input/key_comfort_estimates.csv"
+    raw_position_pair_scores_file: "input/key_pair_comfort_estimates.csv"
+    item_scores_file:              "output/normalized_input/normalized_item_scores.csv"
+    item_pair_scores_file:         "output/normalized_input/normalized_item_pair_scores.csv"
+    position_scores_file:          "output/normalized_input/normalized_position_scores.csv"
+    position_pair_scores_file:     "output/normalized_input/normalized_position_pair_scores.csv"
   output:
-    layout_results_folder:     "output/layouts"
+    layout_results_folder:         "output/layouts"
 
 #-----------------------------------------------------------------------
 # Optimization Settings
 #-----------------------------------------------------------------------
 optimization:  # etaoinsrhldcumfpgwybvkxjqz in FDRSEVAWCQXZ JKULIM;O,P./  
 
-  items_assigned:      "etaoi"               # Items already assigned to positions
-  positions_assigned:  "FJDSV"               # Positions that are already filled 
+  items_assigned:      "" #etaoi"               # Items already assigned to positions
+  positions_assigned:  "" #"FJDSV"               # Positions that are already filled 
 
-  items_to_assign:      "nsrhldcumfpgw"             # items to arrange in positions
-  positions_to_assign:  "REAWCKULMI;O,"             # available positions
-  #items_to_assign:      "srhldcumfpgw"             # items to arrange in positions
-  #positions_to_assign:  "REAWCKULI;O,"             # available positions
-  #items_to_assign:      "srhldcumfpgwyb"             # items to arrange in positions
-  #positions_to_assign:  "REAWCQKULI;O,P"             # available positions
-  #items_to_assign:      "nsrhld"             # items to arrange in positions
-  #positions_to_assign:  "ERAWCQ"             # available positions
+  items_to_assign:      "nsrhldcumfpgw"      # items to arrange in positions
+  positions_to_assign:  "vawcjkulimo;,"      # available positions
+  #items_to_assign:      "nsrhldcumfpgw"      # items to arrange in positions
+  #positions_to_assign:  "REAWCKULMI;O,"      # available positions
 
   items_to_constrain:      ""                # Subset of items_to_assign to arrange within positions_to_constrain
   positions_to_constrain:  ""                # Subset of positions_to_assign to constrain arrangement of items_to_constrain

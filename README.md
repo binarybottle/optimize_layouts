@@ -8,8 +8,10 @@ License: MIT License (see LICENSE)
 ## Usage
 
   ```bash
-  python optimize_layout.py
-  python analyze_results.py --top 5 --config config.yaml
+  python normalize_input.py # Normalize input data
+  python analyze_input.py   # Analyze and plot raw/normalized data
+  python optimize_layout.py # Optimizes layouts based on config file
+  python analyze_results.py # Analyze resulting layouts
   ```
 For running parallel processes, 
 see **Running parallel processes** below.
@@ -155,7 +157,7 @@ NSF ACCESS granted access for a keyboard layout optimization study
     cd optimize_layouts
 
     # Make the scripts executable
-    chmod +x generate_configs.py
+    #chmod +x generate_configs.py
     chmod +x slurm_batchmaking.sh
     chmod +x slurm_submit_batches.sh
 
@@ -171,7 +173,7 @@ NSF ACCESS granted access for a keyboard layout optimization study
     # You can generate configuration files by creating your own
     # generate_configs.py script, following the example in 
     # generate_keyboard_configs1.py:
-    python generate_configs.py
+    #python generate_configs.py
 
     # Replace <YOUR_ALLOCATION_ID> with your actual allocation ID
     # In the code below, replace abc123 with your allocation ID
