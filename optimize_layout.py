@@ -917,13 +917,33 @@ def calculate_upper_bound(
     cross_item_pair_matrix=None,
     cross_position_pair_matrix=None,
     items_assigned=None,
-    positions_assigned=None
+    positions_assigned=None,
+    scaling_factor: float = 1.0,  # New parameter for scaling down future estimates
+    use_averages: bool = False     # New parameter to toggle average-based estimation
 ) -> float:
     """
     Calculate upper bound on best possible score from this node.
-    """
-    debug_print = False
     
+    Args:
+        mapping: Current partial mapping of items to positions
+        used: Boolean array of used positions
+        position_score_matrix: Matrix of position/position-pair scores
+        item_scores: Array of item scores
+        item_pair_score_matrix: Matrix of item-pair scores
+        item_weight: Weight for item score component
+        item_pair_weight: Weight for item-pair score component
+        best_score: Current best score (used for pruning in single-solution mode)
+        depth: Search depth (only used in multi-solution mode)
+        cross_item_pair_matrix: Matrix of cross-interactions 
+        cross_position_pair_matrix: Matrix of cross-interactions
+        items_assigned: List of already assigned items
+        positions_assigned: List of already assigned positions
+        scaling_factor: Factor to scale down future score estimates (default=1.0, no scaling)
+        use_averages: If True, use average-based estimation instead of optimal matching
+    
+    Returns:
+        Upper bound on best possible score from this node
+    """
     # Get current score from placed items
     current_score, current_unweighted_item_score, current_unweighted_item_pair_score = calculate_score(
         mapping, position_score_matrix, item_scores,
@@ -932,20 +952,9 @@ def calculate_upper_bound(
         items_assigned, positions_assigned
     )
     
-    if debug_print and depth is not None and depth < 2:
-        print("\nUPPER BOUND CALCULATION:")
-        print("    Current mapping:", mapping)
-        print("    Current scores:")
-        print("      Item score: ", current_unweighted_item_score)
-        print("      Pair score: ", current_unweighted_item_pair_score)
-    
     # Find unplaced items and available positions
     unplaced = np.where(mapping < 0)[0]
     available = np.where(~used)[0]
-    
-    if debug_print and depth is not None and depth < 2:
-        print("    Unplaced items:", unplaced)
-        print("    Available positions:", available)
     
     # If all items are placed, return the actual score
     if len(unplaced) == 0:
@@ -958,25 +967,43 @@ def calculate_upper_bound(
     #-------------------------------------------------------------------------
     # Single-item component
     #-------------------------------------------------------------------------
-    # Get position scores for remaining positions
-    position_values = np.zeros(len(available), dtype=np.float32)
-    for i, pos in enumerate(available):
-        position_values[i] = position_score_matrix[pos, pos]
-    position_values = np.sort(position_values)[::-1]  # Highest to lowest
-    
-    # Get scores for remaining items
-    item_values = item_scores[unplaced]
-    item_values = np.sort(item_values)[::-1]  # Highest to lowest
-    
-    if debug_print and depth is not None and depth < 2:
-        print("    Position values:", position_values)
-        print("    Item values:", item_values)
-    
-    # Maximum possible item component for unplaced items
-    len_values = min(len(position_values), len(item_values))
     max_item_component_total = 0.0
-    for i in range(len_values):
-        max_item_component_total += position_values[i] * item_values[i]
+    
+    if use_averages:
+        # Average-based approach
+        avg_position_score = 0.0
+        if len(available) > 0:
+            for pos in available:
+                avg_position_score += position_score_matrix[pos, pos]
+            avg_position_score /= len(available)
+        
+        avg_item_score = 0.0
+        if len(unplaced) > 0:
+            for item in unplaced:
+                avg_item_score += item_scores[item]
+            avg_item_score /= len(unplaced)
+        
+        # Total for unplaced items using averages
+        max_item_component_total = avg_position_score * avg_item_score * len(unplaced)
+    else:
+        # Original optimal matching approach
+        # Get position scores for remaining positions
+        position_values = np.zeros(len(available), dtype=np.float32)
+        for i, pos in enumerate(available):
+            position_values[i] = position_score_matrix[pos, pos]
+        position_values = np.sort(position_values)[::-1]  # Highest to lowest
+        
+        # Get scores for remaining items
+        item_values = item_scores[unplaced]
+        item_values = np.sort(item_values)[::-1]  # Highest to lowest
+        
+        # Maximum possible item component for unplaced items
+        len_values = min(len(position_values), len(item_values))
+        for i in range(len_values):
+            max_item_component_total += position_values[i] * item_values[i]
+    
+    # Apply scaling factor to future estimates
+    max_item_component_total *= scaling_factor
     
     # Current component is already calculated for placed items
     current_item_component_total = current_unweighted_item_score * n_placed_items
@@ -993,114 +1020,152 @@ def calculate_upper_bound(
     placed = np.where(mapping >= 0)[0]
     n_placed_pairs = 0
     n_potential_pairs = 0
-    max_pair_component_total = 0.0
+    placed_unplaced_pairs_total = 0.0
+    unplaced_pairs_total = 0.0
     
     # 1. Count current placed pairs
     for i in range(len(placed)):
         for j in range(i + 1, len(placed)):
             n_placed_pairs += 2  # Count both directions
     
-    # 2. Calculate max score for pairs between placed and unplaced
-    placed_unplaced_pairs_total = 0.0
-    for p_idx in range(len(placed)):
-        p_item = placed[p_idx]
-        p_pos = mapping[p_item]
-        for u_idx in range(len(unplaced)):
-            u_item = unplaced[u_idx]
-            # For each unplaced item, find best position pairing with each placed item
-            best_pair_score = 0.0
-            for a_idx in range(len(available)):
-                pos = available[a_idx]
-                # Calculate score in both directions
-                fwd_score = (item_pair_score_matrix[p_item, u_item] * 
-                            position_score_matrix[p_pos, pos])
-                bwd_score = (item_pair_score_matrix[u_item, p_item] * 
-                            position_score_matrix[pos, p_pos])
-                pair_score = fwd_score + bwd_score
-                if pair_score > best_pair_score:
-                    best_pair_score = pair_score
-            
-            placed_unplaced_pairs_total += best_pair_score
-            n_potential_pairs += 2  # Count both directions
-    
-    # 3. Calculate max score for pairs between unplaced items
-    unplaced_pairs_total = 0.0
-    
-    # Create arrays for item pair scores and position pair scores
-    n_unplaced_pairs = (len(unplaced) * (len(unplaced) - 1)) // 2
-    n_available_pairs = (len(available) * (len(available) - 1)) // 2
-    
-    if n_unplaced_pairs > 0 and n_available_pairs > 0:
-        item_pair_scores = np.zeros(n_unplaced_pairs, dtype=np.float32)
-        pos_pair_scores = np.zeros(n_available_pairs, dtype=np.float32)
+    if use_averages:
+        # 2. Average-based approach for placed-unplaced pairs
+        avg_placed_unplaced_item_score = 0.0
+        count_pu_pairs = 0
         
-        # Fill item pair scores array
-        pair_idx = 0
+        for p in placed:
+            for u in unplaced:
+                avg_placed_unplaced_item_score += item_pair_score_matrix[p, u]
+                avg_placed_unplaced_item_score += item_pair_score_matrix[u, p]
+                count_pu_pairs += 2
+        
+        if count_pu_pairs > 0:
+            avg_placed_unplaced_item_score /= count_pu_pairs
+        
+        avg_used_available_pos_score = 0.0
+        count_ua_pairs = 0
+        
+        for p_idx in range(len(placed)):
+            p_pos = mapping[placed[p_idx]]
+            for pos in available:
+                avg_used_available_pos_score += position_score_matrix[p_pos, pos]
+                avg_used_available_pos_score += position_score_matrix[pos, p_pos]
+                count_ua_pairs += 2
+        
+        if count_ua_pairs > 0:
+            avg_used_available_pos_score /= count_ua_pairs
+        
+        # Total for placed-unplaced pairs
+        n_pu_pairs = len(placed) * len(unplaced) * 2  # Both directions
+        placed_unplaced_pairs_total = avg_placed_unplaced_item_score * avg_used_available_pos_score * n_pu_pairs
+        n_potential_pairs += n_pu_pairs
+        
+        # 3. Average-based approach for unplaced-unplaced pairs
+        avg_unplaced_item_score = 0.0
+        count_uu_pairs = 0
+        
         for i in range(len(unplaced)):
-            for j in range(i + 1, len(unplaced)):
-                i_item, j_item = unplaced[i], unplaced[j]
-                # Sum of scores in both directions
-                score = (item_pair_score_matrix[i_item, j_item] + 
-                        item_pair_score_matrix[j_item, i_item])
-                item_pair_scores[pair_idx] = score
-                pair_idx += 1
+            for j in range(i+1, len(unplaced)):
+                u1, u2 = unplaced[i], unplaced[j]
+                avg_unplaced_item_score += item_pair_score_matrix[u1, u2]
+                avg_unplaced_item_score += item_pair_score_matrix[u2, u1]
+                count_uu_pairs += 2
         
-        # Fill position pair scores array
-        pair_idx = 0
+        if count_uu_pairs > 0:
+            avg_unplaced_item_score /= count_uu_pairs
+        
+        avg_available_pos_score = 0.0
+        count_aa_pairs = 0
+        
         for i in range(len(available)):
-            for j in range(i + 1, len(available)):
-                i_pos, j_pos = available[i], available[j]
-                # Sum of scores in both directions
-                score = (position_score_matrix[i_pos, j_pos] + 
-                        position_score_matrix[j_pos, i_pos])
-                pos_pair_scores[pair_idx] = score
-                pair_idx += 1
+            for j in range(i+1, len(available)):
+                p1, p2 = available[i], available[j]
+                avg_available_pos_score += position_score_matrix[p1, p2]
+                avg_available_pos_score += position_score_matrix[p2, p1]
+                count_aa_pairs += 2
         
-        # Sort both arrays in descending order
-        item_pair_scores = np.sort(item_pair_scores)[::-1]
-        pos_pair_scores = np.sort(pos_pair_scores)[::-1]
+        if count_aa_pairs > 0:
+            avg_available_pos_score /= count_aa_pairs
         
-        # Match highest item pair scores with highest position pair scores
-        n_pairs_to_match = min(len(item_pair_scores), len(pos_pair_scores))
-        for i in range(n_pairs_to_match):
-            unplaced_pairs_total += item_pair_scores[i] * pos_pair_scores[i] / 2.0  # Divide by 2 since we count both directions
-            n_potential_pairs += 2  # Count both directions
-    
-    # 4. Add cross-interactions with pre-assigned items
-    cross_interaction_total = 0.0
-    if (cross_item_pair_matrix is not None and 
-        cross_position_pair_matrix is not None and 
-        items_assigned is not None and len(items_assigned) > 0):
-        
-        n_external_items = cross_item_pair_matrix.shape[1]
-        
-        for u_idx in range(len(unplaced)):
-            u_item = unplaced[u_idx]
-            best_cross_score = 0.0
-            
-            # For each unplaced item, find best position for external interactions
-            for a_idx in range(len(available)):
-                pos = available[a_idx]
-                pos_sum = 0.0
-                
-                for ext_idx in range(n_external_items):
+        # Total for unplaced-unplaced pairs
+        n_uu_pairs = len(unplaced) * (len(unplaced) - 1)  # Both directions
+        unplaced_pairs_total = avg_unplaced_item_score * avg_available_pos_score * n_uu_pairs
+        n_potential_pairs += n_uu_pairs
+    else:
+        # Original optimal matching approach
+        # 2. Calculate max score for pairs between placed and unplaced
+        for p_idx in range(len(placed)):
+            p_item = placed[p_idx]
+            p_pos = mapping[p_item]
+            for u_idx in range(len(unplaced)):
+                u_item = unplaced[u_idx]
+                # For each unplaced item, find best position pairing with each placed item
+                best_pair_score = 0.0
+                for a_idx in range(len(available)):
+                    pos = available[a_idx]
                     # Calculate score in both directions
-                    fwd_score = (cross_item_pair_matrix[u_item, ext_idx] * 
-                                cross_position_pair_matrix[pos, ext_idx])
-                    bwd_score = fwd_score  # Simplified assumption for bound calculation
-                    pos_sum += fwd_score + bwd_score
+                    fwd_score = (item_pair_score_matrix[p_item, u_item] * 
+                                position_score_matrix[p_pos, pos])
+                    bwd_score = (item_pair_score_matrix[u_item, p_item] * 
+                                position_score_matrix[pos, p_pos])
+                    pair_score = fwd_score + bwd_score
+                    if pair_score > best_pair_score:
+                        best_pair_score = pair_score
                 
-                if pos_sum > best_cross_score:
-                    best_cross_score = pos_sum
-                    
-            cross_interaction_total += best_cross_score
+                placed_unplaced_pairs_total += best_pair_score
+                n_potential_pairs += 2  # Count both directions
+        
+        # 3. Calculate max score for pairs between unplaced items
+        # Create arrays for item pair scores and position pair scores
+        n_unplaced_pairs = (len(unplaced) * (len(unplaced) - 1)) // 2
+        n_available_pairs = (len(available) * (len(available) - 1)) // 2
+        
+        if n_unplaced_pairs > 0 and n_available_pairs > 0:
+            item_pair_scores = np.zeros(n_unplaced_pairs, dtype=np.float32)
+            pos_pair_scores = np.zeros(n_available_pairs, dtype=np.float32)
+            
+            # Fill item pair scores array
+            pair_idx = 0
+            for i in range(len(unplaced)):
+                for j in range(i + 1, len(unplaced)):
+                    i_item, j_item = unplaced[i], unplaced[j]
+                    # Sum of scores in both directions
+                    score = (item_pair_score_matrix[i_item, j_item] + 
+                            item_pair_score_matrix[j_item, i_item])
+                    item_pair_scores[pair_idx] = score
+                    pair_idx += 1
+            
+            # Fill position pair scores array
+            pair_idx = 0
+            for i in range(len(available)):
+                for j in range(i + 1, len(available)):
+                    i_pos, j_pos = available[i], available[j]
+                    # Sum of scores in both directions
+                    score = (position_score_matrix[i_pos, j_pos] + 
+                            position_score_matrix[j_pos, i_pos])
+                    pos_pair_scores[pair_idx] = score
+                    pair_idx += 1
+            
+            # Sort both arrays in descending order
+            item_pair_scores = np.sort(item_pair_scores)[::-1]
+            pos_pair_scores = np.sort(pos_pair_scores)[::-1]
+            
+            # Match highest item pair scores with highest position pair scores
+            n_pairs_to_match = min(len(item_pair_scores), len(pos_pair_scores))
+            for i in range(n_pairs_to_match):
+                unplaced_pairs_total += item_pair_scores[i] * pos_pair_scores[i] / 2.0  # Divide by 2 since we count both directions
+                n_potential_pairs += 2  # Count both directions
+    
+    # Apply scaling factor to future estimates
+    placed_unplaced_pairs_total *= scaling_factor
+    unplaced_pairs_total *= scaling_factor
     
     # Current pair component is already calculated and normalized
     current_pair_component_total = current_unweighted_item_pair_score * n_placed_pairs
     
     # Combine all pair components
     total_potential_pairs = n_placed_pairs + n_potential_pairs
-    future_pair_component_total = placed_unplaced_pairs_total + unplaced_pairs_total + cross_interaction_total
+    future_pair_component_total = placed_unplaced_pairs_total + unplaced_pairs_total
     
     # Calculate normalized pair component
     max_normalized_pair_component = 0.0
@@ -1113,12 +1178,6 @@ def calculate_upper_bound(
     total_item_score = max_normalized_item_component * item_weight
     total_pair_score = max_normalized_pair_component * item_pair_weight
     combined_score = total_item_score + total_pair_score
-    
-    if debug_print and depth is not None and depth < 3:
-        print("    Final upper bound calculation:")
-        print("      Item component:", max_normalized_item_component, "* weight", item_weight, "=", total_item_score)
-        print("      Pair component:", max_normalized_pair_component, "* weight", item_pair_weight, "=", total_pair_score)
-        print("      Combined score:", combined_score)
     
     return combined_score
 
@@ -1376,7 +1435,9 @@ def branch_and_bound_optimal_nsolutions(
     norm_item_pair_scores: Dict = None,
     norm_position_pair_scores: Dict = None,
     missing_item_pair_norm_score: float = 0.0,
-    missing_position_pair_norm_score: float = 0.0
+    missing_position_pair_norm_score: float = 0.0,
+    scaling_factor: float = 0.85, 
+    use_averages: bool = True  
 ) -> List[Tuple[float, Dict[str, str], Dict]]:
     """
     Branch and bound implementation using depth-first search. 
@@ -1559,7 +1620,7 @@ def branch_and_bound_optimal_nsolutions(
                 item_pair_score_matrix,
                 item_weight,
                 item_pair_weight,
-                cross_item_pair_matrix,  # Make sure these are passed
+                cross_item_pair_matrix, 
                 cross_position_pair_matrix,
                 items_assigned,
                 positions_assigned
@@ -1622,7 +1683,13 @@ def branch_and_bound_optimal_nsolutions(
                     item_pair_score_matrix,
                     item_weight, item_pair_weight,
                     best_score=worst_top_n_score,
-                    depth=depth + 1
+                    depth=depth + 1,
+                    cross_item_pair_matrix=cross_item_pair_matrix,
+                    cross_position_pair_matrix=cross_position_pair_matrix,
+                    items_assigned=items_assigned,
+                    positions_assigned=positions_assigned,
+                    scaling_factor=scaling_factor,
+                    use_averages=use_averages
                 )
 
                 margin = upper_bound - worst_top_n_score
@@ -1646,7 +1713,7 @@ def branch_and_bound_optimal_nsolutions(
 
             # Recursion:
             phase2_dfs(new_mapping, new_used, depth + 1, pbar, 
-                       new_path if debug_print else "")
+                        new_path if debug_print else "")
 
     #-------------------------------------------------------------------------
     # Phase 1: Find all valid arrangements of constrained items
