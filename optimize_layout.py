@@ -918,8 +918,8 @@ def calculate_upper_bound(
     cross_position_pair_matrix=None,
     items_assigned=None,
     positions_assigned=None,
-    scaling_factor: float = 1.0,  # New parameter for scaling down future estimates
-    use_averages: bool = False     # New parameter to toggle average-based estimation
+    scaling_factor: float = 1.0, 
+    use_averages: bool = False  
 ) -> float:
     """
     Calculate upper bound on best possible score from this node.
@@ -1231,7 +1231,8 @@ def analyze_upper_bound_quality(
     
     # Function to DFS and collect sample nodes
     def collect_sample_nodes(mapping, used, depth, nodes_collected):
-        if depth >= max_depth_to_sample or len(nodes_collected) >= sample_size * max_depth_to_sample:
+        """Modified sampling function to ensure better coverage across depths."""
+        if depth >= max_depth_to_sample:
             return
             
         # Record this node if we need more at this depth
@@ -1240,6 +1241,34 @@ def analyze_upper_bound_quality(
             # Deep copy to avoid reference issues
             nodes_collected.append((mapping.copy(), used.copy(), depth))
         
+        # If we already have enough samples at this depth, and we're not at the max depth,
+        # prioritize going deeper rather than exploring more at this level
+        if depth_count >= sample_size and depth < max_depth_to_sample - 1:
+            # Continue deeper only
+            current_item_idx = -1
+            for i in range(len(mapping)):
+                if mapping[i] < 0:
+                    current_item_idx = i
+                    break
+                    
+            if current_item_idx == -1:
+                return
+                
+            # Try just a few random positions to go deeper quickly
+            valid_positions = [pos for pos in range(len(used)) if not used[pos]]
+            if valid_positions:
+                # Randomly select a position instead of trying all
+                np.random.shuffle(valid_positions)
+                pos = valid_positions[0]
+                new_mapping = mapping.copy()
+                new_mapping[current_item_idx] = pos
+                new_used = used.copy()
+                new_used[pos] = True
+                
+                collect_sample_nodes(new_mapping, new_used, depth + 1, nodes_collected)
+            return
+        
+        # Normal exploration when we need more samples at this depth
         # Find unassigned item
         current_item_idx = -1
         for i in range(len(mapping)):
@@ -1254,22 +1283,54 @@ def analyze_upper_bound_quality(
         valid_positions = [pos for pos in range(len(used)) if not used[pos]]
         np.random.shuffle(valid_positions)  # Randomize exploration order
         
-        # Only take a few branches to get diverse samples
-        for pos in valid_positions[:min(3, len(valid_positions))]:
+        # Dynamically adjust branching factor based on depth
+        # Use more branches at shallow depths, fewer at deeper depths
+        branch_factor = max(1, 5 - depth)  # 5 at depth 0, 4 at depth 1, etc.
+        
+        for pos in valid_positions[:min(branch_factor, len(valid_positions))]:
             new_mapping = mapping.copy()
             new_mapping[current_item_idx] = pos
             new_used = used.copy()
             new_used[pos] = True
             
             collect_sample_nodes(new_mapping, new_used, depth + 1, nodes_collected)
-    
+                    
     # Collect sample nodes
     initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int32)
     initial_used = np.zeros(len(positions_to_assign), dtype=bool)
-    
+
     print(f"Collecting {sample_size} sample nodes at each depth up to {max_depth_to_sample}...")
-    collect_sample_nodes(initial_mapping, initial_used, 0, nodes_to_sample)
+
+    # Track progress per depth
+    collected_per_depth = [0] * max_depth_to_sample
+    max_attempts = 50  # Limit attempts to prevent infinite loops
+
+    for attempt in range(max_attempts):
+        # Check if we have enough samples at all depths
+        if all(count >= sample_size for count in collected_per_depth):
+            break
+            
+        # Collect more samples
+        prev_size = len(nodes_to_sample)
+        collect_sample_nodes(initial_mapping, initial_used, 0, nodes_to_sample)
+        
+        # Update counts
+        collected_per_depth = [sum(1 for n in nodes_to_sample if n[2] == d) 
+                            for d in range(max_depth_to_sample)]
+        
+        # Print progress
+        if attempt % 5 == 0:
+            print(f"Attempt {attempt+1}/{max_attempts}: Collected {len(nodes_to_sample)} nodes")
+            for d in range(max_depth_to_sample):
+                print(f"  Depth {d}: {collected_per_depth[d]}/{sample_size}")
+        
+        # If we didn't add any new nodes, try a different random seed
+        if len(nodes_to_sample) == prev_size:
+            np.random.seed(attempt + 42)
+
     print(f"Collected {len(nodes_to_sample)} total nodes")
+    for d in range(max_depth_to_sample):
+        print(f"  Depth {d}: {collected_per_depth[d]}/{sample_size}")
     
     # Analyze bound quality for each node
     print("\nAnalyzing bound quality...")
@@ -1357,7 +1418,7 @@ def analyze_upper_bound_quality(
     
     print("\nSuggested buffer value: Choose the smallest buffer that has <1% risk of pruning good solutions")
     print("=== END ANALYSIS ===\n")
-
+    
 @jit(nopython=True)
 def get_next_item(
     mapping: np.ndarray,
@@ -1436,8 +1497,8 @@ def branch_and_bound_optimal_nsolutions(
     norm_position_pair_scores: Dict = None,
     missing_item_pair_norm_score: float = 0.0,
     missing_position_pair_norm_score: float = 0.0,
-    scaling_factor: float = 0.85, 
-    use_averages: bool = True  
+    scaling_factor: float = 1.0, 
+    use_averages: bool = False  
 ) -> List[Tuple[float, Dict[str, str], Dict]]:
     """
     Branch and bound implementation using depth-first search. 
@@ -1626,9 +1687,9 @@ def branch_and_bound_optimal_nsolutions(
                 positions_assigned
             )
             
-            #worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
-            #margin = total_score - worst_minus_epsilon
-            margin = total_score - worst_top_n_score
+            worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
+            margin = total_score - worst_minus_epsilon
+            #margin = total_score - worst_top_n_score
             if len(solutions) < n_solutions or margin > 0:
                 solution = (
                     total_score,
@@ -1822,7 +1883,9 @@ def branch_and_bound_optimal_nsolutions(
 # Main function and pipeline
 #-----------------------------------------------------------------------------
 def optimize_layout(config: dict, verbose: bool = False, 
-                    analyze_bounds: bool = False) -> None:
+                    analyze_bounds: bool = False,
+                    scaling_factor: float = 1.0,
+                    use_averages: bool = False) -> None:
     """
     Main optimization function. Uses specialized single-solution search when nlayouts=1,
     otherwise uses original branch_and_bound_optimal search.
@@ -1912,7 +1975,9 @@ def optimize_layout(config: dict, verbose: bool = False,
         norm_item_pair_scores=norm_item_pair_scores,  
         norm_position_pair_scores=norm_position_pair_scores,
         missing_item_pair_norm_score=missing_item_pair_norm_score,
-        missing_position_pair_norm_score=missing_position_pair_norm_score
+        missing_position_pair_norm_score=missing_position_pair_norm_score,
+        scaling_factor=scaling_factor,
+        use_averages=use_averages 
     )
     
     # Before printing results, recalculate scores for the complete layout
@@ -1998,7 +2063,11 @@ if __name__ == "__main__":
         config = load_config(args.config)
         
         # Optimize the layout
-        optimize_layout(config, verbose=args.verbose, analyze_bounds=False)
+        optimize_layout(config, 
+                        verbose=args.verbose, 
+                        analyze_bounds=True,
+                        scaling_factor=1.0,
+                        use_averages=False)
         
         elapsed = time.time() - start_time
         print(f"Total runtime: {timedelta(seconds=int(elapsed))}")
