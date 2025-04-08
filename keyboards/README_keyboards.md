@@ -25,13 +25,13 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
-1. Generate 114,240 configuration files.
+1. Generate 720,720 configuration files.
 2. Optimally arrange frequent letters for each configuration. 
 3. Generate a second set of configuration files, removing letters.
 4. Optimally arrange remaining letters.
 5. Select the layout with the highest score.
 
-### Step 1. Generate 114,240 configuration files 
+### Step 1. Generate 720,720 configuration files 
 
   `cd keyboards; python generate_keyboard_configs1.py`
 
@@ -57,19 +57,19 @@ For the following, we:
   │     │     │     │     ║     │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  #### Assign the next 4 letters to any available top-18 keys
-  We then allow the next 4 letters `taoi` to be placed 
-  in any available of the 18 most comfortable keys.
-  There are 57,120 permutations (4 letters in any of 17 available keys):
-    - 2,380 ways to choose 4 keys from 17 keys
-    - 24 ways to arrange 4 letters in those 4 keys
+  #### Assign the next 5 letters to any available top-16 keys
+  We then allow the next 5 letters (`taoin` in English) 
+  to be placed in any available of the 15 most comfortable keys.
+  There are 360,360 permutations (5 letters in any of 15 available keys):
+    - 3.003 ways to choose 5 keys from 16 keys
+    - 120 ways to arrange 5 letters in those 5 keys
 
   ╭───────────────────────────────────────────────╮
   │     │  -  │  -  │  -  ║  -  │  -  │  -  │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  -  │  -  │  e  │  -  ║  -  │  -  │  -  │  -  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │  -  │  -  ║  -  │  -  │     │     │
+  │     │     │     │  -  ║  -  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
   ╭───────────────────────────────────────────────╮
   │     │     │  o  │     ║     │     │     │     │
@@ -83,10 +83,10 @@ For the following, we:
 
   `python optimize_layout.py`
 
-  #### Assign the next 13 letters to the 13 remaining top-18 keys
-  For each of Step 1's 114,240 configuration files, a branch-and-bound 
-  algorithm efficiently probes the more than 6 billion (13!) possible 
-  permutations, to optimally arrange the next 13 letters `nsrhldcumfpgw`
+  #### Assign the next 12 letters to the 12 remaining top-18 keys
+  For each of Step 1's 720,720 configuration files, a branch-and-bound 
+  algorithm efficiently probes the more than 6 billion (12!) possible 
+  permutations, to optimally arrange the next 12 letters `nsrhldcumfpg`
   for that configuration. This results in 18 filled positions:
 
   ╭───────────────────────────────────────────────╮

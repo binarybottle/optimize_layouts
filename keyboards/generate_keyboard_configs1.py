@@ -29,15 +29,22 @@ CONFIG_FILE = '../config.yaml'
 nlayouts = 10
 
 # Items in configurations (18 letters to be assigned to keys)
-items_assigned  = "etaoi"         # 5 most frequent letters (etaoi in English)
-items_to_assign = "nsrhldcumfpgw" # next 13 most frequent letters (nsrhldcumfpgw in English)
+items_assigned  = "etaoin"       # 5 most frequent letters (etaoi in English)
+items_to_assign = "srhldcumfpgw" # next 12 most frequent letters (nsrhldcumfpgw in English)
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
 # Position constraints for items_assigned
+# Constraining items_assigned to 18 keys results in 148,5120 
+# configuration files; 16 keys results in 720,720 config files.
 positions_for_item1 = ["F","D"] # 2 most comfortable left qwerty keys for the most frequent letter
-positions_for_items_2thruN = ["F","D","R","S","E","V","A","W","C",
-                              "J","K","U","L","I","M",";","O",","] # 18 most comfortable qwerty keys
+constrain_n_keys = 16
+if constrain_n_keys == 18:
+    positions_for_items_2thruN = ["F","D","R","S","E","V","A","W","C",
+                                "J","K","U","L","I","M",";","O",","] # 18 most comfortable qwerty keys
+elif constrain_n_keys == 16:
+    positions_for_items_2thruN = ["F","D","R","S","E","V","A","W",
+                                "J","K","U","L","I","M",";","O"] # 16 most comfortable qwerty keys
 
 # Keys to assign by the optimization process
 all_N_keys = "FDRSEVAWCJKULIM;O,"  # 18 most comfortable keys
@@ -63,14 +70,16 @@ def generate_constraint_sets():
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4, pos5 = permN
+                pos2, pos3, pos4, pos5, pos6 = permN
                 
                 # Create final position assignments
                 positions = {items_assigned[0]: pos1, 
                              items_assigned[1]: pos2, 
                              items_assigned[2]: pos3, 
                              items_assigned[3]: pos4, 
-                             items_assigned[4]: pos5}
+                             items_assigned[4]: pos5,
+                             items_assigned[5]: pos6
+                            }
                 
                 # Create the positions_assigned string (must match the order of items_assigned)
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])

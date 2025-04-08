@@ -1418,7 +1418,7 @@ def analyze_upper_bound_quality(
     
     print("\nSuggested buffer value: Choose the smallest buffer that has <1% risk of pruning good solutions")
     print("=== END ANALYSIS ===\n")
-    
+
 @jit(nopython=True)
 def get_next_item(
     mapping: np.ndarray,
@@ -2065,7 +2065,7 @@ if __name__ == "__main__":
         # Optimize the layout
         optimize_layout(config, 
                         verbose=args.verbose, 
-                        analyze_bounds=True,
+                        analyze_bounds=False,
                         scaling_factor=1.0,
                         use_averages=False)
         
