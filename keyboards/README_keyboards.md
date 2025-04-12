@@ -25,13 +25,13 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
-1. Generate 720,720 configuration files.
+1. Generate 65,520 configuration files.
 2. Optimally arrange frequent letters for each configuration. 
 3. Generate a second set of configuration files, removing letters.
 4. Optimally arrange remaining letters.
 5. Select the layout with the highest score.
 
-### Step 1. Generate 720,720 configuration files 
+### Step 1. Generate 65,520 configuration files 
 
   `cd keyboards; python generate_keyboard_configs1.py`
 
@@ -57,12 +57,12 @@ For the following, we:
   │     │     │     │     ║     │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  #### Assign the next 5 letters to any available top-16 keys
-  We then allow the next 5 letters (`taoin` in English) 
-  to be placed in any available of the 15 most comfortable keys.
-  There are 360,360 permutations (5 letters in any of 15 available keys):
-    - 3.003 ways to choose 5 keys from 16 keys
-    - 120 ways to arrange 5 letters in those 5 keys
+  #### Assign the next 4 letters to any available top-16 keys
+  We then allow the next 4 letters (`taoi` in English) 
+  to be placed in any available of the 16 most comfortable keys.
+  There are 32,760 permutations:
+    - 1,365 ways to choose 4 keys from 15 keys
+    - 24 ways to arrange 4 letters in those 4 keys
 
   ╭───────────────────────────────────────────────╮
   │     │  -  │  -  │  -  ║  -  │  -  │  -  │     │
@@ -83,11 +83,30 @@ For the following, we:
 
   `python optimize_layout.py`
 
-  #### Assign the next 12 letters to the 12 remaining top-18 keys
-  For each of Step 1's 720,720 configuration files, a branch-and-bound 
-  algorithm efficiently probes the more than 6 billion (12!) possible 
-  permutations, to optimally arrange the next 12 letters `nsrhldcumfpg`
-  for that configuration. This results in 18 filled positions:
+  #### Assign the next 11 letters to the 11 remaining top-16 keys
+  For each of Step 1's 65,520 configuration files, a branch-and-bound algorithm 
+  optimally arranges the next set of letters for that configuration. 
+
+  If we choose 11 letters (`nsrhldcumfp`), then there are more than
+  39.9 million (11!) possible permutations, resulting in 16 filled positions:
+
+  ╭───────────────────────────────────────────────╮
+  │     │  -  │  o  │  -  ║  -  │  -  │  -  │     │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │  -  │  i  │  e  │  a  ║  -  │  t  │  -  │  -  │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │     │     │     │  -  ║  -  │     │     │     │
+  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+  ╭───────────────────────────────────────────────╮
+  │     │  f  │  o  │  u  ║  l  │  d  │  m  │     │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │  c  │  i  │  e  │  a  ║  h  │  t  │  s  │  n  │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │     │     │     │  p  ║  r  │     │     │     │
+  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+
+  If we choose 13 letters (`nsrhldcumfpgw`), then there are more than
+  6.2 billion (13!) possible permutations, resulting in 18 filled positions:
 
   ╭───────────────────────────────────────────────╮
   │     │  -  │  o  │  -  ║  -  │  -  │  -  │     │
@@ -104,7 +123,7 @@ For the following, we:
   │     │     │  p  │  g  ║  r  │  m  │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-### Step 3. Generate a second set of configuration files, removing letters 
+### Step 3. Generate a 2nd set of configuration files, removing & replacing letters 
 
   ```shell
   cd keyboards; python generate_keyboard_configs2.py
@@ -117,8 +136,20 @@ For the following, we:
   ```
 
   Generate a new configuration file from each optimal layout from Step 2, 
-  removing 4 letters (such as cfpwnm) from the layout's 4 least comfortable keys. 
+  removing the letters from the layout's least comfortable keys. 
   This will promote greater exploration in Step 4.
+
+  If we leave 14 letters, then we will need to fill 10 keys in Step 4:
+
+  ╭───────────────────────────────────────────────╮
+  │     │     │  o  │  u  ║  l  │  d  │     │     │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │  c  │  i  │  e  │  a  ║  h  │  t  │  s  │  n  │
+  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
+  │     │     │     │  g  ║  r  │     │     │     │
+  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+
+  If we leave 12 letters, then we will need to fill 12 keys in Step 4:
 
   ╭───────────────────────────────────────────────╮
   │     │     │  o  │  u  ║  l  │  d  │     │     │
@@ -128,8 +159,8 @@ For the following, we:
   │     │     │     │  g  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-***
-REMOVE 6 LETTERS?:
+If we leave 10 letters, then we will need to fill 14 keys in Step 4:
+
   ╭───────────────────────────────────────────────╮
   │     │     │  o  │  u  ║  l  │  d  │     │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -151,8 +182,8 @@ REMOVE 6 LETTERS?:
   ```
 
   We run optimize_layout.py again on each new unique configuration file to 
-  optimally arrange the remaining letters in the 12 least comfortable keys
-  (in our example, byckxjwvnmfp):
+  optimally arrange the remaining letters in the least comfortable keys
+  (in our example assigning 12 letters, byckxjwvnmfp):
 
   ╭───────────────────────────────────────────────╮
   │  -  │  -  │  o  │  u  ║  l  │  d  │  -  │  -  │
@@ -170,20 +201,10 @@ REMOVE 6 LETTERS?:
   │  k  │  x  │  j  │  g  ║  r  │  m  │  f  │  p  │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-***
-FILL 14 KEYS?:
-  ╭───────────────────────────────────────────────╮
-  │  -  │  -  │  o  │  u  ║  l  │  d  │  -  │  -  │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  -  │  i  │  e  │  a  ║  h  │  t  │  s  │  -  │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  -  │  -  │  -  │  -  ║  -  │  -  │  -  │  -  │
-  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
 
 ### Step 5. Select the layout with the highest score
 
-  Each of the 720,720 configuration files leads to an optimal layout 
+  Each of the 65,520 configuration files leads to an optimal layout 
   based on its initial constraints. A score is computed for each layout,
   based on the same scoring logic used to evaluate layouts during the
   optimization process. For this final step, we select the layout 

@@ -39,11 +39,19 @@ import sys
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = '../output/configs'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 100 
+nlayouts = 1 
 
 # Positions
-MOST_COMFORTABLE_KEYS = "FDRSEVJKULIM"   # 12 most comfortable keys
-LEAST_COMFORTABLE_KEYS = "AWCQXZ;O,P./"  # 12 least comfortable keys
+# FDRSEVAWCQXZ JKULIM;O,P./  
+#MOST_COMFORTABLE_KEYS = "FDRSEVAJKULIM;"  # 14 most comfortable keys
+#LEAST_COMFORTABLE_KEYS = "WCQXZO,P./"     # 10 least comfortable keys
+MOST_COMFORTABLE_KEYS = "FDRSEVJKULIM"     # 12 most comfortable keys
+LEAST_COMFORTABLE_KEYS = "AWCQXZ;O,P./"    # 12 least comfortable keys
+#MOST_COMFORTABLE_KEYS = "FDRSEJKULI"      # 10 most comfortable keys
+#LEAST_COMFORTABLE_KEYS = "VAWCQXZM;O,P./" # 14 least comfortable keys
+
+# Least frequent of 24 letters (`vkxj` in English) to add to items_to_assign
+least_frequent_items_of_24 = 'vkxj'
 
 # Base configuration from the original config file
 with open(CONFIG_FILE, 'r') as f:
@@ -226,14 +234,14 @@ def generate_constraint_sets(layouts):
         
         items_in_least_comfortable = ''.join([pos_to_item.get(pos, '') for pos in LEAST_COMFORTABLE_KEYS])
         
-        # Add vkxj to items_to_assign (as specified in the docstring)
-        fixed_items_to_add = 'vkxj'
-        items_to_assign = fixed_items_to_add + items_in_least_comfortable
-        items_to_assign = ''.join(sorted(set(items_to_assign), key=items_to_assign.index))  # Remove duplicates
+        # Least frequent of 24 letters (`vkxj` in English) to items_to_assign
+        items_to_assign = least_frequent_items_of_24 + items_in_least_comfortable
+        items_to_assign = items_to_assign[:len(LEAST_COMFORTABLE_KEYS)]  # Take first characters
+        #items_to_assign = ''.join(sorted(set(items_to_assign), key=items_to_assign.index))  # Remove duplicates
         
         # Create config
         config = {
-            'items_to_assign': items_to_assign[:14],  # Take first 14 characters
+            'items_to_assign': items_to_assign,
             'positions_to_assign': LEAST_COMFORTABLE_KEYS,
             'items_assigned': items_in_most_comfortable,
             'positions_assigned': MOST_COMFORTABLE_KEYS,

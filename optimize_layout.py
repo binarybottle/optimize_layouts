@@ -13,9 +13,10 @@ See README for more details.
 import yaml
 import numpy as np
 import pandas as pd
-from numba import jit
 from tqdm import tqdm
 import psutil
+from numba import jit, config
+import gc
 
 import os
 from math import perm
@@ -25,6 +26,28 @@ import csv
 from collections import defaultdict
 from typing import List, Dict, Tuple, Set
 import argparse
+
+# Save memory by using a temporary filesystem for the Numba cache:
+# 1. First try to use the job scheduler's temporary directory
+# 2. Then try to use /dev/shm (RAM-based filesystem)
+# 3. Fall back to /tmp which is usually available
+# Check if TMPDIR is set (common in SLURM and other schedulers)
+tmpdir = os.environ.get('TMPDIR')
+if tmpdir and os.path.exists(tmpdir) and os.access(tmpdir, os.W_OK):
+    numba_cache = os.path.join(tmpdir, 'numba_cache')
+    os.makedirs(numba_cache, exist_ok=True)
+    config.CACHE_DIR = numba_cache
+# Or try /dev/shm if available
+elif os.path.exists('/dev/shm') and os.access('/dev/shm', os.W_OK):
+    numba_cache = '/dev/shm/numba_cache'
+    os.makedirs(numba_cache, exist_ok=True)
+    config.CACHE_DIR = numba_cache
+# Fall back to /tmp
+elif os.path.exists('/tmp') and os.access('/tmp', os.W_OK):
+    numba_cache = '/tmp/numba_cache'
+    os.makedirs(numba_cache, exist_ok=True)
+    config.CACHE_DIR = numba_cache
+config.THREADING_LAYER = 'safe'  # Less threading overhead
 
 #-----------------------------------------------------------------------------
 # Loading, validating, and saving functions
@@ -996,7 +1019,7 @@ def calculate_upper_bound(
         # Get scores for remaining items
         item_values = item_scores[unplaced]
         item_values = np.sort(item_values)[::-1]  # Highest to lowest
-        
+   
         # Maximum possible item component for unplaced items
         len_values = min(len(position_values), len(item_values))
         for i in range(len_values):
@@ -1296,8 +1319,8 @@ def analyze_upper_bound_quality(
             collect_sample_nodes(new_mapping, new_used, depth + 1, nodes_collected)
                     
     # Collect sample nodes
-    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int32)
-    initial_used = np.zeros(len(positions_to_assign), dtype=bool)
+    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int16)
+    initial_used = np.zeros(len(positions_to_assign), dtype=np.bool_)
 
     print(f"Collecting {sample_size} sample nodes at each depth up to {max_depth_to_sample}...")
 
@@ -1482,7 +1505,7 @@ def prepare_complete_arrays(
                                                                        missing_item_pair_norm_score)
     
     # Create direct mapping for evaluating a complete layout
-    mapping = np.arange(n_items, dtype=np.int32)
+    mapping = np.arange(n_items, dtype=np.int16)
     
     return mapping, item_scores, item_pair_score_matrix, position_score_matrix
 
@@ -1563,8 +1586,8 @@ def branch_and_bound_optimal_nsolutions(
     worst_top_n_score = np.float32(-np.inf)
     
     # Initialize mapping and used positions
-    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int32)
-    initial_used = np.zeros(n_positions_to_assign, dtype=bool)
+    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int16)
+    initial_used = np.zeros(n_positions_to_assign, dtype=np.bool_)
 
     # Track statistics
     processed_nodes = 0
@@ -1634,148 +1657,164 @@ def branch_and_bound_optimal_nsolutions(
         # Try each constrained position
         for pos in constrained_positions:
             if not used[pos]:
-                new_mapping = mapping.copy()
-                new_mapping[current_item_idx] = pos
-                new_used = used.copy()
-                new_used[pos] = True
-                solutions.extend(phase1_dfs(new_mapping, new_used, depth + 1, pbar))
-        
+                # Store original values for backtracking
+                old_value = mapping[current_item_idx]
+                
+                # Make changes in-place
+                mapping[current_item_idx] = pos
+                used[pos] = True
+                
+                # Recursive call with the modified arrays
+                sub_solutions = phase1_dfs(mapping, used, depth + 1, pbar)
+                solutions.extend(sub_solutions)
+                
+                # Backtrack: restore original state
+                mapping[current_item_idx] = old_value
+                used[pos] = False
+
         return solutions
 
-    def phase2_dfs(
-        mapping: np.ndarray,
-        used: np.ndarray,
-        depth: int,
-        pbar: tqdm,
-        path_str: str = ""
-    ) -> None:
-        """DFS for Phase 2 (remaining items)."""
-        nonlocal solutions, worst_top_n_score, processed_nodes, pruned_count, explored_count, last_progress_update, permutations_completed
-
-        # Count this node as processed
-        processed_nodes += 1
+    def phase2_dfs(initial_mapping, initial_used, initial_depth, pbar):
+        """Iterative version of DFS for Phase 2 using an explicit stack."""
+        # Stack entries: (mapping, used, depth, path_str)
+        stack = [(initial_mapping.copy(), initial_used.copy(), initial_depth, "")]
         
-        # Update progress periodically
-        if processed_nodes - last_progress_update >= progress_update_interval:
-            pbar.update(processed_nodes - last_progress_update)
-            last_progress_update = processed_nodes
-            if debug_print:
-                print(f"\nProgress: {processed_nodes:,} permutations processed")
-                print(f"Pruned: {pruned_count:,}, Explored: {explored_count:,}")
-                print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
-                if solutions:
-                    print(f"Current best score: {solutions[-1][0]:.9f}")
-
-        # Process complete solutions
-        if depth == n_items_to_assign: 
-            permutations_completed += 1           
-            if n_constrained:
-                if not validate_mapping(mapping, constrained_item_indices, constrained_positions):
-                    return
-
-            # Calculate score with cross-interactions
-            total_score, item_component, item_pair_component = calculate_score(
-                mapping,
-                position_score_matrix,
-                item_scores,
-                item_pair_score_matrix,
-                item_weight,
-                item_pair_weight,
-                cross_item_pair_matrix, 
-                cross_position_pair_matrix,
-                items_assigned,
-                positions_assigned
-            )
+        # Use nonlocal variables from outer function
+        nonlocal solutions, worst_top_n_score, processed_nodes, pruned_count, explored_count
+        nonlocal last_progress_update, permutations_completed
+        
+        # Add garbage collection
+        import gc
+        
+        while stack:
+            # Get current state from stack
+            mapping, used, depth, path_str = stack.pop()
             
-            worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
-            margin = total_score - worst_minus_epsilon
-            #margin = total_score - worst_top_n_score
-            if len(solutions) < n_solutions or margin > 0:
-                solution = (
-                    total_score,
-                    item_component,
-                    item_pair_component,
-                    mapping.tolist()
-                )
-                solutions.append(solution)
-                solutions.sort(key=lambda x: x[0])  # Sort by total_score
-                if len(solutions) > n_solutions:
-                    solutions.pop(0)  # Remove worst solution
-                worst_top_n_score = solutions[0][0]
-            return
-       
-        # Find next unassigned item
-        current_item_idx = get_next_item(mapping)
-        if current_item_idx == -1: 
-            return
-
-        # Update path for debugging
-        if debug_print:
-            new_path = path_str + items_to_assign[current_item_idx]
-
-        # Get valid positions for this item
-        if n_constrained and current_item_idx in constrained_item_indices:
-            valid_positions = [pos for pos in constrained_positions if not used[pos]]
-        else:
-            valid_positions = [pos for pos in range(n_positions_to_assign) if not used[pos]]
+            # Count this node as processed
+            processed_nodes += 1
             
-        if debug_print:
-            print(f"\nPlacing item {items_to_assign[current_item_idx]} (idx {current_item_idx})")
-            print("Current mapping: ", mapping)
-            print(f"Valid positions: {valid_positions} ({[positions_to_assign[p] for p in valid_positions]})")
-
-        # Try each valid position
-        for pos in valid_positions:
-            if debug_print:
-                print(f"  Trying {items_to_assign[current_item_idx]} in position {positions_to_assign[pos]}")
-            new_mapping = mapping.copy()
-            new_mapping[current_item_idx] = pos
-            new_used = used.copy()
-            new_used[pos] = True
+            # Do garbage collection periodically
+            if processed_nodes % 100000 == 0:
+                gc.collect()
+                gc.collect() # Force a second collection pass
             
-            # Decide whether to prune - modified with safeguards
-            should_prune = False
+            # Update progress periodically
+            if processed_nodes - last_progress_update >= progress_update_interval:
+                pbar.update(processed_nodes - last_progress_update)
+                last_progress_update = processed_nodes
+                if debug_print:
+                    print(f"\nProgress: {processed_nodes:,} permutations processed")
+                    print(f"Pruned: {pruned_count:,}, Explored: {explored_count:,}")
+                    print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
+                    if solutions:
+                        print(f"Current best score: {solutions[-1][0]:.9f}")
             
-            # Only prune if we have at least one solution
-            if len(solutions) > 0:
-                upper_bound = calculate_upper_bound(
-                    new_mapping, new_used,
-                    position_score_matrix, item_scores,
-                    item_pair_score_matrix,
-                    item_weight, item_pair_weight,
-                    best_score=worst_top_n_score,
-                    depth=depth + 1,
-                    cross_item_pair_matrix=cross_item_pair_matrix,
-                    cross_position_pair_matrix=cross_position_pair_matrix,
-                    items_assigned=items_assigned,
-                    positions_assigned=positions_assigned,
-                    scaling_factor=scaling_factor,
-                    use_averages=use_averages
-                )
-
-                margin = upper_bound - worst_top_n_score
-
-                # Add an anti-aggressive pruning safeguard
-                # If we're pruning too much, occasionally explore branches anyway
-                if margin < 0:
-                    should_prune = True
-                    # Safety mechanism: if pruning is extremely aggressive, 
-                    # occasionally explore anyway (1% chance)
-                    if pruned_count > explored_count * 100 and np.random.random() < 0.01:
-                        should_prune = False
-                        if debug_print and processed_nodes > progress_update_interval:
-                            print(f"WARNING: Bypassing aggressive pruning at depth {depth}")
-            
-            if should_prune:
-                pruned_count += 1
-                continue
+            # Process complete solutions
+            if depth == n_items_to_assign:
+                permutations_completed += 1
+                if n_constrained:
+                    if not validate_mapping(mapping, constrained_item_indices, constrained_positions):
+                        continue  # Skip to next stack item
                 
-            explored_count += 1
-
-            # Recursion:
-            phase2_dfs(new_mapping, new_used, depth + 1, pbar, 
-                        new_path if debug_print else "")
-
+                # Calculate score
+                total_score, item_component, item_pair_component = calculate_score(
+                    mapping, position_score_matrix, item_scores, item_pair_score_matrix,
+                    item_weight, item_pair_weight, cross_item_pair_matrix, 
+                    cross_position_pair_matrix, items_assigned, positions_assigned
+                )
+                
+                # Check if solution qualifies
+                worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
+                margin = total_score - worst_minus_epsilon
+                if len(solutions) < n_solutions or margin > 0:
+                    solution = (
+                        total_score, item_component, item_pair_component, mapping.tolist()
+                    )
+                    solutions.append(solution)
+                    solutions.sort(key=lambda x: x[0])
+                    if len(solutions) > n_solutions:
+                        solutions.pop(0)
+                    worst_top_n_score = solutions[0][0]
+                
+                # Skip to next stack item
+                continue
+            
+            # Find next unassigned item
+            current_item_idx = get_next_item(mapping)
+            if current_item_idx == -1:
+                continue  # Skip to next stack item
+            
+            # Update path for debugging
+            if debug_print:
+                new_path = path_str + items_to_assign[current_item_idx]
+            
+            # Get valid positions
+            if n_constrained and current_item_idx in constrained_item_indices:
+                valid_positions = [pos for pos in constrained_positions if not used[pos]]
+            else:
+                valid_positions = [pos for pos in range(n_positions_to_assign) if not used[pos]]
+            
+            if debug_print:
+                print(f"\nPlacing item {items_to_assign[current_item_idx]} (idx {current_item_idx})")
+                print("Current mapping: ", mapping)
+                print(f"Valid positions: {valid_positions} ({[positions_to_assign[p] for p in valid_positions]})")
+            
+            # Try positions in reverse order (so first one is popped first)
+            for pos in reversed(valid_positions):
+                if debug_print:
+                    print(f"  Trying {items_to_assign[current_item_idx]} in position {positions_to_assign[pos]}")
+                
+                # Temporarily modify the mapping and used arrays in-place
+                # (This is just for the pruning decision)
+                mapping[current_item_idx] = pos
+                used[pos] = True
+                
+                # Pruning decision
+                should_prune = False
+                if len(solutions) > 0:
+                    upper_bound = calculate_upper_bound(
+                        mapping, used, position_score_matrix, item_scores,
+                        item_pair_score_matrix, item_weight, item_pair_weight,
+                        best_score=worst_top_n_score, depth=depth+1,
+                        cross_item_pair_matrix=cross_item_pair_matrix,
+                        cross_position_pair_matrix=cross_position_pair_matrix,
+                        items_assigned=items_assigned, positions_assigned=positions_assigned,
+                        scaling_factor=scaling_factor, use_averages=use_averages
+                    )
+                    
+                    margin = upper_bound - worst_top_n_score
+                    
+                    epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
+                    if margin < epsilon:
+                        should_prune = True
+                        # Anti-aggressive pruning safeguard
+                        if pruned_count > explored_count * 100 and np.random.random() < 0.01:
+                            should_prune = False
+                            if debug_print and processed_nodes > progress_update_interval:
+                                print(f"WARNING: Bypassing aggressive pruning at depth {depth}")
+                
+                # Restore the original state before making a copy
+                mapping[current_item_idx] = -1  # Restore to unassigned
+                used[pos] = False
+                
+                if should_prune:
+                    pruned_count += 1
+                else:
+                    explored_count += 1
+                    # Only make copies when needed (after pruning decision)
+                    new_mapping = mapping.copy()
+                    new_mapping[current_item_idx] = pos
+                    new_used = used.copy()
+                    new_used[pos] = True
+                    
+                    # Add to stack
+                    stack.append((
+                        new_mapping,
+                        new_used,
+                        depth + 1,
+                        new_path if debug_print else ""
+                    ))
+                    
     #-------------------------------------------------------------------------
     # Phase 1: Find all valid arrangements of constrained items
     #-------------------------------------------------------------------------
@@ -1815,7 +1854,7 @@ def branch_and_bound_optimal_nsolutions(
     # Convert final solutions to return format
     return_solutions = []
     for score, unweighted_item_score, unweighted_item_pair_score, mapping_list in reversed(solutions):
-        mapping = np.array(mapping_list, dtype=np.int32)
+        mapping = np.array(mapping_list, dtype=np.int16)
         item_mapping = dict(zip(items_to_assign, [positions_to_assign[i] for i in mapping]))
         
         # Here's where we need to recalculate the score for the complete layout

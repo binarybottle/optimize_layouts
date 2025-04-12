@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate 720,720 configuration files to run keyboard layout optimizations 
+Generate 5,460 configuration files to run keyboard layout optimizations 
 in parallel with specific letter-to-key constraints specified in each file.
 
 This is Step 1 in a process to optimally arrange the 24 most frequent letters 
@@ -24,30 +24,28 @@ import yaml
 import itertools
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = '../output/configs'
+OUTPUT_DIR = '../output/configs1_assign_1_3_12_per_5460_files'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 10
+nlayouts = 1
 
-# Items in configurations (18 letters to be assigned to keys)
-items_assigned  = "etaoin"       # 5 most frequent letters (etaoi in English)
-items_to_assign = "srhldcumfpgw" # next 12 most frequent letters (nsrhldcumfpgw in English)
+# Items in configurations (16 letters to be assigned to keys)
+items_assigned  = "etao"         # 4 most frequent letters (etao in English)
+items_to_assign = "insrhldcumfp" # next 12 most frequent letters (insrhldcumfp in English)
+n_assign_first_round = 1
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
 # Position constraints for items_assigned
-# Constraining items_assigned to 18 keys results in 148,5120 
-# configuration files; 16 keys results in 720,720 config files.
-positions_for_item1 = ["F","D"] # 2 most comfortable left qwerty keys for the most frequent letter
+positions_for_item_1 = ["F","D"] # 2 most comfortable qwerty keys
 constrain_n_keys = 16
 if constrain_n_keys == 18:
     positions_for_items_2thruN = ["F","D","R","S","E","V","A","W","C",
-                                "J","K","U","L","I","M",";","O",","] # 18 most comfortable qwerty keys
+                                  "J","K","U","L","I","M",";","O",","] # 18 most comfortable qwerty keys
 elif constrain_n_keys == 16:
     positions_for_items_2thruN = ["F","D","R","S","E","V","A","W",
-                                "J","K","U","L","I","M",";","O"] # 16 most comfortable qwerty keys
-
+                                  "J","K","U","L","I","M",";","O"] # 16 most comfortable qwerty keys
 # Keys to assign by the optimization process
-all_N_keys = "FDRSEVAWCJKULIM;O,"  # 18 most comfortable keys
+all_N_keys = "".join(positions_for_items_2thruN)
 
 # Base configuration from the original config file
 with open(CONFIG_FILE, 'r') as f:
@@ -60,25 +58,21 @@ def generate_constraint_sets():
     configs = []
     
     # Loop through all possible position combinations
-    for pos1 in positions_for_item1:
-
-        # Find all available positions for remaining items in items_assigned
+    for pos1 in positions_for_item_1:
         remaining_positions = [pos for pos in positions_for_items_2thruN if pos not in [pos1]]
 
         # Generate all combinations of n_assigned positions
-        for comboN in itertools.combinations(remaining_positions, n_assigned-1):
+        for comboN in itertools.combinations(remaining_positions, n_assigned - n_assign_first_round):
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4, pos5, pos6 = permN
+                pos2, pos3, pos4 = permN
                 
                 # Create final position assignments
                 positions = {items_assigned[0]: pos1, 
                              items_assigned[1]: pos2, 
                              items_assigned[2]: pos3, 
-                             items_assigned[3]: pos4, 
-                             items_assigned[4]: pos5,
-                             items_assigned[5]: pos6
+                             items_assigned[3]: pos4
                             }
                 
                 # Create the positions_assigned string (must match the order of items_assigned)

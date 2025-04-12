@@ -1,0 +1,77 @@
+# The cluster is giving memory errors, so the following are tests that process
+# a single config file to optimize 14, 13, 12, then 11 letter assignments.
+
+scp tests.tar.gz aklein1@bridges2.psc.edu:keyboard_optimizer/optimize_layouts/output/tests.tar.gz
+ssh aklein1@bridges2.psc.edu
+cd keyboard_optimizer/optimize_layouts/output/
+tar xvfz tests.tar.gz
+cd tests
+tar xvfz configs1_assign_1_3_14_per_8160_files.tar.gz
+tar xvfz configs1_assign_1_4_13_per_65520_files.tar.gz
+tar xvfz configs1_assign_1_3_12_per_5460_files.tar.gz
+tar xvfz configs1_assign_1_4_11_per_65520_files.tar.gz
+tar xvfz configs1_assign_1_1_3_11_per_13104_files.tar.gz
+cd ../..
+
+# Reattach screen [replace "submission"]
+screen -r submission
+
+#————————
+# Test 14
+#————————
+rm -rf output/errors output/outputs output/layouts
+mv output/tests/configs1_assign_1_3_14_per_8160_files output/configs
+
+# Set TOTAL_CONFIGS & TOTAL_CONFIGS, then run one config file:
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# If fails, move configs back to output/tests/ and move on to the next test
+mv configs output/tests/configs1_assign_1_3_14_per_8160_files
+
+#————————
+# Test 13
+#————————
+rm -rf output/errors output/outputs output/layouts
+mv output/tests/configs1_assign_1_4_13_per_65520_files output/configs
+
+# Set TOTAL_CONFIGS & TOTAL_CONFIGS, then run one config file:
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# If fails, move configs back to output/tests/ and move on to the next test
+mv configs output/tests/configs1_assign_1_4_13_per_65520_files
+
+#————————
+# Test 12
+#————————
+rm -rf output/errors output/outputs output/layouts
+mv output/tests/configs1_assign_1_3_12_per_5460_files output/configs
+
+# Set TOTAL_CONFIGS & TOTAL_CONFIGS, then run one config file:
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# If fails, move configs back to output/tests/ and move on to the next test
+mv configs output/tests/configs1_assign_1_3_12_per_5460_files
+
+#————————
+# Test 11
+#————————
+rm -rf output/errors output/outputs output/layouts
+mv output/tests/configs1_assign_1_4_11_per_65520_files output/configs
+
+# Set TOTAL_CONFIGS & TOTAL_CONFIGS, then run one config file:
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# If fails, move configs back to output/tests/ and move on to the next test
+mv configs output/tests/configs1_assign_1_4_11_per_65520_files
+
+#——————————————————————
+# Test 11 (fewer files)
+#——————————————————————
+rm -rf output/errors output/outputs output/layouts
+mv output/tests/configs1_assign_1_1_3_11_per_13104_file output/configs
+
+# Set TOTAL_CONFIGS & TOTAL_CONFIGS, then run one config file:
+sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
+
+# If fails, move configs back to output/tests/ and move on to the next test
+mv configs output/tests/configs1_assign_1_1_3_11_per_13104_file

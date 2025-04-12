@@ -76,7 +76,7 @@ def prepare_complete_arrays(
             print(f"Warning: {name} values outside [0,1] range: min={np.min(arr)}, max={np.max(arr)}")
     
     # Create direct mapping for evaluating a complete layout
-    mapping = np.arange(n_items, dtype=np.int32)
+    mapping = np.arange(n_items, dtype=np.int16)
     
     return mapping, item_scores, item_pair_score_matrix, position_score_matrix
 
@@ -181,12 +181,12 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True):
                 pos_j = positions[j]
                 
                 # Forward direction (item_i->item_j)
-                fwd_item_score = norm_item_pair_scores.get((item_i, item_j), missing_item_pair_norm_score)
+                fwd_item_score = norm_item_pair_scores.get((item_i.lower(), item_j.lower()), missing_item_pair_norm_score)
                 fwd_pos_score = norm_position_pair_scores.get((pos_i.lower(), pos_j.lower()), 
                                                              missing_position_pair_norm_score)
                 
                 # Backward direction (item_j->item_i)
-                bck_item_score = norm_item_pair_scores.get((item_j, item_i), missing_item_pair_norm_score)
+                bck_item_score = norm_item_pair_scores.get((item_j.lower(), item_i.lower()), missing_item_pair_norm_score)
                 bck_pos_score = norm_position_pair_scores.get((pos_j.lower(), pos_i.lower()), 
                                                              missing_position_pair_norm_score)
                 
