@@ -1,5 +1,5 @@
-# The cluster is giving memory errors, so the following are tests that process
-# a single config file to optimize 14, 13, 12, then 11 letter assignments.
+# The NSF cluster is giving memory errors, so the following are tests to process
+# a single config file that optimizes 14, 13, 12, then 11 letter assignments.
 
 scp tests.tar.gz aklein1@bridges2.psc.edu:keyboard_optimizer/optimize_layouts/output/tests.tar.gz
 ssh aklein1@bridges2.psc.edu
