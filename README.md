@@ -6,6 +6,7 @@ Author: Arno Klein (arnoklein.info)
 License: MIT License (see LICENSE)
 
 ## Usage
+-------------------------------------------------------------------
   ```bash
   python normalize_input.py # Normalize input data
   python analyze_input.py   # Analyze and plot raw/normalized data
@@ -16,6 +17,7 @@ For running parallel processes,
 see **Running parallel processes** below.
 
 ## Context
+-------------------------------------------------------------------
 This code optimizes a layout, an arrangement of items,
 and takes into account scores for individual items, 
 item-pairs (a,b and b,a), positions, and position-pairs.
@@ -28,15 +30,17 @@ for touch typing (see **keyboards/README_keyboards.md**):
   - Positions and position-pairs correspond to keys and key-pairs.  
   - Item scores and item-pair scores correspond to frequency 
     of letters and frequency of bigrams in a given language.
-  - Position scores and position-pair scores correspond to a measure 
-    of comfort when typing single keys or pairs of keys (any language).
+  - Position scores and position-pair scores correspond to 
+    a measure of comfort when typing single keys or pairs of keys 
+    (in any language, as usage frequencies are regressed out).
 
 ## Inputs
+-------------------------------------------------------------------
 The input files are constructed as in the example below.
-The code will accept any set of letters (and special characters) 
-to represent items, item pairs, positions, and position pairs, 
-so long as item pair characters are composed of two item characters 
-and position pair characters are composed of two position characters.
+The code will accept any set of letters (or special characters) 
+to represent items, item-pairs, positions, and position-pairs, 
+so long as each item-pair is represented by two item characters 
+and each position-pair is represented by two position characters.
 
   - raw_item_scores_file:           
     ```
@@ -82,38 +86,44 @@ A configuration file (config.yaml) specifies input filenames
     - items_assigned: items already assigned to positions
     - positions_assigned: positions that are already filled 
     - items_to_constrain: subset of items_to_assign 
-      to arrange within positions_to_constrain
+      to arrange every way within positions_to_constrain
     - positions_to_constrain: subset of positions_to_assign 
-      to constrain items_to_constrain
+      to constrain the possible assignment of items_to_constrain
 
 ## Layout scoring
-Layouts are scored based on normalized item and item_pair scores 
-and corresponding normalized position and position_pair scores, 
+-------------------------------------------------------------------
+Layouts are scored based on normalized item and item-pair scores 
+and corresponding normalized position and position-pair scores, 
 where direction (sequence of a given pair) matters.
-Below, I is the number of items, P is the number of item_pairs:
+Below, `I` is the number of items, `P` is the number of item_pairs:
 
+    ```
     item_component = sum[i,I](item_score_i * position_score_i) / I
     
     item_pair_component = sum[j,P](
-        item_pair_score_j_sequence1 * position_pair_score_j_sequence1 +
-        item_pair_score_j_sequence2 * position_pair_score_j_sequence2) / P
+        item_pair_score_j_seq1 * position_pair_score_j_seq1 +
+        item_pair_score_j_seq2 * position_pair_score_j_seq2) / P
  
-    score = item_weight * item_component + item_pair_weight * item_pair_component
+    score = item_weight      * item_component + 
+            item_pair_weight * item_pair_component
+    ```
 
-To calculate the score for a specific layout, you can use calculate_score.py:
+To calculate the score for a specific layout:
   `python calculate_score.py --items "etaoi" --positions "FJDSV"`
 
 ## Branch-and-bound optimization
+-------------------------------------------------------------------
   - Calculates exact scores for placed letters
   - Uses provable upper bounds for unplaced letters
   - Prunes branches that cannot exceed best known solution
-  - Depth-first search maintains optimality while reducing search space
+  - Depth-first search maintains optimality & reduces search space
   - Uses numba-optimized array operations
-  - Detailed progress tracking and statistics
-  - Comprehensive validation of input configurations
+  - Progress tracking and statistics
+  - Validation of input configurations
   - Optional constraints for a subset of items
 
 ## Output
+-------------------------------------------------------------------
   - Top-scoring layouts:
     - Item-to-position mappings
     - Total score and unweighted item and item-pair scores
@@ -127,23 +137,23 @@ To calculate the score for a specific layout, you can use calculate_score.py:
     - Clear marking of constrained positions
 
 ## Optional: Running parallel processes on SLURM
-The examples below will use Pittsburgh Super Computing Bridges-2 resources.
-NSF ACCESS granted access for a keyboard layout optimization study 
-(see **README_keyboards**). 
+-------------------------------------------------------------------
+The example commands below to parallelize layout optimization
+were used as part of a keyboard layout optimization study supported 
+by NSF and Pittsburgh Supercomputing Center computing resources 
+(see **README_keyboards**).
 
   ### Connect and set up the code environment
     ```bash
     # Log in
     ssh username@bridges2.psc.edu
 
-    # Create a directory for the project
-    mkdir -p keyboard_optimizer
-    cd keyboard_optimizer
+    # Create directory for the project
+    mkdir -p keyboard_optimizer; cd keyboard_optimizer
 
-    # Load Python module
+    # Load Python module, create virtual environment, 
+    # and make activate script executable
     module load python/3.8.6
-
-    # Create a virtual environment and make the activate script executable
     python -m venv keyboard_env
     source keyboard_env/bin/activate
     chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
@@ -151,16 +161,13 @@ NSF ACCESS granted access for a keyboard layout optimization study
     # Install required packages
     pip install pyyaml numpy pandas tqdm numba psutil matplotlib
   
-      # Clone the repository
+    # Clone repository, make scripts executable, 
+    # and make output directories
     git clone https://github.com/binarybottle/optimize_layouts.git
     cd optimize_layouts
-
-    # Make the scripts executable
-    #chmod +x generate_configs.py
+    chmod +x generate_configs.py
     chmod +x slurm_batchmaking.sh
     chmod +x slurm_submit_batches.sh
-
-    # Make output directories if they don't exist
     mkdir -p output
     mkdir -p output/layouts
     mkdir -p output/outputs
@@ -168,48 +175,62 @@ NSF ACCESS granted access for a keyboard layout optimization study
     ```
 
   ### Generate config files and prepare to submit jobs
+  You can generate configuration files in output/configs/ 
+  by creating your own generate_configs.py script, 
+  following the example in generate_keyboard_configs1.py:
+  `python generate_configs.py`
+
+  ### Set up slurm parameters:  
+  Replace slurm parameters listed below according to your setup.
+  Replace <YOUR_ALLOCATION_ID> with your actual allocation ID,
+  and <YOUR_TOTAL_CONFIGS> with the total number of config files.
+  
+  slurm_batchmaking.sh:
+
     ```bash
-    # You can generate configuration files by creating your own
-    # generate_configs.py script, following the example in 
-    # generate_keyboard_configs1.py:
-    #python generate_configs.py
-
-    # Replace <YOUR_ALLOCATION_ID> with your actual allocation ID
-    # In the code below, replace abc123 with your allocation ID
-    # (you can find this using the 'projects' command):
-    sed -i 's/<YOUR_ALLOCATION_ID>/abc123/g' slurm_batchmaking.sh
-
-    # Make any other changes needed in the slurm scripts, 
-    # and don't forget to update TOTAL_CONFIGS (number of config files) 
-    # in slurm_submit_batches.sh and slurm_batchmaking.sh
+    #SBATCH --time=08:00:00       
+    #SBATCH --array=0-999%1000       
+    #SBATCH --ntasks-per-node=1   
+    #SBATCH --cpus-per-task=2     
+    #SBATCH --mem=2GB          
+    #SBATCH --job-name=layouts     
+    #SBATCH --output=output/outputs/layouts_%A_%a.out
+    #SBATCH --error=output/errors/layouts_%A_%a.err
+    #SBATCH -p RM-shared              
+    #SBATCH -A <YOUR_ALLOCATION_ID>   
+    TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS> 
+    BATCH_SIZE=1000       
     ```
 
-  ### Run scripts in `screen`
+  slurm_submit_batches.sh:
+
+    ```bash
+    TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>
+    BATCH_SIZE=1000                   
+    CHUNK_SIZE=5                        
+    ```
+
+  ### Run scripts
+
     ```bash
     # Use screen
     screen -S submission
 
     # Run a single test job
     sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-    # Check the output files to see if any error messages are generated
-    ls -la output/outputs/
-    cat output/outputs/layouts_*.out
 
     # Run just one batch (1001-2000) manually:
     sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
 
     # Run all batches as a slurm job
+    # (The 10-minute limit is just for the batch submission manager 
+    # script that coordinates submitting multiple optimization jobs)
     sbatch --time=00:10:00 slurm_submit_batches.sh
     ```
 
   ### Monitor jobs
+
     ```bash
-    # See the current progress
-    cat batch_submission_progress.txt
-
-    # Check the log files
-    ls -la submission_logs/
-
     # Check all your running jobs
     squeue -u $USER
 
@@ -226,9 +247,6 @@ NSF ACCESS granted access for a keyboard layout optimization study
       find output/layouts/config_${i}* -name "job_failed.txt" | wc -l
     done | awk '{sum+=$1} END {print sum}'
 
-    # View detailed information about a job
-    scontrol show job <job_id>
-
     # Check the number of completed jobs
     ls -la output/layouts/config_*/job_completed.txt | wc -l
     # For very large directories:
@@ -241,10 +259,11 @@ NSF ACCESS granted access for a keyboard layout optimization study
     ```
 
   ### Cancel jobs
-    ```bash
-    # Cancel a specific job ID, such as:
-    scancel 29556406_1
 
+    ```bash
     # Cancel all your jobs at once
     scancel -u $USER
+
+    # Cancel a specific job ID, such as:
+    scancel 29556406_1
     ```

@@ -1,10 +1,24 @@
 # README_keyboards
 Optimize an English keyboard layout
-===================================================================
+===============================================================================
 https://github.com/binarybottle/optimize_layouts.git
 Author: Arno Klein (arnoklein.info)
 License: MIT License (see LICENSE)
 
+## Acknowledgments
+NSF and the Pittsburgh Supercomputing Center (PSC) generously provided 
+computing resources for a keyboard layout optimization study. 
+The study used Bridges-2 at PSC through allocation MED250010 from the 
+Advanced Cyberinfrastructure Coordination Ecosystem: Services & Support 
+(ACCESS) program, which is supported by National Science Foundation grants 
+#2138259, #2138286, #2138307, #2137603, and #2138296. Citation:
+
+  Brown, ST, Buitrago, P, Hanna, E, Sanielevici, S, Scibek, R, 
+  Nystrom, NA (2021). Bridges-2: A Platform for Rapidly-Evolving 
+  and Data Intensive Research. In Practice and Experience in 
+  Advanced Research Computing (pp 1-4). doi:10.1145/3437359.3465593
+
+## Introduction
 Let's apply this software to the challenge of optimizing the 
 arrangement of letters on a computer keyboard for typing in English. 
 

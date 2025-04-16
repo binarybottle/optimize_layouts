@@ -1,5 +1,6 @@
 #!/bin/bash
 # CONFIGURATION 
+# Lines with #SBATCH are directives for the SLURM workload manager. 
 #===================================================================
 #SBATCH --time=08:00:00            # Time limit (max hours per job)
 #SBATCH --array=0-999%1000         # Job array: 0-999 indices (use %1000 to limit concurrent jobs)
@@ -10,9 +11,9 @@
 #SBATCH --output=output/outputs/layouts_%A_%a.out # Output file with job and array IDs
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file with job and array IDs
 #SBATCH -p RM-shared               # Partition (queue) - use shared to save SUs
-#SBATCH -A abc123                  # Replace abc123 with your allocation ID
-TOTAL_CONFIGS=114240  # Total number of configurations
-BATCH_SIZE=1000       # SLURM array limit per batch
+#SBATCH -A <YOUR_ALLOCATION_ID>    # Replace with your allocation ID
+TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS> # Replace with your total number of configurations
+BATCH_SIZE=1000                    # SLURM array limit per batch
 #===================================================================
 
 # The batch number must be provided when submitting:
