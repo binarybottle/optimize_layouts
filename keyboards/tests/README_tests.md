@@ -51,6 +51,10 @@ sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 # Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_4_14_per_73440_files
 
+# TEST RESULT: Did not complete within 10 hours
+# (Each config file would have to complete within 1 hour 
+# not to exceed the allocated 75K compute-hours)
+
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange 'e' in 2 keys, next 3 letters in 16 keys, next 14 in remaining 18 keys
 #———————————————————————————————————————————————————————————————————————————————
@@ -59,6 +63,10 @@ mv output/tests/configs1_assign_1_3_14_per_8160_files output/configs
 sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 # Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_3_14_per_8160_files
+
+# TEST RESULT: Would not complete within 10 hours (see above)
+# (Each config file would have to complete within 10 hours 
+# not to exceed the allocated 75K compute-hours)
 
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange 'e' in 2 keys, next 4 letters in 16 keys, next 13 in remaining 18 keys
@@ -69,6 +77,10 @@ sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 # Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_4_13_per_65520_files
 
+# TEST RESULT: Did not complete within 10 hours
+# (Each config file would have to complete within 1-2 hours 
+# not to exceed the allocated 75K compute-hours)
+
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange 'e' in 2 keys, next 3 letters in 16 keys, next 12 in remaining 16 keys
 #———————————————————————————————————————————————————————————————————————————————
@@ -78,8 +90,10 @@ sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 # Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_3_12_per_5460_files
 
+ configs1_assign_4_12_per_73440_files ???
+
 #———————————————————————————————————————————————————————————————————————————————
-# Arrange 'e' in 2 keys, next 3 letters in 16 keys, next 11 in remaining 16 keys
+# Arrange 'e' in 2 keys, next 4 letters in 16 keys, next 11 in remaining 16 keys
 #———————————————————————————————————————————————————————————————————————————————
 rm -rf output/errors/* output/outputs/* output/layouts/*
 mv output/tests/configs1_assign_1_4_11_per_65520_files output/configs
@@ -87,3 +101,6 @@ sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 # Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_4_11_per_65520_files
 ```
+
+ RM vs EM ???
+

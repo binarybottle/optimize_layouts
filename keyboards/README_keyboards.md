@@ -137,7 +137,7 @@ For the following, we:
   │     │     │  p  │  g  ║  r  │  m  │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-### Step 3. Generate a 2nd set of configuration files, removing & replacing letters 
+### Step 3. Generate a 2nd set of configuration files, removing letters 
 
   ```shell
   cd keyboards; python generate_keyboard_configs2.py
