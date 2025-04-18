@@ -1,7 +1,18 @@
 # Keyboard layout optimization tests run on SLURM
-The following are tests to process a single config file that 
-optimizes 14, 13, 12, then 11 letter assignments.
+The following are tests to process a single config file 
+that optimizes 14 or 13 letter assignments to fill 18 keys.
+12 letter assignments and above require Extreme Memory nodes.
+Up to 11 letter assignments work fine on Regular Memory nodes.
 
+RESULTS: 
+All tests failed to complete within the required time,
+and would exceed the allocated 75,000 compute-hours.
+
+SOLUTION:
+To fill 16 keys, we can use Regular Memory nodes by arranging the top 5
+letters in 16 keys, and the next 11 letters in the remaining keys.
+
+ACKNOWLEDGMENTS:
 These tests are part of a study that used Bridges-2 resources 
 at Pittsburgh Supercomputing Center through allocation MED250010 
 from the Advanced Cyberinfrastructure Coordination Ecosystem: 
@@ -17,8 +28,6 @@ National Science Foundation grants #2138259, #2138286, #2138307,
 ———————————————————————————————————————————————————————————————————————————————
 Setup
 ———————————————————————————————————————————————————————————————————————————————
-ssh aklein1@bridges2.psc.edu
-
 # Set slurm_batchmaking.sh parameters for Extreme Memory nodes on PSC Bridges-2
 #SBATCH --time=10:00:00       
 #SBATCH --array=0-999%1000       
@@ -38,69 +47,55 @@ TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>
 BATCH_SIZE=1000                   
 CHUNK_SIZE=3                        
 
-# Reattach screen [replace "submission"]
-screen -r submission
-
 ```bash
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange top 4 letters in 16 keys, optimize next 14 in remaining 18 keys
 #———————————————————————————————————————————————————————————————————————————————
-rm -rf output/errors/* output/outputs/* output/layouts/*
 mv output/tests/configs1_assign_4_14_per_73440_files output/configs
 sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-# Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_4_14_per_73440_files
 
 # TEST RESULT: Did not complete within 10 hours
 # (Each config file would have to complete within 1 hour 
-# not to exceed the allocated 75K compute-hours)
+# not to exceed the allocated 75,000 compute-hours)
 
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange 'e' in 2 keys, next 3 letters in 16 keys, next 14 in remaining 18 keys
 #———————————————————————————————————————————————————————————————————————————————
-rm -rf output/errors/* output/outputs/* output/layouts/*
 mv output/tests/configs1_assign_1_3_14_per_8160_files output/configs
 sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-# Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_3_14_per_8160_files
 
-# TEST RESULT: Would not complete within 10 hours (see above)
+# TEST RESULT: Did not complete within 10 hours
 # (Each config file would have to complete within 10 hours 
-# not to exceed the allocated 75K compute-hours)
+# not to exceed the allocated 75,000 compute-hours)
 
 #———————————————————————————————————————————————————————————————————————————————
 # Arrange 'e' in 2 keys, next 4 letters in 16 keys, next 13 in remaining 18 keys
 #———————————————————————————————————————————————————————————————————————————————
-rm -rf output/errors/* output/outputs/* output/layouts/*
 mv output/tests/configs1_assign_1_4_13_per_65520_files output/configs
 sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-# Move configs back to output/tests/
 mv output/configs output/tests/configs1_assign_1_4_13_per_65520_files
 
 # TEST RESULT: Did not complete within 10 hours
-# (Each config file would have to complete within 1-2 hours 
-# not to exceed the allocated 75K compute-hours)
-
-#———————————————————————————————————————————————————————————————————————————————
-# Arrange 'e' in 2 keys, next 3 letters in 16 keys, next 12 in remaining 16 keys
-#———————————————————————————————————————————————————————————————————————————————
-rm -rf output/errors/* output/outputs/* output/layouts/*
-mv output/tests/configs1_assign_1_3_12_per_5460_files output/configs
-sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-# Move configs back to output/tests/
-mv output/configs output/tests/configs1_assign_1_3_12_per_5460_files
-
- configs1_assign_4_12_per_73440_files ???
-
-#———————————————————————————————————————————————————————————————————————————————
-# Arrange 'e' in 2 keys, next 4 letters in 16 keys, next 11 in remaining 16 keys
-#———————————————————————————————————————————————————————————————————————————————
-rm -rf output/errors/* output/outputs/* output/layouts/*
-mv output/tests/configs1_assign_1_4_11_per_65520_files output/configs
-sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-# Move configs back to output/tests/
-mv output/configs output/tests/configs1_assign_1_4_11_per_65520_files
+# (Each config file would have to complete in less than about 1 hour 
+# not to exceed the allocated 75,000 compute-hours)
 ```
 
- RM vs EM ???
+#———————————————————————————————————————————————————————————————————————————————
+# Arrange top 5 letters in 16 keys, optimize next 11 in remaining 16 keys
+#———————————————————————————————————————————————————————————————————————————————
 
+53569 jobs completed; 0 jobs failed
+
+  ```bash
+  for i in {1..10}; do 
+    find output/layouts/config* | wc -l
+  done | awk '{sum+=$1} END {print sum}'
+  ```
+  53569
+
+  [aklein1@bridges2-login014 optimize_layouts]$ ls -d output/layouts/config* | wc -l
+52459
+[aklein1@bridges2-login014 optimize_layouts]$ ls output/layouts/layout* | wc -l
+8313

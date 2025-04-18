@@ -57,6 +57,9 @@ def load_config(config_path: str = "config.yaml") -> dict:
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
 
+    # Store the config path for use in file naming
+    config['_config_path'] = config_path
+
     # Create necessary output directories
     output_dirs = [config['paths']['output']['layout_results_folder']]
     for directory in output_dirs:
@@ -382,10 +385,16 @@ def save_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict[str, dic
     Save layout results to a CSV file with proper escaping of special characters.
     Include both pre-assigned and newly optimized items.
     """
-    # Generate timestamp and set output path
+    # Get config ID from the config file path
+    config_path = os.path.basename(config.get('_config_path', 'config.yaml'))
+    config_id = config_path.replace('config_', '').replace('.yaml', '')
+    
+    # Generate timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Include config_id in the filename
     output_path = os.path.join(config['paths']['output']['layout_results_folder'],
-                               f"layout_results_{timestamp}.csv")
+                               f"layout_results_{config_id}_{timestamp}.csv")
     
     def escape_special_chars(text: str) -> str:
         """Helper function to escape special characters and ensure proper CSV formatting."""
