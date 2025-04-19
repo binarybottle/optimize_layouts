@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze layout optimization results and create plots of component scores.
+Analyze layout optimization results and create scatter plots of scores.
 """
 import os
 import sys
@@ -68,6 +68,8 @@ def parse_result_csv(filepath):
             if len(row_data) >= 8:  # Full format with optimized columns
                 items_idx = 0
                 positions_idx = 1
+                opt_items_idx = 2
+                opt_positions_idx = 3
                 rank_idx = 4
                 total_score_idx = 5
                 item_score_idx = 6
@@ -75,6 +77,8 @@ def parse_result_csv(filepath):
             elif len(row_data) >= 6:  # Shorter format
                 items_idx = 0
                 positions_idx = 1
+                opt_items_idx = None
+                opt_positions_idx = None
                 rank_idx = 2
                 total_score_idx = 3
                 item_score_idx = 4
@@ -86,27 +90,31 @@ def parse_result_csv(filepath):
             items = row_data[items_idx].strip('"') if items_idx < len(row_data) else ""
             positions = row_data[positions_idx].strip('"') if positions_idx < len(row_data) else ""
             
+            # Extract optimized items/positions if available
+            opt_items = ""
+            opt_positions = ""
+            if opt_items_idx is not None and opt_items_idx < len(row_data):
+                opt_items = row_data[opt_items_idx].strip('"')
+            if opt_positions_idx is not None and opt_positions_idx < len(row_data):
+                opt_positions = row_data[opt_positions_idx].strip('"')
+            
             try:
                 rank = int(row_data[rank_idx].strip('"')) if rank_idx < len(row_data) else 1
             except ValueError:
                 rank = 1
             
             try:
-                # Parse the total score directly from the string
-                raw_total = row_data[total_score_idx].strip('"')
-                total_score = float(raw_total)
+                total_score = float(row_data[total_score_idx].strip('"'))
             except (ValueError, IndexError):
                 total_score = 0.0
             
             try:
-                raw_item = row_data[item_score_idx].strip('"')
-                item_score = float(raw_item)
+                item_score = float(row_data[item_score_idx].strip('"'))
             except (ValueError, IndexError):
                 item_score = 0.0
             
             try:
-                raw_item_pair = row_data[item_pair_score_idx].strip('"')
-                item_pair_score = float(raw_item_pair)
+                item_pair_score = float(row_data[item_pair_score_idx].strip('"'))
             except (ValueError, IndexError):
                 item_pair_score = 0.0
                 
@@ -120,30 +128,38 @@ def parse_result_csv(filepath):
             ]:
                 clean_positions = clean_positions.replace(special, replacement)
             
+            # Also clean optimized positions if available
+            clean_opt_positions = opt_positions
+            for special, replacement in [
+                ('[semicolon]', ';'),
+                ('[comma]', ','),
+                ('[period]', '.'),
+                ('[slash]', '/')
+            ]:
+                clean_opt_positions = clean_opt_positions.replace(special, replacement)
+            
+            # Get items to assign and positions to assign from config info
+            items_to_assign = config_info.get('Items to assign', '')
+            positions_to_assign = config_info.get('Available positions', '')
+            items_assigned = config_info.get('Assigned items', '')
+            positions_assigned = config_info.get('Assigned positions', '')
+            
             # Create result dictionary
             result = {
+                'config_id': os.path.basename(filepath).replace('layout_results_', '').replace('.csv', ''),
                 'items': items,
                 'positions': clean_positions,
-                'raw_positions': positions,
-                'rank': rank,
-                'raw_total_score': raw_total,  # Keep the raw string
-                'parsed_total_score': total_score,  # Keep the parsed float
-                'total_score': total_score,  # This is what gets used in analysis
+                'opt_items': opt_items,
+                'opt_positions': clean_opt_positions,
+                'total_score': total_score,
                 'item_score': item_score,
                 'item_pair_score': item_pair_score,
-                'file_id': os.path.basename(filepath),
-                'items_assigned': config_info.get('Assigned items', ''),
-                'positions_assigned': config_info.get('Assigned positions', '')
+                'items_to_assign': items_to_assign,
+                'positions_to_assign': positions_to_assign,
+                'items_assigned': items_assigned,
+                'positions_assigned': positions_assigned,
+                'rank': rank
             }
-            
-            # Add config ID
-            config_id = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
-            result['config_id'] = config_id
-            
-            # Add configuration info
-            for k, v in config_info.items():
-                if k not in result:
-                    result[k] = v
             
             results.append(result)
                 
@@ -171,50 +187,92 @@ def load_results(results_dir, max_files=None):
             all_results.extend(results)
     
     print(f"Successfully parsed {len(all_results)} results")
-    return pd.DataFrame(all_results) if all_results else pd.DataFrame()
+    
+    # Create DataFrame
+    df = pd.DataFrame(all_results) if all_results else pd.DataFrame()
+    
+    # Add normalized scores
+    if not df.empty:
+        # Normalize each score type to 0-1 range
+        for score_col in ['total_score', 'item_score', 'item_pair_score']:
+            min_val = df[score_col].min()
+            max_val = df[score_col].max()
+            range_val = max_val - min_val
+            
+            if range_val > 0:
+                df[f'normalized_{score_col}'] = (df[score_col] - min_val) / range_val
+            else:
+                df[f'normalized_{score_col}'] = 1.0  # If all values are the same
+    
+    return df
 
-def plot_component_scores(df, save_path='component_scores.png'):
-    """Plot item score and item-pair score."""
+def plot_scores_scatter(df, normalized=False, save_path=None):
+    """Create a scatter plot of all three score types."""
     if df.empty:
         print("No results to plot!")
         return
     
-    # Sort by item score
-    df_sorted = df.sort_values('item_score')
+    # Determine which score columns to use
+    if normalized:
+        total_col = 'normalized_total_score'
+        item_col = 'normalized_item_score'
+        item_pair_col = 'normalized_item_pair_score'
+        title_prefix = 'Normalized '
+        if save_path is None:
+            save_path = 'normalized_scores_scatter.png'
+    else:
+        total_col = 'total_score'
+        item_col = 'item_score'
+        item_pair_col = 'item_pair_score'
+        title_prefix = ''
+        if save_path is None:
+            save_path = 'scores_scatter.png'
+    
+    # Sort by the appropriate total score
+    df_sorted = df.sort_values(total_col)
     
     # Create the plot
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(12, 8))
     
-    # Plot component scores
-    plt.plot(df_sorted['item_score'].values, marker='s', linestyle='-', 
-             linewidth=1.5, markersize=4, alpha=0.8, label='Item Score (unweighted)')
-    plt.plot(df_sorted['item_pair_score'].values, marker='^', linestyle='-', 
-             linewidth=1.5, markersize=4, alpha=0.8, label='Item-pair Score (unweighted)')
+    # Create scatter plot with color-coded points
+    plt.scatter(range(len(df_sorted)), df_sorted[total_col], 
+                marker='.', s=30, alpha=0.6, label='Total Score', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_col], 
+                marker='.', s=30, alpha=0.6, label='Item Score', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_pair_col], 
+                marker='.', s=30, alpha=0.6, label='Item-pair Score', edgecolors='none')
     
     # Add labels and title
-    plt.xlabel('Layout Index (sorted by item score)')
-    plt.ylabel('Score')
-    plt.title('Layout Optimization Component Scores')
+    plt.xlabel(f'Layout Index (sorted by {title_prefix.lower()}total score)')
+    plt.ylabel(f'{title_prefix}Score')
+    plt.title(f'{title_prefix}Layout Optimization Scores')
     plt.legend()
     plt.grid(True, alpha=0.3)
     
-    # Set y-axis limits
-    score_min = min(df_sorted['item_score'].min(), df_sorted['item_pair_score'].min())
-    score_max = max(df_sorted['item_score'].max(), df_sorted['item_pair_score'].max())
+    # Calculate the score ranges
+    score_min = min(df_sorted[total_col].min(), 
+                    df_sorted[item_col].min(), 
+                    df_sorted[item_pair_col].min())
+    score_max = max(df_sorted[total_col].max(), 
+                    df_sorted[item_col].max(), 
+                    df_sorted[item_pair_col].max())
+    
+    # Set y-axis limits with padding
     score_range = score_max - score_min
     plt.ylim(max(0, score_min - score_range * 0.05), score_max + score_range * 0.05)
     
-    # Add info text
+    # Add score range information
     info_text = [
-        f"Item Score: {df_sorted['item_score'].min():.6f} to {df_sorted['item_score'].max():.6f}",
-        f"Item-pair Score: {df_sorted['item_pair_score'].min():.6f} to {df_sorted['item_pair_score'].max():.6f}"
+        f"{title_prefix}Total Score: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}",
+        f"{title_prefix}Item Score: {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
+        f"{title_prefix}Item-pair Score: {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}"
     ]
     plt.figtext(0.02, 0.02, '\n'.join(info_text), fontsize=9)
     
     # Save the plot
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
-    print(f"Generated component scores plot (saved as {save_path})")
+    print(f"Generated {title_prefix.lower()}scores scatter plot (saved as {save_path})")
 
 def analyze_results(df):
     """Print basic analysis of results."""
@@ -224,30 +282,40 @@ def analyze_results(df):
     
     print(f"\nAnalyzed {len(df)} layout results")
     
-    # Component score statistics
-    print("\nItem Score Statistics:")
-    print(f"  Mean: {df['item_score'].mean():.6f}")
-    print(f"  Min: {df['item_score'].min():.6f}")
-    print(f"  Max: {df['item_score'].max():.6f}")
+    # Score statistics
+    print("\nScore Statistics:")
+    print(f"  Total Score: {df['total_score'].min():.6f} to {df['total_score'].max():.6f} (mean: {df['total_score'].mean():.6f})")
+    print(f"  Item Score: {df['item_score'].min():.6f} to {df['item_score'].max():.6f} (mean: {df['item_score'].mean():.6f})")
+    print(f"  Item-pair Score: {df['item_pair_score'].min():.6f} to {df['item_pair_score'].max():.6f} (mean: {df['item_pair_score'].mean():.6f})")
     
-    print("\nItem-pair Score Statistics:")
-    print(f"  Mean: {df['item_pair_score'].mean():.6f}")
-    print(f"  Min: {df['item_pair_score'].min():.6f}")
-    print(f"  Max: {df['item_pair_score'].max():.6f}")
-    
-    # Find best layouts by component scores
+    # Find best layouts by each score type
+    best_total_idx = df['total_score'].idxmax()
     best_item_idx = df['item_score'].idxmax()
     best_pair_idx = df['item_pair_score'].idxmax()
     
+    print("\nBest Layout by Total Score:")
+    print(f"  Config ID: {df.loc[best_total_idx, 'config_id']}")
+    print(f"  Total Score: {df.loc[best_total_idx, 'total_score']:.6f}")
+    print(f"  Item Score: {df.loc[best_total_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score: {df.loc[best_total_idx, 'item_pair_score']:.6f}")
+    print(f"  Items: {df.loc[best_total_idx, 'items']}")
+    print(f"  Positions: {df.loc[best_total_idx, 'positions']}")
+    
     print("\nBest Layout by Item Score:")
     print(f"  Config ID: {df.loc[best_item_idx, 'config_id']}")
+    print(f"  Total Score: {df.loc[best_item_idx, 'total_score']:.6f}")
     print(f"  Item Score: {df.loc[best_item_idx, 'item_score']:.6f}")
     print(f"  Item-pair Score: {df.loc[best_item_idx, 'item_pair_score']:.6f}")
+    print(f"  Items: {df.loc[best_item_idx, 'items']}")
+    print(f"  Positions: {df.loc[best_item_idx, 'positions']}")
     
     print("\nBest Layout by Item-pair Score:")
     print(f"  Config ID: {df.loc[best_pair_idx, 'config_id']}")
+    print(f"  Total Score: {df.loc[best_pair_idx, 'total_score']:.6f}")
     print(f"  Item Score: {df.loc[best_pair_idx, 'item_score']:.6f}")
     print(f"  Item-pair Score: {df.loc[best_pair_idx, 'item_pair_score']:.6f}")
+    print(f"  Items: {df.loc[best_pair_idx, 'items']}")
+    print(f"  Positions: {df.loc[best_pair_idx, 'positions']}")
 
 def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
@@ -261,19 +329,43 @@ def main():
     df = load_results(args.results_dir, max_files=args.max_files)
     
     if not df.empty:
-        # Show raw vs parsed total scores for a sample
-        print("\nSample of raw vs parsed total scores:")
-        sample_df = df.sample(min(5, len(df)))
-        for _, row in sample_df.iterrows():
-            print(f"  Raw: {row['raw_total_score']}, Parsed: {row['parsed_total_score']}")
+        # Generate both plots
+        plot_scores_scatter(df, normalized=False, save_path='raw_scores_scatter.png')
+        plot_scores_scatter(df, normalized=True, save_path='normalized_scores_scatter.png')
         
-        # Generate plots and analysis
-        plot_component_scores(df)
+        # Analyze results
         analyze_results(df)
         
-        # Save results to Excel
-        df.to_excel("component_scores_summary.xlsx", index=False)
-        print("\nResults saved to component_scores_summary.xlsx")
+        # Save results to Excel with all necessary columns
+        columns_to_export = [
+            'config_id', 
+            'total_score', 
+            'item_score', 
+            'item_pair_score',
+            'normalized_total_score',
+            'normalized_item_score',
+            'normalized_item_pair_score',
+            'items',                # Complete letter sequence
+            'positions',            # Complete position sequence
+            'items_to_assign',      # Items that needed to be assigned
+            'positions_to_assign',  # Available positions
+            'items_assigned',       # Pre-assigned items
+            'positions_assigned',   # Pre-assigned positions
+            'opt_items',            # Optimized items (if available)
+            'opt_positions',        # Optimized positions (if available)
+            'rank'                  # Rank of layout
+        ]
+        
+        # Select columns that exist in the DataFrame
+        valid_columns = [col for col in columns_to_export if col in df.columns]
+        df_export = df[valid_columns]
+        
+        # Sort by total score (descending)
+        df_export.sort_values('total_score', ascending=False, inplace=True)
+        
+        # Save to Excel
+        df_export.to_excel("layout_scores_summary.xlsx", index=False)
+        print("\nResults saved to layout_scores_summary.xlsx")
     else:
         print("No results to analyze!")
 
