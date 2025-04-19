@@ -225,7 +225,7 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # Run all batches as a slurm job
     # (The 10-minute limit is just for the batch submission manager 
     # script that coordinates submitting multiple optimization jobs)
-    sbatch --time=8:00:00 slurm_submit_batches.sh
+    sbatch --time=24:00:00 slurm_submit_batches.sh
     ```
 
   ### Monitor jobs
@@ -252,6 +252,13 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # For very large directories:
     for i in {1..10}; do 
       find output/layouts/config_${i}* -name "job_completed.txt" | wc -l
+    done | awk '{sum+=$1} END {print sum}'
+
+    # Check the number of output files
+    ls -la output/layouts/layout_results_*.csv | wc -l
+    # For very large directories:
+    for i in {1..10}; do 
+      find output/layouts/layout_results_${i}* | wc -l
     done | awk '{sum+=$1} END {print sum}'
 
     # Check which specific jobs have completed

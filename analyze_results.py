@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze the results of the layout optimization runs.
-Includes visual display of top layouts, if specified.
-
-Usage:
->> python analyze_results.py --top 5 --config config.yaml
+Analyze layout optimization results and create plots of component scores.
 """
 import os
 import sys
@@ -14,27 +10,21 @@ import matplotlib.pyplot as plt
 import csv
 import re
 import argparse
-import yaml
 
-# Import the original visualization functions
-sys.path.append('.')  # Ensure current directory is in path
 try:
-    from optimize_layout import visualize_keyboard_layout, load_config
+    from optimize_layout import visualize_keyboard_layout
     visualization_available = True
 except ImportError:
-    print("Warning: Could not import functions from optimize_layout.py")
+    print("Warning: Could not import visualization functions")
     visualization_available = False
 
 def parse_result_csv(filepath):
     """Parse a layout results CSV file and extract key metrics."""
     try:
-        # First try to read the header information to understand the structure
         with open(filepath, 'r') as f:
             lines = f.readlines()
         
-        # Check if this is an empty file
         if not lines:
-            print(f"Empty file: {filepath}")
             return None
             
         # Extract configuration info
@@ -47,103 +37,115 @@ def parse_result_csv(filepath):
                 header_end = i
                 break
                 
-            # Try to split by comma first
             parts = line.split(',')
             if len(parts) >= 2:
                 key, value = parts[0].strip('"'), parts[1].strip('"')
                 config_info[key] = value
         
-        # Parse the actual data section (after the header)
-        data_section = lines[header_end+1:]  # Skip the empty line
-        
-        # Find the header row
+        # Find the data header and parse data rows
+        data_section = lines[header_end+1:]
         header_row = None
+        
         for i, line in enumerate(data_section):
-            if 'Items' in line or 'Rank' in line or 'Score' in line:
+            if 'Total score' in line:
                 header_row = i
                 break
         
         if header_row is None:
-            print(f"Could not find data header in {filepath}")
             return None
             
-        # Get all data rows (multiple layouts might be in one file)
-        data_rows = data_section[header_row + 1:]
         results = []
-        
-        for data_row in data_rows:
-            if not data_row.strip():
-                continue
+        if header_row + 1 < len(data_section):  # Make sure there's data after the header
+            data_row = data_section[header_row + 1]
+            
+            # Parse CSV row properly
+            reader = csv.reader([data_row])
+            row_data = next(reader)
+            
+            # Simply look for the score columns by position
+            # Based on the example format:
+            # "Items","Positions","Optimized Items","Optimized Positions","Rank","Total score","Item score (unweighted)","Item-pair score (unweighted)"
+            if len(row_data) >= 8:  # Full format with optimized columns
+                items_idx = 0
+                positions_idx = 1
+                rank_idx = 4
+                total_score_idx = 5
+                item_score_idx = 6
+                item_pair_score_idx = 7
+            elif len(row_data) >= 6:  # Shorter format
+                items_idx = 0
+                positions_idx = 1
+                rank_idx = 2
+                total_score_idx = 3
+                item_score_idx = 4
+                item_pair_score_idx = 5
+            else:
+                return None  # Not enough columns
                 
-            # Parse the data row (handle different formats)
+            # Extract data
+            items = row_data[items_idx].strip('"') if items_idx < len(row_data) else ""
+            positions = row_data[positions_idx].strip('"') if positions_idx < len(row_data) else ""
+            
             try:
-                # Try with csv module first (handles quoting properly)
-                reader = csv.reader([data_row])
-                row_data = next(reader)
+                rank = int(row_data[rank_idx].strip('"')) if rank_idx < len(row_data) else 1
+            except ValueError:
+                rank = 1
+            
+            try:
+                # Parse the total score directly from the string
+                raw_total = row_data[total_score_idx].strip('"')
+                total_score = float(raw_total)
+            except (ValueError, IndexError):
+                total_score = 0.0
+            
+            try:
+                raw_item = row_data[item_score_idx].strip('"')
+                item_score = float(raw_item)
+            except (ValueError, IndexError):
+                item_score = 0.0
+            
+            try:
+                raw_item_pair = row_data[item_pair_score_idx].strip('"')
+                item_pair_score = float(raw_item_pair)
+            except (ValueError, IndexError):
+                item_pair_score = 0.0
                 
-                # Extract data based on position - older files may have different columns
-                if len(row_data) >= 6:  # Newer format with 6+ columns
-                    items = row_data[0]
-                    positions = row_data[1]
-                    rank = int(row_data[2]) if row_data[2].isdigit() else 1
-                    total_score = float(row_data[3])
-                    item_score = float(row_data[4])
-                    item_pair_score = float(row_data[5])
-                elif len(row_data) >= 3:  # Older format with 3+ columns
-                    items = row_data[0]
-                    positions = row_data[1]
-                    total_score = float(row_data[2])
-                    # Estimate these if not available
-                    item_score = total_score * 0.5  # Assuming equal weights
-                    item_pair_score = total_score * 0.5
-                    rank = 1
-                else:
-                    continue  # Not enough data
-                    
-                # Clean up special characters in positions string
-                clean_positions = positions
-                for special, replacement in [
-                    ('[semicolon]', ';'),
-                    ('[comma]', ','),
-                    ('[period]', '.'),
-                    ('[slash]', '/')
-                ]:
-                    clean_positions = clean_positions.replace(special, replacement)
-                
-                # Extract file identifier - this will be used for exact matching
-                file_id = os.path.basename(filepath)
-                
-                # Get assigned items/positions from the config_info if available
-                assigned_items = config_info.get('Assigned items', '')
-                assigned_positions = config_info.get('Assigned positions', '')
-                
-                result = {
-                    'items': items,
-                    'positions': clean_positions,  # Use cleaned positions
-                    'raw_positions': positions,    # Keep original for reference
-                    'rank': rank,
-                    'total_score': total_score,
-                    'item_score': item_score,
-                    'item_pair_score': item_pair_score,
-                    'file_id': file_id,
-                    'items_assigned': assigned_items,
-                    'positions_assigned': assigned_positions
-                }
-
-                # Extract config ID from filepath - use the full basename to avoid duplicates
-                config_id = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
-                result['config_id'] = config_id
-                
-                # Add any configuration info we found
-                for k, v in config_info.items():
-                    if k not in result:
-                        result[k] = v
-                
-                results.append(result)
-                
-            except Exception as e:
-                print(f"Error parsing data row in {filepath}: {e}")
-                continue
+            # Clean up special characters in positions string
+            clean_positions = positions
+            for special, replacement in [
+                ('[semicolon]', ';'),
+                ('[comma]', ','),
+                ('[period]', '.'),
+                ('[slash]', '/')
+            ]:
+                clean_positions = clean_positions.replace(special, replacement)
+            
+            # Create result dictionary
+            result = {
+                'items': items,
+                'positions': clean_positions,
+                'raw_positions': positions,
+                'rank': rank,
+                'raw_total_score': raw_total,  # Keep the raw string
+                'parsed_total_score': total_score,  # Keep the parsed float
+                'total_score': total_score,  # This is what gets used in analysis
+                'item_score': item_score,
+                'item_pair_score': item_pair_score,
+                'file_id': os.path.basename(filepath),
+                'items_assigned': config_info.get('Assigned items', ''),
+                'positions_assigned': config_info.get('Assigned positions', '')
+            }
+            
+            # Add config ID
+            config_id = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            result['config_id'] = config_id
+            
+            # Add configuration info
+            for k, v in config_info.items():
+                if k not in result:
+                    result[k] = v
+            
+            results.append(result)
                 
         return results
             
@@ -151,268 +153,129 @@ def parse_result_csv(filepath):
         print(f"Error parsing {filepath}: {e}")
         return None
 
-def load_all_results(results_dir):
-    """Load all result files and return a dataframe."""
+def load_results(results_dir, max_files=None):
+    """Load layout result files and return a dataframe."""
     all_results = []
-    processed_files = set()  # Track processed files to avoid duplicates
     
-    # Use a single pattern that makes sense for your directory structure
-    pattern = f"{results_dir}/**/layout_results_*.csv"
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
     
-    # Find all CSV result files
-    all_files = glob.glob(pattern, recursive=True)
-    
-    # Remove duplicates by normalizing paths
-    unique_files = set(os.path.abspath(f) for f in all_files)
-    
-    print(f"Found {len(unique_files)} unique result files")
+    print(f"Found {len(files)} files to process")
     
     # Process each file
-    for filepath in unique_files:
-        if filepath in processed_files:
-            continue
-            
+    for filepath in files:
         results = parse_result_csv(filepath)
         if results:
             all_results.extend(results)
-            processed_files.add(filepath)
     
-    print(f"Successfully parsed {len(processed_files)} result files")
+    print(f"Successfully parsed {len(all_results)} results")
     return pd.DataFrame(all_results) if all_results else pd.DataFrame()
 
-def create_visualization_config(row, base_config=None):
-    """Create a config dictionary for visualization based on a result row and base config."""
-    # Start with the base config if available
-    if base_config:
-        config = base_config.copy()
-    else:
-        # Create a minimal config for visualization
-        config = {
-            'optimization': {
-                'items_to_assign': row['items'],
-                'positions_to_assign': row['positions'].upper(),
-                'items_to_constrain': row.get('Items to constrain', ''),
-                'positions_to_constrain': row.get('Constraint positions', ''),
-                'items_assigned': row.get('items_assigned', ''),
-                'positions_assigned': row.get('positions_assigned', ''),
-                'scoring': {
-                    'item_weight': float(row.get('Item weight', 0.5)),
-                    'item_pair_weight': float(row.get('Item-pair weight', 0.5)),
-                    'missing_item_pair_norm_score': 1.0,
-                    'missing_position_pair_norm_score': 1.0
-                },
-                'nlayouts': 10
-            },
-            'visualization': {
-                'print_keyboard': True
-            }
-        }
+def plot_component_scores(df, save_path='component_scores.png'):
+    """Plot item score and item-pair score."""
+    if df.empty:
+        print("No results to plot!")
+        return
     
-    # Ensure the minimum required fields are set for visualization
-    if 'optimization' not in config:
-        config['optimization'] = {}
+    # Sort by item score
+    df_sorted = df.sort_values('item_score')
     
-    # Override with result-specific data
-    config['optimization']['items_to_assign'] = row['items']
-    config['optimization']['positions_to_assign'] = row['positions'].upper()
+    # Create the plot
+    plt.figure(figsize=(12, 6))
     
-    # Use row values if present, otherwise keep what's in the base config
-    if 'items_assigned' in row and row['items_assigned']:
-        config['optimization']['items_assigned'] = row['items_assigned']
-    if 'positions_assigned' in row and row['positions_assigned']:
-        config['optimization']['positions_assigned'] = row['positions_assigned']
+    # Plot component scores
+    plt.plot(df_sorted['item_score'].values, marker='s', linestyle='-', 
+             linewidth=1.5, markersize=4, alpha=0.8, label='Item Score (unweighted)')
+    plt.plot(df_sorted['item_pair_score'].values, marker='^', linestyle='-', 
+             linewidth=1.5, markersize=4, alpha=0.8, label='Item-pair Score (unweighted)')
     
-    return config
+    # Add labels and title
+    plt.xlabel('Layout Index (sorted by item score)')
+    plt.ylabel('Score')
+    plt.title('Layout Optimization Component Scores')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Set y-axis limits
+    score_min = min(df_sorted['item_score'].min(), df_sorted['item_pair_score'].min())
+    score_max = max(df_sorted['item_score'].max(), df_sorted['item_pair_score'].max())
+    score_range = score_max - score_min
+    plt.ylim(max(0, score_min - score_range * 0.05), score_max + score_range * 0.05)
+    
+    # Add info text
+    info_text = [
+        f"Item Score: {df_sorted['item_score'].min():.6f} to {df_sorted['item_score'].max():.6f}",
+        f"Item-pair Score: {df_sorted['item_pair_score'].min():.6f} to {df_sorted['item_pair_score'].max():.6f}"
+    ]
+    plt.figtext(0.02, 0.02, '\n'.join(info_text), fontsize=9)
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    print(f"Generated component scores plot (saved as {save_path})")
 
-def create_visualization_mapping(row):
-    """Create a proper mapping dictionary from a result row."""
-    mapping = {}
-    items = row['items']
-    positions = row['positions'].upper()  # Convert to uppercase for visualization
-    
-    # Create mapping of each letter to its position
-    for i, letter in enumerate(items):
-        if i < len(positions):
-            mapping[letter] = positions[i]
-    
-    # Include any assigned items if they're present in the data
-    if 'items_assigned' in row and 'positions_assigned' in row:
-        items_assigned = row['items_assigned']
-        positions_assigned = row['positions_assigned']
-        
-        for i, letter in enumerate(items_assigned):
-            if i < len(positions_assigned):
-                mapping[letter] = positions_assigned[i]
-    
-    return mapping
-
-def analyze_results(df, display_top=3, base_config=None):
-    """Analyze results and generate insights."""
+def analyze_results(df):
+    """Print basic analysis of results."""
     if df.empty:
         print("No results to analyze!")
         return
     
-    print(f"Analyzed {len(df)} layout results from {df['config_id'].nunique()} configurations")
+    print(f"\nAnalyzed {len(df)} layout results")
     
-    # Overall statistics
-    print("\nOverall Statistics:")
-    print(f"Mean total score: {df['total_score'].mean():.6f}")
-    print(f"Best total score: {df['total_score'].max():.6f}")
-    print(f"Worst total score: {df['total_score'].min():.6f}")
+    # Component score statistics
+    print("\nItem Score Statistics:")
+    print(f"  Mean: {df['item_score'].mean():.6f}")
+    print(f"  Min: {df['item_score'].min():.6f}")
+    print(f"  Max: {df['item_score'].max():.6f}")
     
-    # Only group if we have multiple configurations
-    if df['config_id'].nunique() > 1:
-        print("\nPerformance by Configuration:")
-        # For each configuration, get the best score
-        config_stats = df.groupby('config_id')['total_score'].agg(['max']).rename(columns={'max': 'best_score'})
-        config_stats['rank'] = config_stats['best_score'].rank(ascending=False).astype(int)
-        config_stats = config_stats.sort_values('best_score', ascending=False)
-        
-        print("Top 10 Configurations by Score:")
-        print(config_stats.head(10))
-        
-        print("\nBottom 10 Configurations by Score:")
-        print(config_stats.tail(10))
+    print("\nItem-pair Score Statistics:")
+    print(f"  Mean: {df['item_pair_score'].mean():.6f}")
+    print(f"  Min: {df['item_pair_score'].min():.6f}")
+    print(f"  Max: {df['item_pair_score'].max():.6f}")
     
-    # Find the best layout overall
-    best_idx = df['total_score'].idxmax()
-    best_layout = df.iloc[best_idx]
+    # Find best layouts by component scores
+    best_item_idx = df['item_score'].idxmax()
+    best_pair_idx = df['item_pair_score'].idxmax()
     
-    print("\nBest Layout Overall:")
-    print(f"Config ID: {best_layout.get('config_id', 'N/A')}")
-    print(f"Total Score: {best_layout['total_score']:.6f}")
-    print(f"Items: {best_layout['items']}")
-    print(f"Positions: {best_layout['positions']}")
-    print(f"Raw Positions: {best_layout.get('raw_positions', 'N/A')}")
-    print(f"Source file: {best_layout.get('file_id', 'unknown')}")
+    print("\nBest Layout by Item Score:")
+    print(f"  Config ID: {df.loc[best_item_idx, 'config_id']}")
+    print(f"  Item Score: {df.loc[best_item_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score: {df.loc[best_item_idx, 'item_pair_score']:.6f}")
     
-    # Show the assigned positions from the filename
-    if best_layout.get('items_assigned') and best_layout.get('positions_assigned'):
-        print(f"Pre-assigned: {best_layout['items_assigned']} in positions {best_layout['positions_assigned']}")
-    
-    # Try to identify the letters in better format
-    try:
-        items = best_layout['items']
-        positions = best_layout['positions']
-        
-        if len(items) == len(positions):
-            print("\nLetter to Position Mapping:")
-            for i, letter in enumerate(items):
-                print(f"  {letter} -> {positions[i]}")
-    except:
-        pass
-    
-    # Display top layouts on CLI if visualization is available
-    if visualization_available:
-        print("\nDisplaying top layouts:")
-        
-        # Get the top results
-        top_df = df.sort_values('total_score', ascending=False).head(display_top)
-        
-        for i, (idx, row) in enumerate(top_df.iterrows(), 1):
-            print(f"\n#{i}: Score: {row['total_score']:.6f}")
-            print(f"Config ID: {row['config_id']}")
-            
-            # Create a custom config for this specific layout
-            config = create_visualization_config(row, base_config)
-            
-            # Create the mapping
-            mapping = create_visualization_mapping(row)
-            
-            # Display configuration details
-            print(f"File: {row['file_id']}")
-            print(f"Items to assign: {row['items']}")
-            print(f"Positions to assign: {row['positions'].upper()}")
-            if row.get('items_assigned'):
-                print(f"Pre-assigned: {row['items_assigned']} in positions {row['positions_assigned']}")
-            
-            # Use the visualization function for this specific layout
-            try:
-                visualize_keyboard_layout(
-                    mapping=mapping,
-                    title=f"Layout #{i} (Config: {row['config_id']})",
-                    config=config
-                )
-            except Exception as e:
-                print(f"Error visualizing layout: {e}")
-                print("Letter mapping:")
-                for letter, pos in mapping.items():
-                    print(f"  {letter} -> {pos}")
-    else:
-        print("\nVisualization not available - printing text results only:")
-        top_df = df.sort_values('total_score', ascending=False).head(display_top)
-        for i, (_, row) in enumerate(top_df.iterrows(), 1):
-            print(f"\n#{i}: Score: {row['total_score']:.6f}")
-            print(f"Items: {row['items']}")
-            print(f"Positions: {row['positions']}")
-    
-    # Save to Excel for further analysis
-    df.to_excel("optimization_results_summary.xlsx", index=False)
-    print("\nResults summary saved to optimization_results_summary.xlsx")
-    
-    # Generate visualizations
-    try:
-        # Score distribution
-        plt.figure(figsize=(10, 6))
-        plt.hist(df['total_score'], bins=20, alpha=0.7)
-        plt.title('Distribution of Layout Scores')
-        plt.xlabel('Total Score')
-        plt.ylabel('Frequency')
-        plt.savefig('score_distribution.png')
-        print("Generated score distribution chart")
-        
-        # If we have multiple configs, plot them
-        if df['config_id'].nunique() > 1:
-            plt.figure(figsize=(14, 6))
-            # Get the best score for each config
-            best_scores = df.groupby('config_id')['total_score'].max().sort_values(ascending=False)
-            
-            # Limit to top 30 for readability
-            if len(best_scores) > 30:
-                best_scores = best_scores.head(30)
-                
-            best_scores.plot(kind='bar')
-            plt.title('Best Score by Configuration (Top 30)')
-            plt.xlabel('Configuration')
-            plt.ylabel('Best Score')
-            plt.xticks(rotation=90)
-            plt.tight_layout()
-            plt.savefig('config_performance.png')
-            print("Generated configuration performance chart")
-            
-    except Exception as e:
-        print(f"Error generating visualizations: {e}")
+    print("\nBest Layout by Item-pair Score:")
+    print(f"  Config ID: {df.loc[best_pair_idx, 'config_id']}")
+    print(f"  Item Score: {df.loc[best_pair_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score: {df.loc[best_pair_idx, 'item_pair_score']:.6f}")
 
-if __name__ == "__main__":
-    # Parse command line arguments
+def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
-    parser.add_argument('--top', type=int, default=3, 
-                        help='Number of top layouts to display (default: 3)')
-    parser.add_argument('--config', type=str, default='config.yaml',
-                        help='Path to configuration file (default: config.yaml)')
-    parser.add_argument('--results-dir', type=str, default=None,
-                        help='Directory containing result files (default: from config)')
+    parser.add_argument('--results-dir', type=str, default='output/layouts',
+                      help='Directory containing result files')
+    parser.add_argument('--max-files', type=int, default=None,
+                      help='Maximum number of files to process (default: all)')
     args = parser.parse_args()
     
-    # Load the configuration file
-    try:
-        base_config = load_config(args.config)
-        print(f"Loaded configuration from {args.config}")
+    print(f"Loading and analyzing results from {args.results_dir}")
+    df = load_results(args.results_dir, max_files=args.max_files)
+    
+    if not df.empty:
+        # Show raw vs parsed total scores for a sample
+        print("\nSample of raw vs parsed total scores:")
+        sample_df = df.sample(min(5, len(df)))
+        for _, row in sample_df.iterrows():
+            print(f"  Raw: {row['raw_total_score']}, Parsed: {row['parsed_total_score']}")
         
-        # Get results directory from config if not specified
-        if args.results_dir is None:
-            results_dir = base_config['paths']['output']['layout_results_folder']
-        else:
-            results_dir = args.results_dir
-            
-    except Exception as e:
-        print(f"Error loading configuration: {e}")
-        print("Using default settings")
-        base_config = None
-        results_dir = 'output/layouts' if args.results_dir is None else args.results_dir
-    
-    print(f"Using results directory: {results_dir}")
-    print("Loading and analyzing optimization results...")
-    
-    results_df = load_all_results(results_dir)
-    analyze_results(results_df, display_top=args.top, base_config=base_config)
+        # Generate plots and analysis
+        plot_component_scores(df)
+        analyze_results(df)
+        
+        # Save results to Excel
+        df.to_excel("component_scores_summary.xlsx", index=False)
+        print("\nResults saved to component_scores_summary.xlsx")
+    else:
+        print("No results to analyze!")
+
+if __name__ == "__main__":
+    main()
