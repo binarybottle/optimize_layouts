@@ -13,6 +13,7 @@
 #SBATCH -A <YOUR_ALLOCATION>        # Replace <YOUR_ALLOCATION> with your allocation ID
 TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total number of configurations
 BATCH_SIZE=1000                     # SLURM array limit per batch
+config_folder=output/configs1       # Configuration files parent folder name
 #===================================================================
 
 # The batch number must be provided when submitting:
@@ -50,16 +51,16 @@ echo "Starting job array ${SLURM_ARRAY_JOB_ID}, task ${SLURM_ARRAY_TASK_ID}"
 echo "Processing config ID: ${CONFIG_ID}"
 echo "Running on node: $(hostname)"
 echo "Current working directory: $(pwd)"
-echo "Configuration file: output/configs/config_${CONFIG_ID}.yaml"
+echo "Configuration file: ${config_folder}/config_${CONFIG_ID}.yaml"
 
 # Check if config file exists
-if [ ! -f output/configs/config_${CONFIG_ID}.yaml ]; then
-    echo "Error: Configuration file output/configs/config_${CONFIG_ID}.yaml not found!"
+if [ ! -f ${config_folder}/config_${CONFIG_ID}.yaml ]; then
+    echo "Error: Configuration file ${config_folder}/config_${CONFIG_ID}.yaml not found!"
     exit 1
 fi
 
 # Run the optimization with the specific configuration
-python optimize_layout.py --config output/configs/config_${CONFIG_ID}.yaml 
+python optimize_layout.py --config ${config_folder}/config_${CONFIG_ID}.yaml 
 
 # Save completion status
 if [ $? -eq 0 ]; then

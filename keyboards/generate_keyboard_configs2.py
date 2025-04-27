@@ -41,14 +41,11 @@ OUTPUT_DIR = '../output/configs'
 CONFIG_FILE = '../config.yaml'
 nlayouts = 1 
 
-# Positions
-# FDRSEVAWCQXZ JKULIM;O,P./  
-#MOST_COMFORTABLE_KEYS = "FDRSEVAJKULIM;"  # 14 most comfortable keys
-#LEAST_COMFORTABLE_KEYS = "WCQXZO,P./"     # 10 least comfortable keys
-MOST_COMFORTABLE_KEYS = "FDRSEVJKULIM"     # 12 most comfortable keys
-LEAST_COMFORTABLE_KEYS = "AWCQXZ;O,P./"    # 12 least comfortable keys
-#MOST_COMFORTABLE_KEYS = "FDRSEJKULI"      # 10 most comfortable keys
-#LEAST_COMFORTABLE_KEYS = "VAWCQXZM;O,P./" # 14 least comfortable keys
+# Positions (left right): FDESVRWACQZX JKILMUO;,P/.  
+MOST_COMFORTABLE_KEYS  = "FDESVRWJKILMUO" # 14 most comfortable keys
+LEAST_COMFORTABLE_KEYS = "ACQZX;,P/."     # 10 least comfortable keys
+#MOST_COMFORTABLE_KEYS  = "FDESVRJKILMU"  # 12 most comfortable keys
+#LEAST_COMFORTABLE_KEYS = "WACQZXO;,P/."  # 12 least comfortable keys
 
 # Least frequent of 24 letters (`vkxj` in English) to add to items_to_assign
 least_frequent_items_of_24 = 'vkxj'
@@ -74,31 +71,37 @@ def parse_layout_results(results_path, top_n=1):
         with open(results_path, 'r') as f:
             reader = csv.reader(f)
             
-            # Skip configuration info (variable number of rows until we find the header)
-            row = next(reader, None)
-            while row and not ('Items' in row and 'Positions' in row and 'Rank' in row):
-                row = next(reader, None)
-                
-            # If we never found the header, return empty
-            if not row:
+            # Skip configuration info (first 9 lines)
+            for _ in range(9):
+                next(reader, None)
+            
+            # Read header row (line 9)
+            header = next(reader, None)
+            if not header:
                 print(f"Warning: Could not find header row in {results_path}")
                 return layouts
-                
+            
+            # Debug: Print header
+            # print(f"Header found: {header}")
+            
             # Read top N data rows
             for _ in range(top_n):
                 layout_row = next(reader, None)
-                if not layout_row or len(layout_row) < 4:
+                if not layout_row or len(layout_row) < 5:  # Ensure row has enough data
+                    # Debug: print(f"No data row found or insufficient columns: {layout_row}")
                     break
-                    
-                # Extract items (letters) and positions
-                items = layout_row[0]
-                positions = layout_row[1]
-                rank = int(layout_row[2]) if len(layout_row) > 2 else 0
-                score = float(layout_row[3]) if len(layout_row) > 3 else 0
+                
+                # Extract all items and positions (including assigned ones)
+                # Your CSV has "Items","Positions","Optimized Items","Optimized Positions"
+                all_items = layout_row[2]
+                all_positions = layout_row[3]
+                all_positions = all_positions.replace('[semicolon]', ';')
+                rank = int(layout_row[4]) if len(layout_row) > 4 else 0
+                score = float(layout_row[5]) if len(layout_row) > 5 else 0
                 
                 layout = {
-                    'items': items,
-                    'positions': positions,
+                    'items': all_items,
+                    'positions': all_positions,
                     'score': score,
                     'rank': rank
                 }
@@ -110,7 +113,7 @@ def parse_layout_results(results_path, top_n=1):
     except Exception as e:
         print(f"Error parsing {results_path}: {e}")
         return layouts
-
+    
 def find_layout_results(step1_dir, layouts_per_config=1):
     """
     Find layout result files from Step #1, taking the top N layouts from each config.
@@ -126,7 +129,7 @@ def find_layout_results(step1_dir, layouts_per_config=1):
     # Group result files by config number
     config_results = defaultdict(list)
     
-    pattern = os.path.join(step1_dir, "config_*/layout_results_*.csv")
+    pattern = os.path.join(step1_dir, "layout_results_*.csv")
     result_files = glob.glob(pattern)
     
     if not result_files:
@@ -138,11 +141,22 @@ def find_layout_results(step1_dir, layouts_per_config=1):
     # First, organize files by config number
     for file_path in result_files:
         try:
-            config_num = int(file_path.split('config_')[1].split('/')[0])
+            # Extract config number from filename
+            filename = os.path.basename(file_path)
+            parts = filename.split('_')
+            if len(parts) > 2:
+                try:
+                    config_num = int(parts[2])
+                except ValueError:
+                    config_num = 0
+            else:
+                config_num = 0
+
             config_results[config_num].append(file_path)
         except (IndexError, ValueError) as e:
             print(f"Warning: Could not extract config number from {file_path}: {e}")
-    
+            config_results[0].append(file_path)
+                
     print(f"Found results for {len(config_results)} different Step #1 configurations")
     
     # Process each config's results
@@ -153,45 +167,49 @@ def find_layout_results(step1_dir, layouts_per_config=1):
         # Take the most recent file for this config
         latest_file = file_paths[0]
         
-        # Parse layouts from this file
-        with open(latest_file, 'r') as f:
-            reader = csv.reader(f)
-            
-            # Skip configuration info
-            for _ in range(10):  # Skip first rows of config info
-                next(reader, None)
-            
-            # Read header row
-            header = next(reader, None)
-            if not header:
-                continue
-            
-            # Read top N data rows for this config
-            layouts_found = 0
-            for row in reader:
-                if not row or len(row) < 4:  # Ensure row has enough data
+        try:
+            # Parse the CSV file based on the format we've seen
+            with open(latest_file, 'r') as f:
+                reader = csv.reader(f)
+                
+                # Skip configuration info (first 9 lines)
+                for _ in range(9):
+                    next(reader, None)
+                
+                # Read header row
+                header = next(reader, None)
+                if not header:
                     continue
                 
-                # Extract items (letters) and positions
-                items = row[0]
-                positions = row[1]
-                rank = int(row[2]) if len(row) > 2 else 0
-                score = float(row[3]) if len(row) > 3 else 0
-                
-                layout = {
-                    'items': items,
-                    'positions': positions,
-                    'score': score,
-                    'rank': rank,
-                    'config': config_num,
-                    'source_file': latest_file
-                }
-                
-                results.append(layout)
-                layouts_found += 1
-                
-                if layouts_found >= layouts_per_config:
-                    break
+                # Read data rows for this config
+                layouts_found = 0
+                for row in reader:
+                    if not row or len(row) < 6:  # Ensure row has enough data
+                        continue
+                    
+                    # Extract full layout data (all items and positions)
+                    all_items = row[2]
+                    all_positions = row[3]
+                    all_positions = all_positions.replace('[semicolon]', ';')
+                    rank = int(row[4]) if len(row) > 4 else 0
+                    score = float(row[5]) if len(row) > 5 else 0
+                    
+                    layout = {
+                        'items': all_items,
+                        'positions': all_positions,
+                        'score': score,
+                        'rank': rank,
+                        'config': config_num,
+                        'source_file': latest_file
+                    }
+                    
+                    results.append(layout)
+                    layouts_found += 1
+                    
+                    if layouts_found >= layouts_per_config:
+                        break
+        except Exception as e:
+            print(f"Error processing {latest_file}: {e}")
     
     print(f"Extracted {len(results)} layouts from {len(config_results)} configurations")
     return results
@@ -201,83 +219,99 @@ def generate_constraint_sets(layouts):
     configs = []
     unique_item_sets = set()  # Track unique sets of letters in most comfortable keys
     duplicates_count = 0      # Track number of duplicates found
+    error_count = 0           # Track number of layouts with errors
     
     for layout in layouts:
-        # Extract items and positions from the layout
-        items = layout['items']
-        positions = layout['positions']
-        config_num = layout.get('config', 0)
-        rank = layout.get('rank', 1)
-        
-        # Create mapping of positions to items
-        pos_to_item = {}
-        for i, pos in enumerate(positions):
-            pos_to_item[pos] = items[i]
-        
-        # Create mapping of items to positions
-        item_to_pos = {}
-        for i, item in enumerate(items):
-            item_to_pos[item] = positions[i]
-        
-        # Identify items in the most/least comfortable keys
-        items_in_most_comfortable = ''.join([pos_to_item.get(pos, '') for pos in MOST_COMFORTABLE_KEYS])
-        
-        # Check if we've already seen this set of most comfortable letters
-        items_key = ''.join(sorted(items_in_most_comfortable))
-        if items_key in unique_item_sets:
-            # Skip this layout as it would produce a duplicate config
-            duplicates_count += 1
-            continue
-        
-        # Add to our set of unique letter combinations
-        unique_item_sets.add(items_key)
-        
-        items_in_least_comfortable = ''.join([pos_to_item.get(pos, '') for pos in LEAST_COMFORTABLE_KEYS])
-        
-        # Least frequent of 24 letters (`vkxj` in English) to items_to_assign
-        items_to_assign = least_frequent_items_of_24 + items_in_least_comfortable
-        items_to_assign = items_to_assign[:len(LEAST_COMFORTABLE_KEYS)]  # Take first characters
-        #items_to_assign = ''.join(sorted(set(items_to_assign), key=items_to_assign.index))  # Remove duplicates
-        
-        # Create config
-        config = {
-            'items_to_assign': items_to_assign,
-            'positions_to_assign': LEAST_COMFORTABLE_KEYS,
-            'items_assigned': items_in_most_comfortable,
-            'positions_assigned': MOST_COMFORTABLE_KEYS,
-            'items_to_constrain': "",  # No constraints for these configurations
-            'positions_to_constrain': "",
-            'source_config': config_num,  # Store source config for reference
-            'source_rank': rank  # Store rank in original config
-        }
-        
-        # Validate config
-        if len(config['items_to_assign']) == 14 and len(config['items_assigned']) == 10:
-            configs.append(config)
-        else:
-            print(f"Warning: Invalid configuration generated from config_{config_num}, rank {rank}:")
-            print(f"  items_to_assign: '{config['items_to_assign']}' (length: {len(config['items_to_assign'])})")
-            print(f"  items_assigned: '{config['items_assigned']}' (length: {len(config['items_assigned'])})")
+        try:
+            # Extract items and positions from the layout
+            items = layout['items']
+            positions = layout['positions']
+            config_num = layout.get('config', 0)
+            rank = layout.get('rank', 1)
             
-            # Try to fix the configuration
-            if len(config['items_to_assign']) < 14:
-                # Add more common letters until we have 14
-                common_letters = 'zqxjkvbpygwfmcdhrlstnaoeiu'  # Least to most common
-                for letter in common_letters:
-                    if letter not in config['items_to_assign'] and letter not in config['items_assigned']:
-                        config['items_to_assign'] += letter
-                        if len(config['items_to_assign']) == 14:
-                            break
-                            
-                print(f"  Fixed items_to_assign: '{config['items_to_assign']}' (length: {len(config['items_to_assign'])})")
+            # Validate that items and positions have the same length
+            if len(items) != len(positions):
+                print(f"Warning: Items and positions have different lengths in layout from config_{config_num}:")
+                print(f"  Items: '{items}' (length: {len(items)})")
+                print(f"  Positions: '{positions}' (length: {len(positions)})")
+                error_count += 1
+                continue
+            
+            # Create mapping of positions to items
+            pos_to_item = {}
+            for i, pos in enumerate(positions):
+                pos_to_item[pos] = items[i]
+            
+            # Create mapping of items to positions
+            item_to_pos = {}
+            for i, item in enumerate(items):
+                item_to_pos[item] = positions[i]
+            
+            # Filter the most comfortable keys to only include positions that exist in this layout
+            available_comfortable_keys = [key for key in MOST_COMFORTABLE_KEYS if key in positions]
+            available_uncomfortable_keys = [key for key in LEAST_COMFORTABLE_KEYS if key in positions]
+            
+            if not available_comfortable_keys or not available_uncomfortable_keys:
+                print(f"Warning: Layout from config_{config_num} has no usable keys for constraints")
+                error_count += 1
+                continue
+            
+            # Identify items in the available most/least comfortable keys
+            items_in_most_comfortable = ''.join([pos_to_item.get(pos, '') for pos in available_comfortable_keys])
+            
+            # Check if we've already seen this set of most comfortable letters
+            items_key = ''.join(sorted(items_in_most_comfortable))
+            if items_key in unique_item_sets:
+                # Skip this layout as it would produce a duplicate config
+                duplicates_count += 1
+                continue
+            
+            # Add to our set of unique letter combinations
+            unique_item_sets.add(items_key)
+            
+            items_in_least_comfortable = ''.join([pos_to_item.get(pos, '') for pos in available_uncomfortable_keys])
+            
+            # Least frequent of 24 letters (`vkxj` in English) to items_to_assign
+            items_to_assign = least_frequent_items_of_24 + items_in_least_comfortable
+            items_to_assign = items_to_assign[:len(available_uncomfortable_keys)]  # Limit by available positions
+            
+            # Create config
+            config = {
+                'items_to_assign': items_to_assign,
+                'positions_to_assign': ''.join(available_uncomfortable_keys),
+                'items_assigned': items_in_most_comfortable,
+                'positions_assigned': ''.join(available_comfortable_keys),
+                'items_to_constrain': "",  # No constraints for these configurations
+                'positions_to_constrain': "",
+                'source_config': config_num,  # Store source config for reference
+                'source_rank': rank  # Store rank in original config
+            }
+            
+            # Validate that there's at least some data to work with
+            if len(config['items_to_assign']) > 0 and len(config['items_assigned']) > 0:
+                configs.append(config)
+            else:
+                print(f"Warning: Invalid configuration generated from config_{config_num}, rank {rank}:")
+                print(f"  items_to_assign: '{config['items_to_assign']}' (length: {len(config['items_to_assign'])})")
+                print(f"  items_assigned: '{config['items_assigned']}' (length: {len(config['items_assigned'])})")
+                error_count += 1
                 
-                # Add if fixed successfully
-                if len(config['items_to_assign']) == 14 and len(config['items_assigned']) == 10:
-                    configs.append(config)
-                    print("  Configuration fixed and added.")
-    
-    print(f"Skipped {duplicates_count} duplicate configurations")
+        except Exception as e:
+            print(f"Error processing layout from config_{layout.get('config', 0)}: {e}")
+            error_count += 1
+            continue
+            
+    print(f"Skipped {duplicates_count} duplicate configurations and {error_count} configurations with errors")
     return configs
+
+def debug_available_positions(layouts):
+    all_positions = set()
+    for layout in layouts:
+        positions = layout['positions']
+        for pos in positions:
+            all_positions.add(pos)
+    print(f"\nAvailable positions in layouts: {''.join(sorted(all_positions))}")
+    return all_positions
 
 def create_config_files(configs, output_subdir=""):
     """Create individual config file for each configuration."""
@@ -300,6 +334,9 @@ def create_config_files(configs, output_subdir=""):
         
         config['optimization']['nlayouts'] = nlayouts
         
+        # Make sure to preserve the scoring weights from the base config
+        config['optimization']['scoring'] = base_config['optimization']['scoring']
+
         # Determine file naming based on approach
         if output_subdir == "per_config":
             # Per-config approach - use source config and rank
@@ -307,11 +344,11 @@ def create_config_files(configs, output_subdir=""):
             source_rank = config_params.get('source_rank', 1)
             
             # Set up unique output path based on source config
-            output_folder = f"output/layouts/step2_per_config/from_config_{source_config}_rank_{source_rank}"
+            output_folder = f"../output/layouts/step2_per_config/from_config_{source_config}_rank_{source_rank}"
             config_filename = f"{output_dir}/step2_from_config_{source_config}_rank_{source_rank}.yaml"
         else:
             # Across-all approach - use top N naming
-            output_folder = f"output/layouts/step2_across_all/top_{i}"
+            output_folder = f"../output/layouts/step2_across_all/top_{i}"
             config_filename = f"{output_dir}/step2_top_{i}.yaml"
         
         # Set output folder in config
@@ -329,7 +366,7 @@ def create_config_files(configs, output_subdir=""):
 if __name__ == "__main__":
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Generate configurations from existing layouts.')
-    parser.add_argument('--step1-dir', type=str, default='output/layouts',
+    parser.add_argument('--step1-dir', type=str, default='../output/layouts',
                         help='Directory containing existing layouts')
     parser.add_argument('--layouts-per-config', type=int, default=1,
                         help='Number of top layouts to take from each existing config (default: 1)')
@@ -344,10 +381,13 @@ if __name__ == "__main__":
     # Find layout results from Step #1, taking the top N layouts from each config
     layouts_per_config = find_layout_results(args.step1_dir, args.layouts_per_config)
     
+    # Debug available positions
+    available_positions = debug_available_positions(layouts_per_config)
+
     if not layouts_per_config:
         print("Error: No layout results found from Step #1")
         sys.exit(1)
-    
+
     # Generate configurations from per-config layouts
     configs_per_config = generate_constraint_sets(layouts_per_config)
     
@@ -370,15 +410,34 @@ if __name__ == "__main__":
     if args.both_approaches or args.top_across_all > 0:
         # Get top N layouts across all configs
         all_layouts = []
-        for file_path in glob.glob(os.path.join(args.step1_dir, "config_*/layout_results_*.csv")):
+        for file_path in glob.glob(os.path.join(args.step1_dir, "layout_results_*.csv")):
             config_layouts = parse_layout_results(file_path, top_n=100)  # Get many layouts from each file
+
             for layout in config_layouts:
                 try:
-                    config_num = int(file_path.split('config_')[1].split('/')[0])
+                    # Try to extract config number if possible, otherwise use a default
+                    if 'config_' in file_path:
+                        config_num = int(file_path.split('config_')[1].split('/')[0])
+                    else:
+                        # Extract number from layout_results_NUMBER_date.csv
+                        filename = os.path.basename(file_path)
+                        parts = filename.split('_')
+                        if len(parts) > 2:
+                            try:
+                                config_num = int(parts[2])
+                            except ValueError:
+                                config_num = 0
+                        else:
+                            config_num = 0
+
                     layout['config'] = config_num
                     layout['source_file'] = file_path
                 except (IndexError, ValueError) as e:
                     print(f"Warning: Could not extract config number from {file_path}: {e}")
+                    # Still add config information
+                    layout['config'] = 0
+                    layout['source_file'] = file_path
+
             all_layouts.extend(config_layouts)
         
         # Sort all layouts by score and take top N

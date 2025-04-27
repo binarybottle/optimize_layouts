@@ -31,11 +31,11 @@ For the following, we:
   - Refer to the "comfort" of a key based on typing research data.
     The rank order of estimated key comfort is:
     ╭───────────────────────────────────────────────╮
-    │  10 │  8  │  5  │  3  ║  3  │  5  │  8  │  10 │
+    │  10 │  7  │  3  │  6  ║  6  │  3  │  7  │  10 │
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │  7  │  4  │  2  │  1  ║  1  │  2  │  4  │  7  │
+    │  8  │  4  │  2  │  1  ║  1  │  2  │  4  │  8  │
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │  12 │  11 │  9  │  6  ║  6  │  9  │  11 │  12 │
+    │  11 │  12 │  9  │  5  ║  5  │  9  │  12 │  11 │
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
@@ -122,20 +122,20 @@ For the following, we:
   (More than 11 letters exceeds time and memory limits for supercomputer center compute-hours -- see tests/README_tests.md.)
 
  #### Determine and apply item and item-pair weights
- Compute the median value of thousands of resulting 16-key optimized layouts. 
- Use these values as item and item-pair weights in config.yaml.
- Run optimize_layout.py again with the new weights. 
+ Compute the median item and item-pair values of thousands of resulting 
+ 16-key optimized layouts. Use these values as item and item-pair weights 
+ in config.yaml. Run optimize_layout.py again with the new weights. 
 
 ### Step 3. Generate a 2nd set of configuration files, removing letters 
 
   ```shell
   cd keyboards; python generate_keyboard_configs2.py
   # Per-config approach (default: 1 layout per config file):
-  python generate_configs2.py --layouts-per-config 100
+  python generate_keyboard_configs2.py --layouts-per-config 100
   # Across-all approach (top 1,000 layouts across all config files):
-  python generate_configs2.py --top-across-all 1000
+  python generate_keyboard_configs2.py --top-across-all 1000
   # Both approaches together:
-  python generate_configs2.py --layouts-per-config 100 --top-across-all 1000
+  python generate_keyboard_configs2.py --layouts-per-config 100 --top-across-all 1000
   ```
 
   Generate a new configuration file from each optimal layout from Step 2, 
@@ -145,9 +145,9 @@ For the following, we:
   If we leave 14 letters, then we will need to fill 10 keys in Step 4:
 
   ╭───────────────────────────────────────────────╮
-  │     │     │  o  │  u  ║  l  │  d  │     │     │
+  │     │  f  │  o  │  u  ║  l  │  d  │  m  │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  c  │  i  │  e  │  a  ║  h  │  t  │  s  │  n  │
+  │     │  i  │  e  │  a  ║  h  │  t  │  s  │     │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │     │     │     │  g  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
@@ -162,17 +162,6 @@ For the following, we:
   │     │     │     │  g  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-If we leave 10 letters, then we will need to fill 14 keys in Step 4:
-
-  ╭───────────────────────────────────────────────╮
-  │     │     │  o  │  u  ║  l  │  d  │     │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │  i  │  e  │  a  ║  h  │  t  │  s  │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │     │     ║     │     │     │     │
-  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
-
 ### Step 4. Optimally arrange remaining letters
 
   ```shell
@@ -186,7 +175,7 @@ If we leave 10 letters, then we will need to fill 14 keys in Step 4:
 
   We run optimize_layout.py again on each new unique configuration file to 
   optimally arrange the remaining letters in the least comfortable keys
-  (in our example assigning 12 letters, byckxjwvnmfp):
+  -- in our example assigning 12 letters, byckxjwvnmfp
 
   ╭───────────────────────────────────────────────╮
   │  -  │  -  │  o  │  u  ║  l  │  d  │  -  │  -  │
@@ -205,9 +194,9 @@ If we leave 10 letters, then we will need to fill 14 keys in Step 4:
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
  #### Determine and apply item and item-pair weights
- Compute the median value of thousands of resulting 24-key optimized layouts. 
- Use these values as item and item-pair weights in config.yaml.
- Run optimize_layout.py again with the new weights. 
+ Compute the median item and item-pair values of thousands of resulting 
+ 24-key optimized layouts. Use these values as item and item-pair weights 
+ in config.yaml. Run optimize_layout.py again with the new weights. 
 
 ### Step 5. Select the layout with the highest score
 

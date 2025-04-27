@@ -32,8 +32,8 @@ optimization:  # etaoinsrhldcumfpgwybvkxjqz in FDRSEVAWCQXZ JKULIM;O,P./
   positions_to_constrain:  ""   # Subset of positions_to_assign to constrain arrangement of items_to_constrain
 
   scoring:  
-    item_weight: 0.22                     # Weight for single-item scoring
-    item_pair_weight: 0.1                 # Weight for item_pair scoring
+    item_weight: 0.222                    # Weight for single-item scoring
+    item_pair_weight: 0.099               # Weight for item_pair scoring
     missing_item_pair_norm_score: 1.0
     missing_position_pair_norm_score: 1.0
 
