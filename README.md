@@ -223,9 +223,7 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
 
     # Run all batches as a slurm job
-    # (The 10-minute limit is just for the batch submission manager 
-    # script that coordinates submitting multiple optimization jobs)
-    sbatch --time=24:00:00 slurm_submit_batches.sh
+    sbatch --time=8:00:00 slurm_submit_batches.sh
     ```
 
   ### Monitor jobs

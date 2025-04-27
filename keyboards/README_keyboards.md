@@ -119,23 +119,12 @@ For the following, we:
   │     │     │     │  p  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  If we choose 13 letters (`nsrhldcumfpgw`), then there are more than
-  6.2 billion (13!) possible permutations, resulting in 18 filled positions:
+  (More than 11 letters exceeds time and memory limits for supercomputer center compute-hours -- see tests/README_tests.md.)
 
-  ╭───────────────────────────────────────────────╮
-  │     │  -  │  o  │  -  ║  -  │  -  │  -  │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  -  │  i  │  e  │  a  ║  -  │  t  │  -  │  -  │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │  -  │  -  ║  -  │  -  │     │     │
-  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-  ╭───────────────────────────────────────────────╮
-  │     │  f  │  o  │  u  ║  l  │  d  │  w  │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │  c  │  i  │  e  │  a  ║  h  │  t  │  s  │  n  │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │  p  │  g  ║  r  │  m  │     │     │
-  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+ #### Determine and apply item and item-pair weights
+ Compute the median value of thousands of resulting 16-key optimized layouts. 
+ Use these values as item and item-pair weights in config.yaml.
+ Run optimize_layout.py again with the new weights. 
 
 ### Step 3. Generate a 2nd set of configuration files, removing letters 
 
@@ -215,6 +204,10 @@ If we leave 10 letters, then we will need to fill 14 keys in Step 4:
   │  k  │  x  │  j  │  g  ║  r  │  m  │  f  │  p  │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
+ #### Determine and apply item and item-pair weights
+ Compute the median value of thousands of resulting 24-key optimized layouts. 
+ Use these values as item and item-pair weights in config.yaml.
+ Run optimize_layout.py again with the new weights. 
 
 ### Step 5. Select the layout with the highest score
 

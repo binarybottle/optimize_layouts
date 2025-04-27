@@ -1,15 +1,15 @@
 #!/bin/bash
 # CONFIGURATION 
 #===================================================================
-#SBATCH --time=4:00:00              # Time limit for the job
+#SBATCH --time=10:00:00             # Time limit for the job
 #SBATCH --array=0-999%1000          # Array job with 1000 tasks per batch
 #SBATCH --ntasks-per-node=1         # Number of tasks per node
-#SBATCH --cpus-per-task=2           # Number of CPUs per task   
-#SBATCH --mem=2GB                   # Memory allocation
+#SBATCH --cpus-per-task=24          # Number of CPUs per task   
+#SBATCH --mem=512GB                 # Memory allocation
 #SBATCH --job-name=layouts          # Job name
 #SBATCH --output=output/outputs/layouts_%A_%a.out # Output file
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file
-#SBATCH -p RM-shared                # Regular Memory-shared or Extreme Memory nodes on Bridges-2   
+#SBATCH -p EM                       # Regular Memory-shared or Extreme Memory nodes on Bridges-2   
 #SBATCH -A <YOUR_ALLOCATION>        # Replace <YOUR_ALLOCATION> with your allocation ID
 TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total number of configurations
 BATCH_SIZE=1000                     # SLURM array limit per batch
