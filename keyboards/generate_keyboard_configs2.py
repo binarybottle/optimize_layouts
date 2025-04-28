@@ -37,7 +37,7 @@ from collections import defaultdict
 import sys
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = '../output/configs'
+OUTPUT_DIR = '../output/configs2'
 CONFIG_FILE = '../config.yaml'
 nlayouts = 1 
 
@@ -188,8 +188,8 @@ def find_layout_results(step1_dir, layouts_per_config=1):
                         continue
                     
                     # Extract full layout data (all items and positions)
-                    all_items = row[2]
-                    all_positions = row[3]
+                    all_items     = row[0]  # "Items"
+                    all_positions = row[1]  # "Positions"
                     all_positions = all_positions.replace('[semicolon]', ';')
                     rank = int(row[4]) if len(row) > 4 else 0
                     score = float(row[5]) if len(row) > 5 else 0
@@ -208,6 +208,7 @@ def find_layout_results(step1_dir, layouts_per_config=1):
                     
                     if layouts_found >= layouts_per_config:
                         break
+
         except Exception as e:
             print(f"Error processing {latest_file}: {e}")
     
@@ -224,8 +225,8 @@ def generate_constraint_sets(layouts):
     for layout in layouts:
         try:
             # Extract items and positions from the layout
-            items = layout['items']
-            positions = layout['positions']
+            items = layout['items']  # This is the Items column (e.g., "etaoinsrhldcumfp")
+            positions = layout['positions']  # This is the Positions column (e.g., "FDESVJKILMUO;RWA")
             config_num = layout.get('config', 0)
             rank = layout.get('rank', 1)
             
@@ -242,59 +243,47 @@ def generate_constraint_sets(layouts):
             for i, pos in enumerate(positions):
                 pos_to_item[pos] = items[i]
             
-            # Create mapping of items to positions
-            item_to_pos = {}
-            for i, item in enumerate(items):
-                item_to_pos[item] = positions[i]
+            # Identify items in the most comfortable keys
+            items_in_most_comfortable = ""
+            for pos in MOST_COMFORTABLE_KEYS:
+                if pos in pos_to_item:
+                    items_in_most_comfortable += pos_to_item[pos]
             
-            # Filter the most comfortable keys to only include positions that exist in this layout
-            available_comfortable_keys = [key for key in MOST_COMFORTABLE_KEYS if key in positions]
-            available_uncomfortable_keys = [key for key in LEAST_COMFORTABLE_KEYS if key in positions]
-            
-            if not available_comfortable_keys or not available_uncomfortable_keys:
-                print(f"Warning: Layout from config_{config_num} has no usable keys for constraints")
+            # Skip if there are no items in most comfortable keys
+            if not items_in_most_comfortable:
+                print(f"Warning: Layout from config_{config_num} has no items in most comfortable keys")
                 error_count += 1
                 continue
             
-            # Identify items in the available most/least comfortable keys
-            items_in_most_comfortable = ''.join([pos_to_item.get(pos, '') for pos in available_comfortable_keys])
-            
-            # Check if we've already seen this set of most comfortable letters
-            items_key = ''.join(sorted(items_in_most_comfortable))
+            # Check for duplicates
+            items_key = items_in_most_comfortable
             if items_key in unique_item_sets:
-                # Skip this layout as it would produce a duplicate config
                 duplicates_count += 1
                 continue
-            
-            # Add to our set of unique letter combinations
+
+            # Add to unique sets
             unique_item_sets.add(items_key)
             
-            items_in_least_comfortable = ''.join([pos_to_item.get(pos, '') for pos in available_uncomfortable_keys])
-            
-            # Least frequent of 24 letters (`vkxj` in English) to items_to_assign
-            items_to_assign = least_frequent_items_of_24 + items_in_least_comfortable
-            items_to_assign = items_to_assign[:len(available_uncomfortable_keys)]  # Limit by available positions
+            # Fill the to_assign items with letters not in items_in_most_comfortable
+            to_assign_items = ""
+            alphabet = 'abcdefghijklmnopqrstuvwxyz'
+            for letter in alphabet:
+                if letter not in items_in_most_comfortable and len(to_assign_items) < len(LEAST_COMFORTABLE_KEYS):
+                    to_assign_items += letter
             
             # Create config
             config = {
-                'items_to_assign': items_to_assign,
-                'positions_to_assign': ''.join(available_uncomfortable_keys),
                 'items_assigned': items_in_most_comfortable,
-                'positions_assigned': ''.join(available_comfortable_keys),
-                'items_to_constrain': "",  # No constraints for these configurations
+                'positions_assigned': MOST_COMFORTABLE_KEYS,
+                'items_to_assign': to_assign_items,
+                'positions_to_assign': LEAST_COMFORTABLE_KEYS,
+                'items_to_constrain': "",
                 'positions_to_constrain': "",
-                'source_config': config_num,  # Store source config for reference
-                'source_rank': rank  # Store rank in original config
+                'source_config': config_num,
+                'source_rank': rank
             }
             
-            # Validate that there's at least some data to work with
-            if len(config['items_to_assign']) > 0 and len(config['items_assigned']) > 0:
-                configs.append(config)
-            else:
-                print(f"Warning: Invalid configuration generated from config_{config_num}, rank {rank}:")
-                print(f"  items_to_assign: '{config['items_to_assign']}' (length: {len(config['items_to_assign'])})")
-                print(f"  items_assigned: '{config['items_assigned']}' (length: {len(config['items_assigned'])})")
-                error_count += 1
+            configs.append(config)
                 
         except Exception as e:
             print(f"Error processing layout from config_{layout.get('config', 0)}: {e}")

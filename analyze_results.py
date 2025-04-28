@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 Analyze layout optimization results and create scatter plots of scores.
+Now shows weighted scores instead of normalized scores.
 """
 import os
 import sys
@@ -144,6 +145,17 @@ def parse_result_csv(filepath):
             items_assigned = config_info.get('Assigned items', '')
             positions_assigned = config_info.get('Assigned positions', '')
             
+            # Get weight values from config
+            try:
+                item_weight = float(config_info.get('Item weight', '0.222'))
+            except ValueError:
+                item_weight = 0.222
+                
+            try:
+                item_pair_weight = float(config_info.get('Item-pair weight', '0.099'))
+            except ValueError:
+                item_pair_weight = 0.099
+            
             # Create result dictionary
             result = {
                 'config_id': os.path.basename(filepath).replace('layout_results_', '').replace('.csv', ''),
@@ -158,6 +170,8 @@ def parse_result_csv(filepath):
                 'positions_to_assign': positions_to_assign,
                 'items_assigned': items_assigned,
                 'positions_assigned': positions_assigned,
+                'item_weight': item_weight,
+                'item_pair_weight': item_pair_weight,
                 'rank': rank
             }
             
@@ -191,44 +205,50 @@ def load_results(results_dir, max_files=None):
     # Create DataFrame
     df = pd.DataFrame(all_results) if all_results else pd.DataFrame()
     
-    # Add normalized scores
+    # Add weighted scores instead of normalized scores
     if not df.empty:
-        # Normalize each score type to 0-1 range
-        for score_col in ['total_score', 'item_score', 'item_pair_score']:
-            min_val = df[score_col].min()
-            max_val = df[score_col].max()
-            range_val = max_val - min_val
-            
-            if range_val > 0:
-                df[f'normalized_{score_col}'] = (df[score_col] - min_val) / range_val
-            else:
-                df[f'normalized_{score_col}'] = 1.0  # If all values are the same
+        # Calculate weighted scores
+        df['weighted_item_score'] = df['item_score'] * df['item_weight']
+        df['weighted_item_pair_score'] = df['item_pair_score'] * df['item_pair_weight']
+        
+        # Verify that total_score = weighted_item_score + weighted_item_pair_score
+        df['calculated_total'] = df['weighted_item_score'] + df['weighted_item_pair_score']
+        
+        # Check if there's a significant difference between calculated and reported total
+        tol = 1e-8  # Tolerance for floating point comparison
+        mismatch_count = ((df['total_score'] - df['calculated_total']).abs() > tol).sum()
+        if mismatch_count > 0:
+            print(f"Warning: {mismatch_count} rows have total scores that don't match the weighted sum")
+            # Calculate difference statistics for mismatches
+            mismatch_df = df[((df['total_score'] - df['calculated_total']).abs() > tol)]
+            print(f"  Average difference: {(mismatch_df['total_score'] - mismatch_df['calculated_total']).abs().mean()}")
+            print(f"  Max difference: {(mismatch_df['total_score'] - mismatch_df['calculated_total']).abs().max()}")
     
     return df
 
-def plot_scores_scatter(df, normalized=False, save_path=None):
-    """Create a scatter plot of all three score types."""
+def plot_scores_scatter(df, weighted=True, save_path=None):
+    """Create a scatter plot of all three score types (now with weighted instead of normalized)."""
     if df.empty:
         print("No results to plot!")
         return
     
     # Determine which score columns to use
-    if normalized:
-        total_col = 'normalized_total_score'
-        item_col = 'normalized_item_score'
-        item_pair_col = 'normalized_item_pair_score'
-        title_prefix = 'Normalized '
+    if weighted:
+        total_col = 'total_score'
+        item_col = 'weighted_item_score'
+        item_pair_col = 'weighted_item_pair_score'
+        title_prefix = 'Weighted '
         if save_path is None:
-            save_path = 'normalized_scores_scatter.png'
+            save_path = 'weighted_scores_scatter.png'
     else:
         total_col = 'total_score'
         item_col = 'item_score'
         item_pair_col = 'item_pair_score'
         title_prefix = ''
         if save_path is None:
-            save_path = 'scores_scatter.png'
+            save_path = 'raw_scores_scatter.png'
     
-    # Sort by the appropriate total score
+    # Sort by the total score
     df_sorted = df.sort_values(total_col)
     
     # Create the plot
@@ -243,7 +263,7 @@ def plot_scores_scatter(df, normalized=False, save_path=None):
                 marker='.', s=30, alpha=0.6, label='Item-pair Score', edgecolors='none')
     
     # Add labels and title
-    plt.xlabel(f'Layout Index (sorted by {title_prefix.lower()}total score)')
+    plt.xlabel(f'Layout Index (sorted by total score)')
     plt.ylabel(f'{title_prefix}Score')
     plt.title(f'{title_prefix}Layout Optimization Scores')
     plt.legend()
@@ -261,12 +281,25 @@ def plot_scores_scatter(df, normalized=False, save_path=None):
     score_range = score_max - score_min
     plt.ylim(max(0, score_min - score_range * 0.05), score_max + score_range * 0.05)
     
+    # Calculate average weights for info text
+    avg_item_weight = df['item_weight'].mean()
+    avg_item_pair_weight = df['item_pair_weight'].mean()
+    
     # Add score range information
-    info_text = [
-        f"{title_prefix}Total Score: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}",
-        f"{title_prefix}Item Score: {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
-        f"{title_prefix}Item-pair Score: {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}"
-    ]
+    if weighted:
+        info_text = [
+            f"Average weights - Item: {avg_item_weight:.3f}, Item-pair: {avg_item_pair_weight:.3f}",
+            f"Total Score: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}",
+            f"Weighted Item Score: {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
+            f"Weighted Item-pair Score: {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}"
+        ]
+    else:
+        info_text = [
+            f"Average weights - Item: {avg_item_weight:.3f}, Item-pair: {avg_item_pair_weight:.3f}",
+            f"Total Score: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}",
+            f"Item Score (unweighted): {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
+            f"Item-pair Score (unweighted): {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}"
+        ]
     plt.figtext(0.02, 0.02, '\n'.join(info_text), fontsize=9)
     
     # Save the plot
@@ -285,8 +318,13 @@ def analyze_results(df):
     # Score statistics
     print("\nScore Statistics:")
     print(f"  Total Score: {df['total_score'].min():.6f} to {df['total_score'].max():.6f} (mean: {df['total_score'].mean():.6f})")
-    print(f"  Item Score: {df['item_score'].min():.6f} to {df['item_score'].max():.6f} (mean: {df['item_score'].mean():.6f})")
-    print(f"  Item-pair Score: {df['item_pair_score'].min():.6f} to {df['item_pair_score'].max():.6f} (mean: {df['item_pair_score'].mean():.6f})")
+    print(f"  Item Score (unweighted): {df['item_score'].min():.6f} to {df['item_score'].max():.6f} (mean: {df['item_score'].mean():.6f})")
+    print(f"  Item-pair Score (unweighted): {df['item_pair_score'].min():.6f} to {df['item_pair_score'].max():.6f} (mean: {df['item_pair_score'].mean():.6f})")
+    
+    if 'weighted_item_score' in df.columns:
+        print(f"  Weighted Item Score: {df['weighted_item_score'].min():.6f} to {df['weighted_item_score'].max():.6f} (mean: {df['weighted_item_score'].mean():.6f})")
+        print(f"  Weighted Item-pair Score: {df['weighted_item_pair_score'].min():.6f} to {df['weighted_item_pair_score'].max():.6f} (mean: {df['weighted_item_pair_score'].mean():.6f})")
+        print(f"  Average weights - Item: {df['item_weight'].mean():.3f}, Item-pair: {df['item_pair_weight'].mean():.3f}")
     
     # Find best layouts by each score type
     best_total_idx = df['total_score'].idxmax()
@@ -296,24 +334,33 @@ def analyze_results(df):
     print("\nBest Layout by Total Score:")
     print(f"  Config ID: {df.loc[best_total_idx, 'config_id']}")
     print(f"  Total Score: {df.loc[best_total_idx, 'total_score']:.6f}")
-    print(f"  Item Score: {df.loc[best_total_idx, 'item_score']:.6f}")
-    print(f"  Item-pair Score: {df.loc[best_total_idx, 'item_pair_score']:.6f}")
+    print(f"  Item Score (unweighted): {df.loc[best_total_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score (unweighted): {df.loc[best_total_idx, 'item_pair_score']:.6f}")
+    if 'weighted_item_score' in df.columns:
+        print(f"  Weighted Item Score: {df.loc[best_total_idx, 'weighted_item_score']:.6f}")
+        print(f"  Weighted Item-pair Score: {df.loc[best_total_idx, 'weighted_item_pair_score']:.6f}")
     print(f"  Items: {df.loc[best_total_idx, 'items']}")
     print(f"  Positions: {df.loc[best_total_idx, 'positions']}")
     
     print("\nBest Layout by Item Score:")
     print(f"  Config ID: {df.loc[best_item_idx, 'config_id']}")
     print(f"  Total Score: {df.loc[best_item_idx, 'total_score']:.6f}")
-    print(f"  Item Score: {df.loc[best_item_idx, 'item_score']:.6f}")
-    print(f"  Item-pair Score: {df.loc[best_item_idx, 'item_pair_score']:.6f}")
+    print(f"  Item Score (unweighted): {df.loc[best_item_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score (unweighted): {df.loc[best_item_idx, 'item_pair_score']:.6f}")
+    if 'weighted_item_score' in df.columns:
+        print(f"  Weighted Item Score: {df.loc[best_item_idx, 'weighted_item_score']:.6f}")
+        print(f"  Weighted Item-pair Score: {df.loc[best_item_idx, 'weighted_item_pair_score']:.6f}")
     print(f"  Items: {df.loc[best_item_idx, 'items']}")
     print(f"  Positions: {df.loc[best_item_idx, 'positions']}")
     
     print("\nBest Layout by Item-pair Score:")
     print(f"  Config ID: {df.loc[best_pair_idx, 'config_id']}")
     print(f"  Total Score: {df.loc[best_pair_idx, 'total_score']:.6f}")
-    print(f"  Item Score: {df.loc[best_pair_idx, 'item_score']:.6f}")
-    print(f"  Item-pair Score: {df.loc[best_pair_idx, 'item_pair_score']:.6f}")
+    print(f"  Item Score (unweighted): {df.loc[best_pair_idx, 'item_score']:.6f}")
+    print(f"  Item-pair Score (unweighted): {df.loc[best_pair_idx, 'item_pair_score']:.6f}")
+    if 'weighted_item_score' in df.columns:
+        print(f"  Weighted Item Score: {df.loc[best_pair_idx, 'weighted_item_score']:.6f}")
+        print(f"  Weighted Item-pair Score: {df.loc[best_pair_idx, 'weighted_item_pair_score']:.6f}")
     print(f"  Items: {df.loc[best_pair_idx, 'items']}")
     print(f"  Positions: {df.loc[best_pair_idx, 'positions']}")
 
@@ -330,8 +377,8 @@ def main():
     
     if not df.empty:
         # Generate both plots
-        plot_scores_scatter(df, normalized=False, save_path='raw_scores_scatter.png')
-        plot_scores_scatter(df, normalized=True, save_path='normalized_scores_scatter.png')
+        plot_scores_scatter(df, weighted=False, save_path='raw_scores_scatter.png')
+        plot_scores_scatter(df, weighted=True, save_path='weighted_scores_scatter.png')
         
         # Analyze results
         analyze_results(df)
@@ -342,9 +389,10 @@ def main():
             'total_score', 
             'item_score', 
             'item_pair_score',
-            'normalized_total_score',
-            'normalized_item_score',
-            'normalized_item_pair_score',
+            'weighted_item_score',
+            'weighted_item_pair_score',
+            'item_weight',
+            'item_pair_weight',
             'items',                # Complete letter sequence
             'positions',            # Complete position sequence
             'items_to_assign',      # Items that needed to be assigned

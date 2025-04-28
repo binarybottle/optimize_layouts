@@ -27,6 +27,7 @@ For the following, we:
   - Focus on the 24 most frequent letters in English:
     etaoinsrhldcumfpgwybvkxj (not q or z)
   - Focus on the 24 keys in, above, and below the home row.
+    FDRSEVAWCQXZJKULIM;O,P./ (not ' or [)
   - Arrange letters in stages (more detail below).
   - Refer to the "comfort" of a key based on typing research data.
     The rank order of estimated key comfort is:
@@ -37,6 +38,8 @@ For the following, we:
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
     │  11 │  12 │  9  │  5  ║  5  │  9  │  12 │  11 │
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+
+
 
 ## Overview of Steps
 1. Generate 65,520 configuration files.
@@ -99,7 +102,8 @@ For the following, we:
 
   #### Assign the next 11 letters to the 11 remaining top-16 keys
   For each of Step 1's 65,520 configuration files, a branch-and-bound algorithm 
-  optimally arranges the next set of letters for that configuration. 
+  optimally arranges the next set of letters for that configuration.
+  A score is computed for each layout (see "Layout scoring" in README.md).
 
   If we choose 11 letters (`nsrhldcumfp`), then there are more than
   39.9 million (11!) possible permutations, resulting in 16 filled positions:
@@ -119,29 +123,25 @@ For the following, we:
   │     │     │     │  p  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  (More than 11 letters exceeds time and memory limits for supercomputer center compute-hours -- see tests/README_tests.md.)
+  (More than 11 letters exceeds time and memory limits for 
+  supercomputer center compute-hours -- see tests/README_tests.md.)
 
  #### Determine and apply item and item-pair weights
- Compute the median item and item-pair values of thousands of resulting 
- 16-key optimized layouts. Use these values as item and item-pair weights 
- in config.yaml. Run optimize_layout.py again with the new weights. 
+ Compute median item and item-pair values of tens of thousands of 16-key 
+ optimized layouts (set item and item-pair weights both to 0.5 in config files). 
+ Replace item and item-pair weights with these median values.
+ Run optimize_layout.py again with the revised config files. 
 
 ### Step 3. Generate a 2nd set of configuration files, removing letters 
 
   ```shell
   cd keyboards; python generate_keyboard_configs2.py
-  # Per-config approach (default: 1 layout per config file):
-  python generate_keyboard_configs2.py --layouts-per-config 100
-  # Across-all approach (top 1,000 layouts across all config files):
-  python generate_keyboard_configs2.py --top-across-all 1000
-  # Both approaches together:
-  python generate_keyboard_configs2.py --layouts-per-config 100 --top-across-all 1000
+  python generate_keyboard_configs2.py # default: 1 layout per config file
   ```
 
   Generate a new configuration file from each optimal layout from Step 2, 
   removing the letters from the layout's least comfortable keys. 
   This will promote greater exploration in Step 4.
-
   If we leave 14 letters, then we will need to fill 10 keys in Step 4:
 
   ╭───────────────────────────────────────────────╮
@@ -152,33 +152,16 @@ For the following, we:
   │     │     │     │  g  ║  r  │     │     │     │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
-  If we leave 12 letters, then we will need to fill 12 keys in Step 4:
-
-  ╭───────────────────────────────────────────────╮
-  │     │     │  o  │  u  ║  l  │  d  │     │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │  i  │  e  │  a  ║  h  │  t  │  s  │     │
-  ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-  │     │     │     │  g  ║  r  │     │     │     │
-  ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
 ### Step 4. Optimally arrange remaining letters
 
-  ```shell
-  # Per-config approach (default: 1 layout per config file):
-  python generate_configs2.py --layouts-per-config 100
-  # Across-all approach (top 1,000 layouts across all config files):
-  python generate_configs2.py --top-across-all 1000
-  # Both approaches together:
-  python generate_configs2.py --layouts-per-config 100 --top-across-all 1000
-  ```
+  `python optimize_layout.py`
 
-  We run optimize_layout.py again on each new unique configuration file to 
+  Run optimize_layout.py again on each new unique configuration file to 
   optimally arrange the remaining letters in the least comfortable keys
-  -- in our example assigning 12 letters, byckxjwvnmfp
+  -- in our example assigning 10 letters, ckxjwvnmfp
 
   ╭───────────────────────────────────────────────╮
-  │  -  │  -  │  o  │  u  ║  l  │  d  │  -  │  -  │
+  │  -  │  f  │  o  │  u  ║  l  │  d  │  m  │  -  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  -  │  i  │  e  │  a  ║  h  │  t  │  s  │  -  │
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -194,18 +177,15 @@ For the following, we:
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
  #### Determine and apply item and item-pair weights
- Compute the median item and item-pair values of thousands of resulting 
- 24-key optimized layouts. Use these values as item and item-pair weights 
- in config.yaml. Run optimize_layout.py again with the new weights. 
+ Again, compute median item and item-pair values of tens of thousands of 24-key 
+ optimized layouts (set item and item-pair weights both to 0.5 in config files). 
+ Replace item and item-pair weights with these median values.
+ Run optimize_layout.py again with the revised config files. 
 
 ### Step 5. Select the layout with the highest score
 
-  Each of the 65,520 configuration files leads to an optimal layout 
-  based on its initial constraints. A score is computed for each layout,
-  based on the same scoring logic used to evaluate layouts during the
-  optimization process. For this final step, we select the layout 
-  with the highest score for a 24-key layout, 
-  and add the 2 least frequent letters q and z: 
+  Finally, we select the layout with the highest score for a 24-key layout, 
+  and add the 2 least frequent letters (q and z): 
 
   ╭─────────────────────────────────────────────────────╮
   │  b  │  y  │  o  │  u  ║  l  │  d  │  w  │  v  │  z  │ 
