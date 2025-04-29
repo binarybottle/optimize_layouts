@@ -219,9 +219,6 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # Run a single test job
     sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 
-    # Run just one batch (1001-2000) manually:
-    sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
-
     # Run all batches as a slurm job
     sbatch --time=8:00:00 slurm_submit_batches.sh
     ```
@@ -232,35 +229,21 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # Check all your running jobs
     squeue -u $USER
 
-    # Check a specific job array status
-    squeue -j <job_array_id>
-
     # See how many jobs are running vs. pending
     squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 
-    # Check if there are any failed jobs
-    ls -la output/layouts/config_*/job_failed.txt | wc -l
-    # For very large directories:
-    for i in {1..10}; do 
-      find output/layouts/config_${i}* -name "job_failed.txt" | wc -l
-    done | awk '{sum+=$1} END {print sum}'
-
-    # Check the number of completed jobs
-    ls -la output/layouts/config_*/job_completed.txt | wc -l
-    # For very large directories:
-    for i in {1..10}; do 
-      find output/layouts/config_${i}* -name "job_completed.txt" | wc -l
-    done | awk '{sum+=$1} END {print sum}'
-
-    # Check the number of output files
-    ls -la output/layouts/layout_results_*.csv | wc -l
-    # For very large directories:
-    for i in {1..10}; do 
-      find output/layouts/layout_results_${i}* | wc -l
-    done | awk '{sum+=$1} END {print sum}'
-
-    # Check which specific jobs have completed
-    ls -la output/layouts/config_*/job_completed.txt | head -10
+    # Check number of completed jobs, failed jobs, and output files
+    for type in "Completed jobs:output/layouts/config_*job_completed.txt" "Failed jobs:output/layouts/config_*job_failed.txt" "Output files:output/layouts/layout_results_*"; do
+      # Split the string into label and pattern
+      label=${type%%:*}
+      pattern=${type#*:}
+      
+      # Print label
+      echo "$label"
+      
+      # Find files matching pattern across all configs and sum the counts
+      find output/layouts/ -path "$pattern" | wc -l
+    done
     ```
 
   ### Cancel jobs
