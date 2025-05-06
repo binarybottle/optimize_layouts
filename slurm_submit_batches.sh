@@ -6,7 +6,7 @@ CONFIGURATION
 ===================================================================
 TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total number of configurations
 BATCH_SIZE=1000                     # SLURM array limit per batch
-CHUNK_SIZE=5                        # Number of batches to submit in each manager run
+CHUNK_SIZE=3                        # Number of batches to submit in each manager run
 ===================================================================
 
 # Calculate number of batches needed (ceiling division)
@@ -81,7 +81,7 @@ for ((batch=START_BATCH; batch<=END_BATCH; batch++)); do
     fi
     
     # Add a small delay between submissions
-    sleep 2
+    sleep 30
 done
 
 # Update the progress file for the next run

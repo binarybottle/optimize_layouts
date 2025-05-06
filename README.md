@@ -219,6 +219,9 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # Run a single test job
     sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
 
+    # Run just one batch (1001-2000) manually:
+    sbatch --export=BATCH_NUM=1 slurm_batchmaking.sh
+
     # Run all batches as a slurm job
     sbatch --time=8:00:00 slurm_submit_batches.sh
     ```
@@ -243,6 +246,18 @@ by NSF and Pittsburgh Supercomputing Center computing resources
       
       # Find files matching pattern across all configs and sum the counts
       find output/layouts/ -path "$pattern" | wc -l
+    done
+
+    for type in "Output files:output/phase1/outputs/*"; do
+      # Split the string into label and pattern
+      label=${type%%:*}
+      pattern=${type#*:}
+      
+      # Print label
+      echo "$label"
+      
+      # Find files matching pattern across all configs and sum the counts
+      find output/phase1/outputs/ -path "$pattern" | wc -l
     done
     ```
 
