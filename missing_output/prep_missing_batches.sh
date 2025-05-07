@@ -1,5 +1,4 @@
 #!/bin/bash
-# missing_prep_batches.sh
 
 # Create directory for batch files
 mkdir -p missing_batches

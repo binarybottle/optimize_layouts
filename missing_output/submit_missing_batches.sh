@@ -1,5 +1,4 @@
 #!/bin/bash
-# missing_submit_all_batches.sh
 
 total_batches=$(ls missing_batches/batch_*.txt | wc -l)
 current=1

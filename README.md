@@ -248,7 +248,7 @@ by NSF and Pittsburgh Supercomputing Center computing resources
       find output/layouts/ -path "$pattern" | wc -l
     done
 
-    for type in "Output files:output/phase1/outputs/*"; do
+    for type in "Output files:output/outputs/layouts_*.out"; do
       # Split the string into label and pattern
       label=${type%%:*}
       pattern=${type#*:}

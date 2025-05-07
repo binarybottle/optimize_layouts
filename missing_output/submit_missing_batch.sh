@@ -1,5 +1,4 @@
 #!/bin/bash
-# missing_submit_batch.sh
 
 # SLURM configuration
 #SBATCH --time=4:00:00
@@ -15,7 +14,7 @@
 # The batch file must be provided when submitting:
 # sbatch --export=BATCH_FILE=missing_batches/batch_1.txt submit_batch.sh
 if [ -z "$BATCH_FILE" ]; then
-    echo "Error: BATCH_FILE not set. Use: sbatch --export=BATCH_FILE=missing_batches/batch_X.txt"
+    echo "Error: BATCH_FILE not set. Use: sbatch --export=BATCH_FILE=missing_output/missing_batches/batch_X.txt"
     exit 1
 fi
 
