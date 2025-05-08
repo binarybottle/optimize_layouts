@@ -15,6 +15,8 @@ TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total nu
 BATCH_SIZE=1000                     # SLURM array limit per batch
 config_pre=output/configs2/per_config/step2_from_config_  # config file path and prepend before ID (phase 1: output/configs1/config_)
 config_post=_rank_1.yaml  # config file append after ID (phase 1: .yaml)
+output_pre="output/layouts/layout_results_"
+output_post="_*.csv"
 #===================================================================
 
 # The batch number must be provided when submitting:
@@ -60,14 +62,23 @@ if [ ! -f ${config_pre}${CONFIG_ID}${config_post} ]; then
     exit 1
 fi
 
-# Run the optimization with the specific configuration
-python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post} 
+# Define the output layout file path
+LAYOUT_FILE="${output_pre}${CONFIG_ID}${output_post}"
 
-# Save completion status
-if [ $? -eq 0 ]; then
-    echo "Job completed successfully at $(date)" > output/layouts/config_${CONFIG_ID}/job_completed.txt
+# Check if the output file already exists
+if [ -f "$LAYOUT_FILE" ]; then
+    echo "Output layout file already exists for config ${CONFIG_ID}. Skipping optimization."
 else
-    echo "Job failed with error code $? at $(date)" > output/layouts/config_${CONFIG_ID}/job_failed.txt
+    echo "Output layout file not found. Running optimization for config ${CONFIG_ID}."
+    # Run the optimization with the specific configuration
+    python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post}
+    
+    # Save completion status
+    if [ $? -eq 0 ]; then
+        echo "Job completed successfully at $(date)" > output/layouts/config_${CONFIG_ID}/job_completed.txt
+    else
+        echo "Job failed with error code $? at $(date)" > output/layouts/config_${CONFIG_ID}/job_failed.txt
+    fi
 fi
 
 echo "Job finished at: $(date)"
