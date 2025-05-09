@@ -1,20 +1,20 @@
 #!/bin/bash
-# CONFIGURATION 
+# CONFIGURATION ("EM" for Extreme Memory nodes on Bridges-2)
 #===================================================================
-#SBATCH --time=4:00:00              # Time limit for the job
-#SBATCH --array=0-999%1000          # Array job with 1000 tasks per batch
-#SBATCH --ntasks-per-node=1         # Number of tasks per node
-#SBATCH --cpus-per-task=2           # Number of CPUs per task   
-#SBATCH --mem=2GB                   # Memory allocation
-#SBATCH --job-name=layouts          # Job name
+#SBATCH -p RM-shared           # Regular Memory-shared    (EM: EM)   
+#SBATCH --time=4:00:00         # Time limit for the job
+#SBATCH --array=0-999%1000     # Array job with 1000 tasks per batch
+#SBATCH --ntasks-per-node=1    # Number of tasks per node
+#SBATCH --cpus-per-task=2      # Number of CPUs per task  (EM: 24)  
+#SBATCH --mem=2GB              # Memory allocation        (EM: 512GB) 
+#SBATCH --job-name=layouts     # Job name
 #SBATCH --output=output/outputs/layouts_%A_%a.out # Output file
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file
-#SBATCH -p RM-shared                # Regular Memory-shared or Extreme Memory nodes on Bridges-2   
-#SBATCH -A <ALLOCATION_ID>          # Replace <ALLOCATION_ID> with your allocation ID
-TOTAL_CONFIGS=<TOTAL_CONFIGS>       # Replace <TOTAL_CONFIGS> with total number of configurations
-BATCH_SIZE=1000                     # SLURM array limit per batch
+#SBATCH -A <ALLOCATION_ID>     # Replace <ALLOCATION_ID> with your allocation ID
+TOTAL_CONFIGS=<TOTAL_CONFIGS>  # Replace <TOTAL_CONFIGS> with total number of configurations
+BATCH_SIZE=1000                # SLURM array limit per batch
 config_pre=output/configs2/per_config/step2_from_config_  # config file path and prepend before ID (phase 1: output/configs1/config_)
-config_post=_rank_1.yaml  # config file append after ID (phase 1: .yaml)
+config_post=_rank_1.yaml       # config file append after ID (phase 1: .yaml)
 output_pre="output/layouts/layout_results_"
 output_post="_*.csv"
 #===================================================================
