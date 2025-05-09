@@ -10,8 +10,8 @@
 #SBATCH --output=output/outputs/layouts_%A_%a.out # Output file
 #SBATCH --error=output/errors/layouts_%A_%a.err   # Error file
 #SBATCH -p RM-shared                # Regular Memory-shared or Extreme Memory nodes on Bridges-2   
-#SBATCH -A <YOUR_ALLOCATION>        # Replace <YOUR_ALLOCATION> with your allocation ID
-TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total number of configurations
+#SBATCH -A <ALLOCATION_ID>          # Replace <ALLOCATION_ID> with your allocation ID
+TOTAL_CONFIGS=<TOTAL_CONFIGS>       # Replace <TOTAL_CONFIGS> with total number of configurations
 BATCH_SIZE=1000                     # SLURM array limit per batch
 config_pre=output/configs2/per_config/step2_from_config_  # config file path and prepend before ID (phase 1: output/configs1/config_)
 config_post=_rank_1.yaml  # config file append after ID (phase 1: .yaml)

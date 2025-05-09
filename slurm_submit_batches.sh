@@ -4,9 +4,9 @@
 
 CONFIGURATION
 ===================================================================
-TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>  # Replace <YOUR_TOTAL_CONFIGS> with total number of configurations
-BATCH_SIZE=1000                     # SLURM array limit per batch
-CHUNK_SIZE=3                        # Number of batches to submit in each manager run
+TOTAL_CONFIGS=<TOTAL_CONFIGS>  # Replace <TOTAL_CONFIGS> with total number of configurations
+BATCH_SIZE=1000                # SLURM array limit per batch
+CHUNK_SIZE=3                   # Number of batches to submit in each manager run
 ===================================================================
 
 # Calculate number of batches needed (ceiling division)

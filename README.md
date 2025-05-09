@@ -182,8 +182,8 @@ by NSF and Pittsburgh Supercomputing Center computing resources
 
   ### Set up slurm parameters:  
   Replace slurm parameters listed below according to your setup.
-  Replace <YOUR_ALLOCATION_ID> with your actual allocation ID,
-  and <YOUR_TOTAL_CONFIGS> with the total number of config files.
+  Replace <ALLOCATION_ID> with the actual allocation ID,
+  and <TOTAL_CONFIGS> with the total number of config files.
   
   slurm_batchmaking.sh:
 
@@ -197,15 +197,15 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     #SBATCH --output=output/outputs/layouts_%A_%a.out
     #SBATCH --error=output/errors/layouts_%A_%a.err
     #SBATCH -p RM-shared              
-    #SBATCH -A <YOUR_ALLOCATION_ID>   
-    TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS> 
+    #SBATCH -A <ALLOCATION_ID>   
+    TOTAL_CONFIGS=<TOTAL_CONFIGS> 
     BATCH_SIZE=1000       
     ```
 
   slurm_submit_batches.sh:
 
     ```bash
-    TOTAL_CONFIGS=<YOUR_TOTAL_CONFIGS>
+    TOTAL_CONFIGS=<TOTAL_CONFIGS>
     BATCH_SIZE=1000                   
     CHUNK_SIZE=5                        
     ```
@@ -232,18 +232,8 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # See how many jobs are running vs. pending
     squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 
-    # Check number of completed jobs, failed jobs, and output files
-    for type in "Output files:output/layouts/layout_results_*"; do
-      # Split the string into label and pattern
-      label=${type%%:*}
-      pattern=${type#*:}
-      
-      # Print label
-      echo "$label"
-      
-      # Find files matching pattern across all configs and sum the counts
-      find output/layouts/ -path "$pattern" | wc -l
-    done
+    # Check number of output files
+    sh count_files.sh output/layouts
     ```
 
   ### Cancel jobs
@@ -253,5 +243,5 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     scancel -u $USER
 
     # Cancel a specific job ID, such as:
-    scancel 29556406_1
+    scancel <job_array_id>
     ```
