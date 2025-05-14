@@ -39,13 +39,13 @@ import sys
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = '../output/configs2'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 1 
+nlayouts = 10 
 
 # Positions (left right): FDESVRWACQZX JKILMUO;,P/.  
-MOST_COMFORTABLE_KEYS  = "FDESVRWJKILMUO" # 14 most comfortable keys
-LEAST_COMFORTABLE_KEYS = "ACQZX;,P/."     # 10 least comfortable keys
-#MOST_COMFORTABLE_KEYS  = "FDESVRJKILMU"  # 12 most comfortable keys
-#LEAST_COMFORTABLE_KEYS = "WACQZXO;,P/."  # 12 least comfortable keys
+#MOST_COMFORTABLE_KEYS  = "FDESVRWJKILMUO" # 14 most comfortable keys
+#LEAST_COMFORTABLE_KEYS = "ACQZX;,P/."     # 10 least comfortable keys
+MOST_COMFORTABLE_KEYS  = "FDESVRJKILMU"  # 12 most comfortable keys
+LEAST_COMFORTABLE_KEYS = "WACQZXO;,P/."  # 12 least comfortable keys
 
 # Least frequent of 24 letters (`vkxj` in English) to add to items_to_assign
 least_frequent_items_of_24 = 'vkxj'
@@ -333,16 +333,10 @@ def create_config_files(configs, output_subdir=""):
             source_rank = config_params.get('source_rank', 1)
             
             # Set up unique output path based on source config
-            output_folder = f"../output/layouts/step2_per_config/from_config_{source_config}_rank_{source_rank}"
             config_filename = f"{output_dir}/step2_from_config_{source_config}_rank_{source_rank}.yaml"
         else:
             # Across-all approach - use top N naming
-            output_folder = f"../output/layouts/step2_across_all/top_{i}"
             config_filename = f"{output_dir}/step2_top_{i}.yaml"
-        
-        # Set output folder in config
-        #config['paths']['output']['layout_results_folder'] = output_folder
-        #os.makedirs(output_folder, exist_ok=True)
         
         # Write the configuration to a YAML file
         with open(config_filename, 'w') as f:

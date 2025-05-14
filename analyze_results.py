@@ -2,6 +2,7 @@
 """
 Analyze layout optimization results and create scatter plots of scores.
 Now shows weighted scores instead of normalized scores.
+Enhanced with additional plots for comparing different score metrics.
 """
 import os
 import sys
@@ -11,6 +12,7 @@ import matplotlib.pyplot as plt
 import csv
 import re
 import argparse
+import numpy as np
 
 try:
     from optimize_layout import visualize_keyboard_layout
@@ -22,10 +24,23 @@ except ImportError:
 def parse_result_csv(filepath):
     """Parse a layout results CSV file and extract key metrics."""
     try:
-        with open(filepath, 'r') as f:
+        # First check if file exists
+        if not os.path.exists(filepath):
+            print(f"File not found: {filepath}")
+            return None
+            
+        # Check file size
+        file_size = os.path.getsize(filepath)
+        if file_size == 0:
+            print(f"File is empty: {filepath}")
+            return None
+            
+        # Now try to read the file
+        with open(filepath, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
         if not lines:
+            print(f"No content in file: {filepath}")
             return None
             
         # Extract configuration info
@@ -53,15 +68,24 @@ def parse_result_csv(filepath):
                 break
         
         if header_row is None:
+            print(f"Could not find 'Total score' column in {filepath}")
             return None
             
         results = []
         if header_row + 1 < len(data_section):  # Make sure there's data after the header
             data_row = data_section[header_row + 1]
             
+            # Debug print
+            if 'debug' in globals() and debug:
+                print(f"Processing data row: {data_row[:50]}...")
+            
             # Parse CSV row properly
             reader = csv.reader([data_row])
             row_data = next(reader)
+            
+            # Debug print
+            if 'debug' in globals() and debug:
+                print(f"Parsed row data: {row_data[:4]}...")
             
             # Simply look for the score columns by position
             # Based on the example format:
@@ -85,6 +109,7 @@ def parse_result_csv(filepath):
                 item_score_idx = 4
                 item_pair_score_idx = 5
             else:
+                print(f"Not enough columns in {filepath}, found {len(row_data)}")
                 return None  # Not enough columns
                 
             # Extract data
@@ -102,21 +127,25 @@ def parse_result_csv(filepath):
             try:
                 rank = int(row_data[rank_idx].strip('"')) if rank_idx < len(row_data) else 1
             except ValueError:
+                print(f"Could not parse rank from {row_data[rank_idx]}")
                 rank = 1
             
             try:
                 total_score = float(row_data[total_score_idx].strip('"'))
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
+                print(f"Error parsing total score: {e}")
                 total_score = 0.0
             
             try:
                 item_score = float(row_data[item_score_idx].strip('"'))
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
+                print(f"Error parsing item score: {e}")
                 item_score = 0.0
             
             try:
                 item_pair_score = float(row_data[item_pair_score_idx].strip('"'))
-            except (ValueError, IndexError):
+            except (ValueError, IndexError) as e:
+                print(f"Error parsing item-pair score: {e}")
                 item_pair_score = 0.0
                 
             # Clean up special characters in positions string
@@ -181,6 +210,8 @@ def parse_result_csv(filepath):
             
     except Exception as e:
         print(f"Error parsing {filepath}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def load_results(results_dir, max_files=None):
@@ -192,18 +223,33 @@ def load_results(results_dir, max_files=None):
     if max_files:
         files = files[:max_files]
     
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return pd.DataFrame()  # Return empty dataframe
+    
     print(f"Found {len(files)} files to process")
     
     # Process each file
-    for filepath in files:
+    successful_files = 0
+    for i, filepath in enumerate(files):
+        if i % 10 == 0:  # Print progress every 10 files
+            print(f"Processing file {i+1}/{len(files)}: {os.path.basename(filepath)}")
         results = parse_result_csv(filepath)
         if results:
             all_results.extend(results)
+            successful_files += 1
     
-    print(f"Successfully parsed {len(all_results)} results")
+    print(f"Successfully parsed {successful_files}/{len(files)} files, yielding {len(all_results)} results")
+    
+    if not all_results:
+        print("No valid results found in any file!")
+        return pd.DataFrame()  # Return empty dataframe
     
     # Create DataFrame
-    df = pd.DataFrame(all_results) if all_results else pd.DataFrame()
+    df = pd.DataFrame(all_results)
+    
+    # Print column names to help debugging
+    print(f"DataFrame columns: {', '.join(df.columns.tolist())}")
     
     # Add weighted scores instead of normalized scores
     if not df.empty:
@@ -307,6 +353,276 @@ def plot_scores_scatter(df, weighted=True, save_path=None):
     plt.savefig(save_path, dpi=300)
     print(f"Generated {title_prefix.lower()}scores scatter plot (saved as {save_path})")
 
+def plot_scores_by_item_score(df, weighted=True, save_path=None):
+    """Create a scatter plot of scores, sorted by 1-key scores."""
+    if df.empty:
+        print("No results to plot!")
+        return
+    
+    # Determine which score columns to use
+    if weighted:
+        total_col = 'total_score'
+        item_col = 'weighted_item_score'
+        item_pair_col = 'weighted_item_pair_score'
+        title_prefix = 'Weighted '
+        if save_path is None:
+            save_path = 'weighted_scores_by_1key.png'
+    else:
+        total_col = 'total_score'
+        item_col = 'item_score'
+        item_pair_col = 'item_pair_score'
+        title_prefix = ''
+        if save_path is None:
+            save_path = 'raw_scores_by_1key.png'
+    
+    # Sort by the item score
+    df_sorted = df.sort_values(item_col)
+    
+    # Create the plot
+    plt.figure(figsize=(12, 8))
+    
+    # Create scatter plot with color-coded points
+    plt.scatter(range(len(df_sorted)), df_sorted[total_col], 
+                marker='.', s=30, alpha=0.6, label='Total Score', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_col], 
+                marker='.', s=30, alpha=0.6, label='Item Score (1-key)', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_pair_col], 
+                marker='.', s=30, alpha=0.6, label='Item-pair Score (2-key)', edgecolors='none')
+    
+    # Add labels and title
+    plt.xlabel(f'Layout Index (sorted by 1-key score)')
+    plt.ylabel(f'{title_prefix}Score')
+    plt.title(f'{title_prefix}Layout Scores Sorted by 1-Key Score')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Calculate the score ranges
+    score_min = min(df_sorted[total_col].min(), 
+                    df_sorted[item_col].min(), 
+                    df_sorted[item_pair_col].min())
+    score_max = max(df_sorted[total_col].max(), 
+                    df_sorted[item_col].max(), 
+                    df_sorted[item_pair_col].max())
+    
+    # Set y-axis limits with padding
+    score_range = score_max - score_min
+    plt.ylim(max(0, score_min - score_range * 0.05), score_max + score_range * 0.05)
+    
+    # Add score range information
+    info_text = [
+        f"1-key Score Range: {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
+        f"2-key Score Range: {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}",
+        f"Total Score Range: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}"
+    ]
+    plt.figtext(0.02, 0.02, '\n'.join(info_text), fontsize=9)
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    print(f"Generated scores sorted by 1-key plot (saved as {save_path})")
+
+def plot_scores_by_item_pair_score(df, weighted=True, save_path=None):
+    """Create a scatter plot of scores, sorted by 2-key scores."""
+    if df.empty:
+        print("No results to plot!")
+        return
+    
+    # Determine which score columns to use
+    if weighted:
+        total_col = 'total_score'
+        item_col = 'weighted_item_score'
+        item_pair_col = 'weighted_item_pair_score'
+        title_prefix = 'Weighted '
+        if save_path is None:
+            save_path = 'weighted_scores_by_2key.png'
+    else:
+        total_col = 'total_score'
+        item_col = 'item_score'
+        item_pair_col = 'item_pair_score'
+        title_prefix = ''
+        if save_path is None:
+            save_path = 'raw_scores_by_2key.png'
+    
+    # Sort by the item-pair score
+    df_sorted = df.sort_values(item_pair_col)
+    
+    # Create the plot
+    plt.figure(figsize=(12, 8))
+    
+    # Create scatter plot with color-coded points
+    plt.scatter(range(len(df_sorted)), df_sorted[total_col], 
+                marker='.', s=30, alpha=0.6, label='Total Score', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_col], 
+                marker='.', s=30, alpha=0.6, label='Item Score (1-key)', edgecolors='none')
+    plt.scatter(range(len(df_sorted)), df_sorted[item_pair_col], 
+                marker='.', s=30, alpha=0.6, label='Item-pair Score (2-key)', edgecolors='none')
+    
+    # Add labels and title
+    plt.xlabel(f'Layout Index (sorted by 2-key score)')
+    plt.ylabel(f'{title_prefix}Score')
+    plt.title(f'{title_prefix}Layout Scores Sorted by 2-Key Score')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    
+    # Calculate the score ranges
+    score_min = min(df_sorted[total_col].min(), 
+                    df_sorted[item_col].min(), 
+                    df_sorted[item_pair_col].min())
+    score_max = max(df_sorted[total_col].max(), 
+                    df_sorted[item_col].max(), 
+                    df_sorted[item_pair_col].max())
+    
+    # Set y-axis limits with padding
+    score_range = score_max - score_min
+    plt.ylim(max(0, score_min - score_range * 0.05), score_max + score_range * 0.05)
+    
+    # Add score range information
+    info_text = [
+        f"1-key Score Range: {df_sorted[item_col].min():.6f} to {df_sorted[item_col].max():.6f}",
+        f"2-key Score Range: {df_sorted[item_pair_col].min():.6f} to {df_sorted[item_pair_col].max():.6f}",
+        f"Total Score Range: {df_sorted[total_col].min():.6f} to {df_sorted[total_col].max():.6f}"
+    ]
+    plt.figtext(0.02, 0.02, '\n'.join(info_text), fontsize=9)
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    print(f"Generated scores sorted by 2-key plot (saved as {save_path})")
+
+def plot_1key_vs_2key_scores(df, weighted=True, save_path=None, with_product=False):
+    """Create a scatter plot of 1-key scores vs 2-key scores with optional product indicators."""
+    if df.empty:
+        print("No results to plot!")
+        return
+    
+    # Determine which score columns to use
+    if weighted:
+        item_col = 'weighted_item_score'
+        item_pair_col = 'weighted_item_pair_score'
+        title_prefix = 'Weighted '
+        if save_path is None:
+            save_path = 'weighted_1key_vs_2key.png'
+    else:
+        item_col = 'item_score'
+        item_pair_col = 'item_pair_score'
+        title_prefix = ''
+        if save_path is None:
+            save_path = 'raw_1key_vs_2key.png'
+    
+    # Create the plot
+    plt.figure(figsize=(12, 10))
+    
+    # Create scatter plot for 1-key vs 2-key scores
+    plt.scatter(df[item_col], df[item_pair_col], 
+                marker='.', s=30, alpha=0.6, edgecolors='none', label='Layout Scores')
+    
+    # Add product dots if requested
+    if with_product:
+        # Calculate product of 1-key and 2-key scores for each layout
+        df['score_product'] = df[item_col] * df[item_pair_col]
+        
+        # For each layout, we'll place the product on the X axis
+        # and make the size of the dot proportional to the product value
+        # Create an array of zeros the same length as our data
+        product_x = df[item_col].values
+        product_y = df[item_pair_col].values
+        
+        # Plot the products at the same position as their source datapoints
+        # but make them red and larger
+        plt.scatter(product_x, product_y, 
+                    marker='o', s=df['score_product']*10000, color='red', alpha=0.3, 
+                    edgecolors='red', linewidth=1, label='Score Products')
+                    
+        # Add a contour plot showing product lines
+        x_range = np.linspace(df[item_col].min()*0.9, df[item_col].max()*1.1, 100)
+        y_range = np.linspace(df[item_pair_col].min()*0.9, df[item_pair_col].max()*1.1, 100)
+        X, Y = np.meshgrid(x_range, y_range)
+        Z = X * Y  # Product values
+        
+        # Plot contour lines for constant product values
+        contour = plt.contour(X, Y, Z, 6, colors='gray', alpha=0.4, linestyles='--')
+        plt.clabel(contour, inline=True, fontsize=8, fmt='%0.6f')
+        
+        title = f'{title_prefix}1-Key vs 2-Key Scores with Products'
+        plt.legend(loc='upper left')
+    else:
+        title = f'{title_prefix}1-Key vs 2-Key Scores'
+    
+    # Add labels and title
+    plt.xlabel(f'{title_prefix}Item Score (1-key)')
+    plt.ylabel(f'{title_prefix}Item-pair Score (2-key)')
+    plt.title(title)
+    plt.grid(True, alpha=0.3)
+    
+    # Calculate correlation coefficient
+    corr = df[item_col].corr(df[item_pair_col])
+    
+    # Add correlation info
+    plt.figtext(0.02, 0.02, f'Correlation: {corr:.4f}', fontsize=9)
+    
+    # Save the plot
+    if with_product:
+        save_path = save_path.replace('.png', '_with_product.png')
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    print(f"Generated 1-key vs 2-key plot (saved as {save_path})")
+
+def plot_score_distributions(df, weighted=True, save_path=None):
+    """Plot the distributions of 1-key and 2-key scores together."""
+    if df.empty:
+        print("No results to plot!")
+        return
+    
+    # Determine which score columns to use
+    if weighted:
+        item_col = 'weighted_item_score'
+        item_pair_col = 'weighted_item_pair_score'
+        title_prefix = 'Weighted '
+        if save_path is None:
+            save_path = 'weighted_score_distributions.png'
+    else:
+        item_col = 'item_score'
+        item_pair_col = 'item_pair_score'
+        title_prefix = ''
+        if save_path is None:
+            save_path = 'raw_score_distributions.png'
+    
+    # Create the plot
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Plot histograms
+    ax.hist(df[item_col], bins=30, alpha=0.5, label='1-key Scores')
+    ax.hist(df[item_pair_col], bins=30, alpha=0.5, label='2-key Scores')
+    
+    # Add labels and title
+    ax.set_xlabel(f'{title_prefix}Score Value')
+    ax.set_ylabel('Frequency')
+    ax.set_title(f'{title_prefix}Distribution of 1-key and 2-key Scores')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Add distribution statistics
+    item_stats = [
+        f"1-key Mean: {df[item_col].mean():.6f}",
+        f"1-key Median: {df[item_col].median():.6f}",
+        f"1-key Std Dev: {df[item_col].std():.6f}"
+    ]
+    
+    pair_stats = [
+        f"2-key Mean: {df[item_pair_col].mean():.6f}",
+        f"2-key Median: {df[item_pair_col].median():.6f}",
+        f"2-key Std Dev: {df[item_pair_col].std():.6f}"
+    ]
+    
+    stats_text = item_stats + pair_stats
+    plt.figtext(0.02, 0.02, '\n'.join(stats_text), fontsize=9)
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300)
+    print(f"Generated score distributions plot (saved as {save_path})")
+
 def analyze_results(df):
     """Print basic analysis of results."""
     if df.empty:
@@ -325,6 +641,16 @@ def analyze_results(df):
         print(f"  Weighted Item Score: {df['weighted_item_score'].min():.6f} to {df['weighted_item_score'].max():.6f} (mean: {df['weighted_item_score'].mean():.6f})")
         print(f"  Weighted Item-pair Score: {df['weighted_item_pair_score'].min():.6f} to {df['weighted_item_pair_score'].max():.6f} (mean: {df['weighted_item_pair_score'].mean():.6f})")
         print(f"  Average weights - Item: {df['item_weight'].mean():.3f}, Item-pair: {df['item_pair_weight'].mean():.3f}")
+    
+    # Calculate correlations
+    corr_item_total = df['item_score'].corr(df['total_score'])
+    corr_pair_total = df['item_pair_score'].corr(df['total_score'])
+    corr_item_pair = df['item_score'].corr(df['item_pair_score'])
+    
+    print("\nCorrelations:")
+    print(f"  Item Score to Total Score: {corr_item_total:.4f}")
+    print(f"  Item-pair Score to Total Score: {corr_pair_total:.4f}")
+    print(f"  Item Score to Item-pair Score: {corr_item_pair:.4f}")
     
     # Find best layouts by each score type
     best_total_idx = df['total_score'].idxmax()
@@ -367,55 +693,130 @@ def analyze_results(df):
 def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
     parser.add_argument('--results-dir', type=str, default='output/layouts',
-                      help='Directory containing result files')
+                       help='Directory containing result files')
     parser.add_argument('--max-files', type=int, default=None,
-                      help='Maximum number of files to process (default: all)')
+                       help='Maximum number of files to process (default: all)')
+    parser.add_argument('--weighted', action='store_true', default=True,
+                       help='Use weighted scores for analysis')
+    parser.add_argument('--raw', action='store_true', default=False,
+                       help='Use raw (unweighted) scores for analysis')
+    parser.add_argument('--debug', action='store_true', default=False,
+                       help='Enable debug output')
     args = parser.parse_args()
     
-    print(f"Loading and analyzing results from {args.results_dir}")
-    df = load_results(args.results_dir, max_files=args.max_files)
+    # Enable more verbose output if debug flag is set
+    global debug
+    debug = args.debug
     
-    if not df.empty:
-        # Generate both plots
-        plot_scores_scatter(df, weighted=False, save_path='raw_scores_scatter.png')
-        plot_scores_scatter(df, weighted=True, save_path='weighted_scores_scatter.png')
+    try:
+        print(f"Loading and analyzing results from {args.results_dir}")
         
-        # Analyze results
-        analyze_results(df)
+        # Check if directory exists
+        if not os.path.exists(args.results_dir):
+            print(f"ERROR: Directory '{args.results_dir}' does not exist!")
+            return
         
-        # Save results to Excel with all necessary columns
-        columns_to_export = [
-            'config_id', 
-            'total_score', 
-            'item_score', 
-            'item_pair_score',
-            'weighted_item_score',
-            'weighted_item_pair_score',
-            'item_weight',
-            'item_pair_weight',
-            'items',                # Complete letter sequence
-            'positions',            # Complete position sequence
-            'items_to_assign',      # Items that needed to be assigned
-            'positions_to_assign',  # Available positions
-            'items_assigned',       # Pre-assigned items
-            'positions_assigned',   # Pre-assigned positions
-            'opt_items',            # Optimized items (if available)
-            'opt_positions',        # Optimized positions (if available)
-            'rank'                  # Rank of layout
-        ]
+        # Check if directory contains any CSV files
+        csv_files = glob.glob(f"{args.results_dir}/layout_results_*.csv")
+        if not csv_files:
+            print(f"ERROR: No layout_results_*.csv files found in '{args.results_dir}'!")
+            return
         
-        # Select columns that exist in the DataFrame
-        valid_columns = [col for col in columns_to_export if col in df.columns]
-        df_export = df[valid_columns]
+        print(f"Found {len(csv_files)} CSV files to process")
         
-        # Sort by total score (descending)
-        df_export.sort_values('total_score', ascending=False, inplace=True)
+        if debug:
+            # Print first few files for debugging
+            print("First few files:")
+            for f in csv_files[:5]:
+                print(f"  {f}")
         
-        # Save to Excel
-        df_export.to_excel("layout_scores_summary.xlsx", index=False)
-        print("\nResults saved to layout_scores_summary.xlsx")
-    else:
-        print("No results to analyze!")
+        # Load the results with error handling
+        try:
+            df = load_results(args.results_dir, max_files=args.max_files)
+        except Exception as e:
+            print(f"ERROR: Failed to load results: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return
+        
+        if df is None or df.empty:
+            print("No valid results to analyze! Check the format of your CSV files.")
+            return
+        
+        print(f"Successfully loaded {len(df)} layout results")
+        
+        if debug:
+            # Print DataFrame info for debugging
+            print("\nDataFrame columns:")
+            print(df.columns.tolist())
+            print("\nFirst few rows:")
+            print(df.head(3))
+        
+        # Determine whether to use weighted or raw scores
+        use_weighted = not args.raw
+        weight_str = "weighted" if use_weighted else "raw"
+        print(f"Using {'weighted' if use_weighted else 'raw'} scores for analysis")
+        
+        try:
+            # Generate original plots
+            plot_scores_scatter(df, weighted=use_weighted, save_path=f'{weight_str}_scores_scatter.png')
+            
+            # Generate new plots
+            plot_scores_by_item_score(df, weighted=use_weighted, save_path=f'{weight_str}_scores_by_1key.png')
+            plot_scores_by_item_pair_score(df, weighted=use_weighted, save_path=f'{weight_str}_scores_by_2key.png')
+            plot_1key_vs_2key_scores(df, weighted=use_weighted, save_path=f'{weight_str}_1key_vs_2key.png', with_product=False)
+            plot_score_distributions(df, weighted=use_weighted, save_path=f'{weight_str}_score_distributions.png')
+            
+            # Analyze results
+            analyze_results(df)
+            
+            # Save results to Excel with all necessary columns
+            columns_to_export = [
+                'config_id', 
+                'total_score', 
+                'item_score', 
+                'item_pair_score',
+                'weighted_item_score',
+                'weighted_item_pair_score',
+                'item_weight',
+                'item_pair_weight',
+                'items',                # Complete letter sequence
+                'positions',            # Complete position sequence
+                'items_to_assign',      # Items that needed to be assigned
+                'positions_to_assign',  # Available positions
+                'items_assigned',       # Pre-assigned items
+                'positions_assigned',   # Pre-assigned positions
+                'opt_items',            # Optimized items (if available)
+                'opt_positions',        # Optimized positions (if available)
+                'rank'                  # Rank of layout
+            ]
+            
+            # Select columns that exist in the DataFrame
+            valid_columns = [col for col in columns_to_export if col in df.columns]
+            df_export = df[valid_columns]
+            
+            # Sort by total score (descending)
+            df_export.sort_values('total_score', ascending=False, inplace=True)
+            
+            # Save to Excel
+            try:
+                df_export.to_excel("layout_scores_summary.xlsx", index=False)
+                print("\nResults saved to layout_scores_summary.xlsx")
+            except Exception as e:
+                print(f"Error saving Excel file: {e}")
+                print("Saving to CSV instead...")
+                df_export.to_csv("layout_scores_summary.csv", index=False)
+                print("Results saved to layout_scores_summary.csv")
+            
+        except Exception as e:
+            print(f"ERROR during analysis or plotting: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
