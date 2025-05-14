@@ -9,11 +9,9 @@ Example usage:
     python calculate_score.py --items "ecumfponsrithlabdgjkqvwx" --positions "FDESVRWJKILMUO;,P/ZCXA.Q" --details
 """
 import argparse
-import numpy as np
 import yaml
 import os
 from optimize_layout import (
-    load_config as load_config_original, 
     load_scores, 
     calculate_score,
     visualize_keyboard_layout,
@@ -33,12 +31,6 @@ def load_config(config_path: str = "config.yaml") -> dict:
     for directory in output_dirs:
         os.makedirs(directory, exist_ok=True)
 
-    # Convert weights to float32
-    config['optimization']['scoring']['item_weight'] = np.float32(
-        config['optimization']['scoring']['item_weight'])
-    config['optimization']['scoring']['item_pair_weight'] = np.float32(
-        config['optimization']['scoring']['item_pair_weight'])
-    
     # Normalize strings to lowercase with consistent access pattern
     optimization = config['optimization']
     for position in ['items_to_assign', 'positions_to_assign', 
@@ -59,7 +51,9 @@ def split_mapping(items_str, positions_str):
     
     return items, positions
 
-def calculate_layout_score(items_str, positions_str, config, detailed=True):
+def calculate_layout_score(items_str, positions_str, config, detailed=True,
+                           missing_item_pair_norm_score=1.0,
+                           missing_position_pair_norm_score=1.0):
     """
     Calculate the score for a given layout using optimize_layout.py's method.
     
@@ -70,7 +64,7 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True):
         detailed: Whether to print detailed scoring information
     
     Returns:
-        Tuple of (total_score, scaled_item_score, scaled_pair_score)
+        Tuple of (total_score, item_score, item_pair_score)
     """
     # Extract the items and positions
     items, positions = split_mapping(items_str, positions_str)
@@ -86,17 +80,9 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True):
         load_scores(config)
     )
     
-    # Extract scoring settings
-    item_weight = config['optimization']['scoring']['item_weight']
-    item_pair_weight = config['optimization']['scoring']['item_pair_weight']
-    missing_item_pair_norm_score = config['optimization']['scoring'].get('missing_item_pair_norm_score', 1.0)
-    missing_position_pair_norm_score = config['optimization']['scoring'].get('missing_position_pair_norm_score', 1.0)
-    
     # Print only the relevant scoring parameters
     if detailed:
         print("\nScoring Configuration:")
-        print(f"  Item weight:                 {item_weight:.6f}")
-        print(f"  Item-pair weight:            {item_pair_weight:.6f}")
         print(f"  Missing item pair score:     {missing_item_pair_norm_score:.6f}")
         print(f"  Missing position pair score: {missing_position_pair_norm_score:.6f}")
         print(f"\nScoring {len(items)} items: {''.join(items)}")
@@ -111,54 +97,18 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True):
     )
     
     # Calculate raw scores using calculate_score
-    # This gives us the unweighted scores
-    raw_total, raw_item_score, raw_pair_score = calculate_score(
+    total_score, item_score, item_pair_score = calculate_score(
         mapping,
         position_score_matrix, 
         item_scores,
-        item_pair_score_matrix,
-        item_weight, 
-        item_pair_weight
+        item_pair_score_matrix
     )
-    
-    # The key empirical scaling factors that match optimize_layout.py's output
-    ITEM_SCALE_FACTOR = 0.282994
-    PAIR_SCALE_FACTOR = 1.230196
-    
-    # Apply the scaling factors to get the scores reported by optimize_layout.py
-    scaled_item_score = raw_item_score * ITEM_SCALE_FACTOR
-    scaled_pair_score = raw_pair_score * PAIR_SCALE_FACTOR
-    
-    # Calculate weighted scores as optimize_layout.py does
-    weighted_item_score = item_weight * scaled_item_score
-    weighted_pair_score = item_pair_weight * scaled_pair_score
-    
-    # Calculate the correct total score
-    # This is simply the sum of the weighted components
-    correct_total_score = weighted_item_score + weighted_pair_score
     
     if detailed:
         print("\nScoring Calculation:")
-        print(f"  Raw unweighted item score:   {raw_item_score:.12f}")
-        print(f"  Raw unweighted pair score:   {raw_pair_score:.12f}")
-        print(f"  Item scaling factor:         {ITEM_SCALE_FACTOR:.6f}")
-        print(f"  Pair scaling factor:         {PAIR_SCALE_FACTOR:.6f}")
-        print(f"  Scaled item score:           {scaled_item_score:.12f}")
-        print(f"  Scaled pair score:           {scaled_pair_score:.12f}")
-        print(f"  Item weight:                 {item_weight:.6f}")
-        print(f"  Pair weight:                 {item_pair_weight:.6f}")
-        print(f"  Weighted item score:         {weighted_item_score:.12f}")
-        print(f"  Weighted pair score:         {weighted_pair_score:.12f}")
-        print(f"  Total score:                 {correct_total_score:.12f}")
-        
-        # Explanation of the scaling factors
-        print("\nExplanation of Score Calculation:")
-        print(f"  Standard total (weighted sum): {raw_total:.12f}")
-        print(f"    = {item_weight:.3f} × {raw_item_score:.6f} + {item_pair_weight:.3f} × {raw_pair_score:.6f}")
-        print(f"  Optimizer total:              {correct_total_score:.12f}")
-        print(f"    = {item_weight:.3f} × ({raw_item_score:.6f} × {ITEM_SCALE_FACTOR:.6f}) + {item_pair_weight:.3f} × ({raw_pair_score:.6f} × {PAIR_SCALE_FACTOR:.6f})")
-        print(f"    = {item_weight:.3f} × {scaled_item_score:.6f} + {item_pair_weight:.3f} × {scaled_pair_score:.6f}")
-        print(f"    = {weighted_item_score:.6f} + {weighted_pair_score:.6f}")
+        print(f"  Item score:      {item_score:.12f}")
+        print(f"  Item pair score: {item_pair_score:.12f}")
+        print(f"  Total score:     {total_score:.12f}")
         
         # Print individual item scores if detailed output is requested
         if detailed:
@@ -201,7 +151,7 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True):
     config['optimization']['positions_assigned'] = original_positions_assigned
     
     # Return the correct score values
-    return correct_total_score, scaled_item_score, scaled_pair_score
+    return total_score, item_score, item_pair_score
 
 def main():
     parser = argparse.ArgumentParser(description="Calculate layout score using optimize_layout.py's method.")
@@ -221,31 +171,25 @@ def main():
     print(f"{len(args.positions)} positions: {args.positions}")
     
     # Calculate score using optimizer's method
-    total_score, scaled_item_score, scaled_pair_score = calculate_layout_score(
+    total_score, item_score, item_pair_score = calculate_layout_score(
         args.items,
         args.positions,
         config,
-        detailed=args.details
+        detailed=args.details,
+        missing_item_pair_norm_score=1.0,
+        missing_position_pair_norm_score=1.0
     )
-    
-    # Calculate weighted scores
-    item_weight = config['optimization']['scoring']['item_weight']
-    item_pair_weight = config['optimization']['scoring']['item_pair_weight']
-    weighted_item_score = item_weight * scaled_item_score
-    weighted_pair_score = item_pair_weight * scaled_pair_score
     
     # Always show the final scores
     print(f"\nFinal Scores (Optimizer Method):")
     print(f"Total score:              {total_score:.12f}")
-    print(f"Item score:               {scaled_item_score:.12f}")
-    print(f"Item-pair score:          {scaled_pair_score:.12f}")
-    print(f"Weighted item score:      {weighted_item_score:.12f}")
-    print(f"Weighted item-pair score: {weighted_pair_score:.12f}")
+    print(f"Item score:               {item_score:.12f}")
+    print(f"Item-pair score:          {item_pair_score:.12f}")
     
     # Show the CSV output format that matches optimize_layout.py's output
     print(f"\nCSV Values:")
-    print(f"total_score item_score item_pair_score weighted_item_score weighted_item_pair_score item_weight item_pair_weight")
-    print(f"{total_score:.6f} {scaled_item_score:.6f} {scaled_pair_score:.6f} {weighted_item_score:.6f} {weighted_pair_score:.6f} {item_weight:.3f} {item_pair_weight:.3f}")
+    print(f"total_score item_score item_pair_score")
+    print(f"{total_score:.6f} {item_score:.6f} {item_pair_score:.6f}")
 
 if __name__ == "__main__":
     main()

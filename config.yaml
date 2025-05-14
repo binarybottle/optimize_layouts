@@ -20,25 +20,23 @@ paths:
 #-----------------------------------------------------------------------
 # Optimization Settings
 #-----------------------------------------------------------------------
-optimization:  
-  # All 24 letters/keys: etaoinsrhldcumfpgwybvkxj FDRSEVAWCQXZ JKULIM;O,P./  
-  # Phase 1 winner (16 letters/keys): etaoinsrhldcumfp	FDSEVJKILMUO;RWA
-  items_assigned:       "etaoinsrhldc"    # Items already assigned to positions
-  positions_assigned:   "FDSEVJKILMUR"    # Positions that are already filled 
+# All 24 letters/keys: etaoinsrhldcumfpgwybvkxj FDRSEVAWCQXZ JKULIM;O,P./  
+# 14 letters:     87,178,291,200 permutations
+# 16 letters: 20,922,789,888,000 permutations
+optimization:   
+  nlayouts: 100                           # Number of top layouts to display and save
 
-  items_to_assign:      "umfpgwybvkxj"    # items to arrange in positions
-  positions_to_assign:  "AWCQXZ;O,P./"    # available positions
+  items_assigned:       ""                # Items already assigned to positions
+  positions_assigned:   ""                # Positions that are already filled 
 
-  items_to_constrain:      ""   # Subset of items_to_assign to arrange within positions_to_constrain
-  positions_to_constrain:  ""   # Subset of positions_to_assign to constrain arrangement of items_to_constrain
+  items_to_assign:      "etaoinsrhldcum"  # items to arrange in positions
+  positions_to_assign:  "FDRSEVAJKULIM;"  # available positions
 
-  scoring:  
-    item_weight: 0.222                    # Weight for single-item scoring
-    item_pair_weight: 0.099               # Weight for item_pair scoring
-    missing_item_pair_norm_score: 1.0
-    missing_position_pair_norm_score: 1.0
+  # Subset of items_to_assign to arrange within positions_to_constrain, and
+  # subset of positions_to_assign to constrain arrangement of items_to_constrain
+  items_to_constrain:      ""   
+  positions_to_constrain:  ""  
 
-  nlayouts: 10                            # Number of top layouts to display and save
 #-----------------------------------------------------------------------
 # Visualization Settings
 #-----------------------------------------------------------------------

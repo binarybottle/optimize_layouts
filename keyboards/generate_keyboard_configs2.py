@@ -323,9 +323,6 @@ def create_config_files(configs, output_subdir=""):
         
         config['optimization']['nlayouts'] = nlayouts
         
-        # Make sure to preserve the scoring weights from the base config
-        config['optimization']['scoring'] = base_config['optimization']['scoring']
-
         # Determine file naming based on approach
         if output_subdir == "per_config":
             # Per-config approach - use source config and rank

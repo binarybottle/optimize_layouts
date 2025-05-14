@@ -128,12 +128,6 @@ For the following, we:
   (More than 11 letters exceeds time and memory limits for 
   supercomputer center compute-hours -- see tests/README_tests.md.)
 
- #### Determine and apply item and item-pair weights
- Compute median item and item-pair values of tens of thousands of 16-key 
- optimized layouts (set item and item-pair weights both to 0.5 in config files). 
- Replace item and item-pair weights with these median values.
- Run optimize_layout.py again with the revised config files. 
-
 ### Step 3. Generate a 2nd set of configuration files, removing letters 
 
   ```shell
@@ -177,12 +171,6 @@ For the following, we:
   ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
   │  k  │  x  │  j  │  g  ║  r  │  m  │  f  │  p  │
   ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
- #### Determine and apply item and item-pair weights
- Again, compute median item and item-pair values of tens of thousands of 24-key 
- optimized layouts (set item and item-pair weights both to 0.5 in config files). 
- Replace item and item-pair weights with these median values.
- Run optimize_layout.py again with the revised config files. 
 
 ### Step 5. Select the layout with the highest score
 

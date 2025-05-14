@@ -104,8 +104,7 @@ Below, `I` is the number of items, `P` is the number of item_pairs:
         item_pair_score_j_seq1 * position_pair_score_j_seq1 +
         item_pair_score_j_seq2 * position_pair_score_j_seq2) / P
  
-    score = item_weight      * item_component + 
-            item_pair_weight * item_pair_component
+    score = item_component * item_pair_component
     ```
 
 To calculate the score for a specific layout:
@@ -126,7 +125,7 @@ To calculate the score for a specific layout:
 -------------------------------------------------------------------
   - Top-scoring layouts:
     - Item-to-position mappings
-    - Total score and unweighted item and item-pair scores
+    - Total score and item and item-pair scores
   - Detailed command-line output and CSV file:
     - Configuration parameters
     - Search space statistics
