@@ -62,11 +62,11 @@ if [ ! -f ${config_pre}${CONFIG_ID}${config_post} ]; then
     exit 1
 fi
 
-# Define the output layout file path
-LAYOUT_FILE="${output_pre}${CONFIG_ID}${output_post}"
+# Define the output layout file path pattern
+LAYOUT_PATTERN="${output_pre}${CONFIG_ID}${output_post}"
 
-# Check if the output file already exists
-if [ -f "$LAYOUT_FILE" ]; then
+# Check if any file matching this pattern exists
+if ls $LAYOUT_PATTERN 1> /dev/null 2>&1; then
     echo "Output layout file already exists for config ${CONFIG_ID}. Skipping optimization."
 else
     echo "Output layout file not found. Running optimization for config ${CONFIG_ID}."

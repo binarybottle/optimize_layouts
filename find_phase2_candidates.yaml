@@ -1,0 +1,29 @@
+# Configuration file for compare_layouts.py script
+
+paths:
+  input:
+    # Input files
+    item_scores_file:              "output/normalized_input/normalized_item_scores.csv"
+    item_pair_scores_file:         "output/normalized_input/normalized_item_pair_scores.csv"
+    position_scores_file:          "output/normalized_input/normalized_position_scores.csv"
+    position_pair_scores_file:     "output/normalized_input/normalized_position_pair_scores.csv"
+  output:
+    # Output directories
+    layout_results_folder: "output"
+
+optimization:
+  # Items and positions
+  items_to_assign: ""  # Will be set dynamically in script
+  positions_to_assign: ""  # Will be set dynamically in script
+  items_assigned: ""  # Will be set dynamically in script
+  positions_assigned: ""  # Will be set dynamically in script
+  
+  # Scoring configuration
+  scoring:
+    item_weight: 0.5
+    item_pair_weight: 0.5
+    missing_item_pair_norm_score: 1.0
+    missing_position_pair_norm_score: 1.0
+
+visualization:
+  print_keyboard: false

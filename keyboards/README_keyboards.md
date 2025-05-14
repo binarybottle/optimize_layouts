@@ -105,6 +105,8 @@ For the following, we:
   optimally arranges the next set of letters for that configuration.
   A score is computed for each layout (see "Layout scoring" in README.md).
 
+2,146,435,200
+
   If we choose 11 letters (`nsrhldcumfp`), then there are more than
   39.9 million (11!) possible permutations, resulting in 16 filled positions:
 
