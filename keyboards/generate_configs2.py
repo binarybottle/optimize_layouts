@@ -8,9 +8,9 @@ This is one step in a process to optimally arrange the 24 most frequent letters
 in the 24 keys of the home block of a keyboard. 
 
 There are two versions of this script:
-  - generate_keyboard_configs1.py generates an initial set of sparse keyboard layouts as config files.
+  - generate_configs1.py generates an initial set of sparse keyboard layouts as config files.
   - optimize_layout.py generates optimal keyboard layouts for a given config file.
-  - generate_keyboard_configs2.py generates a new set of config files based on the optimal keyboard layouts.
+  - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
 See **README_keyboards.md** for a full description.
 

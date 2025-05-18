@@ -8,9 +8,9 @@ This is Step 1 in a process to optimally arrange the 24 most frequent letters
 in the 24 keys of the home block of a keyboard. 
 
 There are two versions of this script:
-  - generate_keyboard_configs1.py generates an initial set of sparse keyboard layouts as config files.
+  - generate_configs1.py generates an initial set of sparse keyboard layouts as config files.
   - optimize_layout.py generates optimal keyboard layouts for a given config file.
-  - generate_keyboard_configs2.py generates a new set of config files based on the optimal keyboard layouts.
+  - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
 Usage: ``python generate_keyboard_configs1.py``
     
@@ -26,7 +26,7 @@ import itertools
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 1
+nlayouts = 1000
 
 # Items in configurations (16 letters to be assigned to keys)
 # etaoinsrhldcumfpgwybvkxjqz
@@ -116,10 +116,6 @@ def create_config_files(configs, nlayouts=10):
         
         # Set nlayouts
         config['optimization']['nlayouts'] = nlayouts
-        
-        # Set up unique output path
-        #config['paths']['output']['layout_results_folder'] = f"output/layouts/config_{i}"
-        #os.makedirs(config['paths']['output']['layout_results_folder'], exist_ok=True)
         
         # Write the configuration to a YAML file
         config_filename = f"{OUTPUT_DIR}/config_{i}.yaml"

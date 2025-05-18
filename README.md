@@ -26,10 +26,10 @@ it uses a branch-and-bound algorithm.
 
 The initial intended use-case is keyboard layout optimization 
 for touch typing (see **keyboards/README_keyboards.md**):
-  - Items and item-pairs correspond to letters and bigrams.
+  - Items and item-pairs correspond to letters and letter-pairs.
   - Positions and position-pairs correspond to keys and key-pairs.  
   - Item scores and item-pair scores correspond to frequency 
-    of letters and frequency of bigrams in a given language.
+    of letters and frequency of letter-pairs in a given language.
   - Position scores and position-pair scores correspond to 
     a measure of comfort when typing single keys or pairs of keys 
     (in any language, as usage frequencies are regressed out).

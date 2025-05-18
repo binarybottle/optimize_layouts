@@ -13,7 +13,7 @@ import yaml
 import os
 from optimize_layout import (
     load_scores, 
-    calculate_score,
+    calculate_score_for_new_items,
     visualize_keyboard_layout,
     prepare_complete_arrays
 )
@@ -97,11 +97,15 @@ def calculate_layout_score(items_str, positions_str, config, detailed=True,
     )
     
     # Calculate raw scores using calculate_score
-    total_score, item_score, item_pair_score = calculate_score(
+    total_score, item_score, item_pair_score = calculate_score_for_new_items(
         mapping,
         position_score_matrix, 
         item_scores,
-        item_pair_score_matrix
+        item_pair_score_matrix,
+        None,  # cross_item_pair_matrix
+        None,  # cross_position_pair_matrix
+        None,  # reverse_cross_item_pair_matrix
+        None   # reverse_cross_position_pair_matrix
     )
     
     if detailed:
