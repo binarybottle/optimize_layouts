@@ -1,41 +1,25 @@
 #!/bin/bash
-# slurm_smart_submit.sh - Smart configuration detection with managed chunked submissions
+# quota_smart_array_submit.sh - Quota-aware array job submission
 
-# CONFIGURATION
-#===================================================================
+# Configuration
 TOTAL_CONFIGS=65520                # Total configurations
-BATCH_SIZE=1000                    # SLURM array limit per batch
-CHUNK_SIZE=4                       # Number of batches to submit in each run
+BATCH_SIZE=1000                    # Configs per batch file
+ARRAY_SIZE=1000                    # Maximum array tasks per job
+MAX_CONCURRENT=500                 # Maximum concurrent tasks
+CHUNK_SIZE=4                       # Number of array jobs to submit at once
 config_pre=output/configs1/config_ # Config file path prefix
 config_post=.yaml                  # Config file suffix
-#===================================================================
 
 # Create needed directories
 mkdir -p output/outputs output/errors submission_logs batch_files
 
-# Staging file to record which configurations need processing
-PENDING_FILE="pending_configs.txt"
-BATCHES_FILE="batch_list.txt"  # List of batch files to be processed
-PROGRESS_FILE="batch_submission_progress.txt"  # Track which batch we're on
-
-# Check if we should rescan or use existing batch files
-RESCAN=1  # Default to rescan
-
-# If batches file exists and no --rescan flag, use existing batches
-if [ -f "$BATCHES_FILE" ] && [ "$1" != "--rescan" ]; then
-    echo "Found existing batch list. Using it for submission."
-    echo "(Run with --rescan to force a new configuration scan)"
-    RESCAN=0
-fi
-
-# Scan for pending configurations if needed
-if [ $RESCAN -eq 1 ]; then
+# Decide whether to scan for new configurations or use existing batches
+if [ "$1" == "--rescan" ] || [ ! -f "pending_configs.txt" ]; then
     echo "=== Scanning for pending configurations ==="
     echo "This may take several minutes for $TOTAL_CONFIGS configurations..."
     
     # Clear existing files
-    > $PENDING_FILE
-    > $BATCHES_FILE
+    > pending_configs.txt
     rm -f batch_files/*
     
     # Track counts
@@ -59,7 +43,7 @@ if [ $RESCAN -eq 1 ]; then
             TOTAL_COMPLETED=$((TOTAL_COMPLETED+1))
         else
             # Add to pending list
-            echo $CONFIG_ID >> $PENDING_FILE
+            echo $CONFIG_ID >> pending_configs.txt
             TOTAL_PENDING=$((TOTAL_PENDING+1))
         fi
         
@@ -93,50 +77,38 @@ if [ $RESCAN -eq 1 ]; then
             
             # Start a new batch if this one is full
             if [ $CURRENT_COUNT -eq $BATCH_SIZE ]; then
-                echo $BATCH_FILE >> $BATCHES_FILE
                 CURRENT_BATCH=$((CURRENT_BATCH+1))
                 CURRENT_COUNT=0
                 BATCH_FILE="batch_files/batch_${CURRENT_BATCH}.txt"
                 > $BATCH_FILE
             fi
-        done < $PENDING_FILE
-        
-        # Add the last batch if it has any configs
-        if [ $CURRENT_COUNT -gt 0 ]; then
-            echo $BATCH_FILE >> $BATCHES_FILE
-        fi
+        done < pending_configs.txt
         
         # Count total batches
-        TOTAL_BATCHES=$(wc -l < $BATCHES_FILE)
+        TOTAL_BATCHES=$(ls -1 batch_files/batch_*.txt 2>/dev/null | wc -l)
         echo "Created $TOTAL_BATCHES batch files"
         
-        # Reset progress for the new batch list
-        echo "0" > $PROGRESS_FILE
+        # Reset progress file for new batch list
+        echo "0" > batch_submission_progress.txt
     else
         echo "No pending configurations found. All work is complete!"
         exit 0
     fi
+else
+    # Use existing batch files
+    TOTAL_BATCHES=$(ls -1 batch_files/batch_*.txt 2>/dev/null | wc -l)
+    TOTAL_PENDING=$(wc -l < pending_configs.txt)
+    echo "Using existing $TOTAL_BATCHES batch files with $TOTAL_PENDING pending configurations"
 fi
 
-# Read the current progress
+# Read the current progress or start fresh
+PROGRESS_FILE="batch_submission_progress.txt"
 if [ -f "$PROGRESS_FILE" ]; then
     CURRENT_BATCH=$(cat "$PROGRESS_FILE")
 else
     CURRENT_BATCH=0
-    echo "0" > $PROGRESS_FILE
+    echo "0" > "$PROGRESS_FILE"
 fi
-
-# Count total batches
-TOTAL_BATCHES=$(wc -l < $BATCHES_FILE)
-
-# Log file for this submission run
-LOG_FILE="submission_logs/submission_$(date +%Y%m%d_%H%M%S)_chunk${CURRENT_BATCH}.log"
-
-echo "=== SLURM Managed Submission Chunk ===" | tee -a "$LOG_FILE"
-echo "Total batches: $TOTAL_BATCHES" | tee -a "$LOG_FILE"
-echo "Starting from batch: $CURRENT_BATCH" | tee -a "$LOG_FILE"
-echo "Chunk size: $CHUNK_SIZE" | tee -a "$LOG_FILE"
-echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 
 # Calculate end batch for this chunk
 END_BATCH=$((CURRENT_BATCH + CHUNK_SIZE - 1))
@@ -144,26 +116,43 @@ if [ $END_BATCH -ge $TOTAL_BATCHES ]; then
     END_BATCH=$((TOTAL_BATCHES - 1))
 fi
 
-echo "This run will submit batches $CURRENT_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
+# Log file
+LOG_FILE="submission_logs/array_submission_$(date +%Y%m%d_%H%M%S)_chunk${CURRENT_BATCH}.log"
+
+echo "=== SLURM Quota-Aware Array Job Submission ===" | tee -a "$LOG_FILE"
+echo "Total pending configurations: $TOTAL_PENDING" | tee -a "$LOG_FILE"
+echo "Total batch files: $TOTAL_BATCHES" | tee -a "$LOG_FILE"
+echo "Submitting batches $CURRENT_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
+echo "Array size: $ARRAY_SIZE" | tee -a "$LOG_FILE"
+echo "Max concurrent tasks: $MAX_CONCURRENT" | tee -a "$LOG_FILE"
+echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 
 # Array to store job IDs from this chunk
 declare -a CHUNK_JOB_IDS
 
-# Submit batches for this chunk
+# Submit array jobs for this chunk
 for ((i=CURRENT_BATCH; i<=END_BATCH; i++)); do
-    # Get the batch file path (i+1 because file lines are 1-indexed)
-    BATCH_FILE=$(sed -n "$((i+1))p" $BATCHES_FILE)
+    BATCH_FILE="batch_files/batch_$((i+1)).txt"  # +1 because batch files are 1-indexed
     
     if [ ! -f "$BATCH_FILE" ]; then
         echo "Warning: Batch file $BATCH_FILE not found" | tee -a "$LOG_FILE"
         continue
     fi
     
+    # Count configs in this batch
     CONFIG_COUNT=$(wc -l < $BATCH_FILE)
-    echo "Submitting batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations..." | tee -a "$LOG_FILE"
     
-    # Submit the job
-    JOB_OUTPUT=$(sbatch --export=CONFIG_FILE=$BATCH_FILE slurm_batch_processor.sh 2>&1)
+    # Calculate array indices
+    if [ $CONFIG_COUNT -lt $ARRAY_SIZE ]; then
+        ARRAY_RANGE="0-$((CONFIG_COUNT-1))"
+    else
+        ARRAY_RANGE="0-$((ARRAY_SIZE-1))"
+    fi
+    
+    echo "Submitting batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
+    
+    # Submit array job
+    JOB_OUTPUT=$(sbatch --export=CONFIG_FILE=$BATCH_FILE --array=$ARRAY_RANGE%$MAX_CONCURRENT slurm_array_processor.sh 2>&1)
     JOB_STATUS=$?
     
     if [ $JOB_STATUS -eq 0 ]; then
@@ -174,10 +163,10 @@ for ((i=CURRENT_BATCH; i<=END_BATCH; i++)); do
         echo "  Failed: $JOB_OUTPUT" | tee -a "$LOG_FILE"
     fi
     
-    sleep 2  # Short delay between submissions
+    sleep 2  # Small delay between submissions
 done
 
-# Update the progress file for the next run
+# Update progress for next run
 NEXT_BATCH=$((END_BATCH + 1))
 echo $NEXT_BATCH > "$PROGRESS_FILE"
 
