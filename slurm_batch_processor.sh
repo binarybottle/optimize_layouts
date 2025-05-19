@@ -79,7 +79,7 @@ for ((i=0; i<TOTAL_CONFIGS; i++)); do
     
     # Run the optimization
     echo "  Running optimization..."
-    python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post} --output ${output_pre}${CONFIG_ID}${output_post}
+    python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post}
     
     if [ $? -eq 0 ]; then
         echo "  Optimization completed successfully"
