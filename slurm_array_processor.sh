@@ -1,5 +1,7 @@
 #!/bin/bash
 # Process a single configuration as an array task
+# This script is intended to be run as a SLURM array job, 
+# called by slurm_quota_smart_array_submit.sh
 
 # SLURM configuration
 #===================================================================
@@ -8,10 +10,10 @@
 #SBATCH --cpus-per-task=2           # Number of CPUs per task   
 #SBATCH --mem=2GB                   # Memory allocation
 #SBATCH --job-name=layout           # Job name
-#SBATCH --output=layout_%A_%a.out   # Output file with array job and task IDs
-#SBATCH --error=layout_%A_%a.err    # Error file with array job and task IDs
+#SBATCH --output=output/outputs/layout_%A_%a.out   # Output file with array job and task IDs
+#SBATCH --error=output/errors/layout_%A_%a.err    # Error file with array job and task IDs
 #SBATCH -p RM-shared                # Regular Memory-shared
-#SBATCH -A med250002p               # Your allocation ID
+#SBATCH -A <ALLOCATION_ID>          # Your allocation ID (e.g., med250002p)
 #===================================================================
 
 # Configuration
