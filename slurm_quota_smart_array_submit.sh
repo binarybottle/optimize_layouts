@@ -1,8 +1,13 @@
 #!/bin/bash
-# quota_smart_array_submit.sh - Quota-aware array job submission
+# Quota-aware array job submission
+# 
+# If you want to start fresh with a new scan:
+#     bash slurm_quota_smart_array_submit.sh --rescan
+# Otherwise:
+#     bash slurm_quota_smart_array_submit.sh
 
 # Configuration
-TOTAL_CONFIGS=65520                # Total configurations
+TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (e.g., 65520)
 BATCH_SIZE=1000                    # Configs per batch file
 ARRAY_SIZE=1000                    # Maximum array tasks per job
 MAX_CONCURRENT=500                 # Maximum concurrent tasks
@@ -35,18 +40,30 @@ if [ "$1" == "--rescan" ] || [ ! -f "pending_configs.txt" ]; then
             continue
         fi
         
-        # Check if output already exists using find (proven reliable method)
+        # Check if output already exists and contains actual data
         FIND_PATTERN="layout_results_${CONFIG_ID}_[0-9]*"
-        FILE_COUNT=$(find output/layouts -name "$FIND_PATTERN*.csv" | wc -l)
-        
-        if [ "$FILE_COUNT" -gt 0 ]; then
+        HAS_VALID_OUTPUT=false
+
+        # Find all matching CSV files for this config
+        while IFS= read -r -d '' file; do
+            if [ -s "$file" ]; then  # Check if file is not empty
+                # Count lines in the file (excluding header)
+                LINE_COUNT=$(tail -n +2 "$file" | wc -l)
+                if [ "$LINE_COUNT" -gt 0 ]; then
+                    HAS_VALID_OUTPUT=true
+                    break  # Found at least one valid file, no need to check others
+                fi
+            fi
+        done < <(find output/layouts -name "$FIND_PATTERN*.csv" -print0)
+
+        if [ "$HAS_VALID_OUTPUT" = true ]; then
             TOTAL_COMPLETED=$((TOTAL_COMPLETED+1))
         else
             # Add to pending list
             echo $CONFIG_ID >> pending_configs.txt
             TOTAL_PENDING=$((TOTAL_PENDING+1))
         fi
-        
+
         # Show progress periodically
         if [ $((CONFIG_ID % 5000)) -eq 0 ]; then
             echo "Scanned $CONFIG_ID / $TOTAL_CONFIGS configs..."
