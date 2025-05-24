@@ -164,9 +164,7 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # and make output directories
     git clone https://github.com/binarybottle/optimize_layouts.git
     cd optimize_layouts
-    chmod +x generate_configs.py
-    chmod +x slurm_batchmaking.sh
-    chmod +x slurm_submit_batches.sh
+    chmod +x *.py *.sh
     mkdir -p output
     mkdir -p output/layouts
     mkdir -p output/outputs
@@ -184,29 +182,34 @@ by NSF and Pittsburgh Supercomputing Center computing resources
   Replace <ALLOCATION_ID> with the actual allocation ID,
   and <TOTAL_CONFIGS> with the total number of config files.
   
-  slurm_batchmaking.sh:
+  slurm_array_processor.sh:
 
     ```bash
-    #SBATCH --time=08:00:00       
-    #SBATCH --array=0-999%1000       
-    #SBATCH --ntasks-per-node=1   
-    #SBATCH --cpus-per-task=2     
-    #SBATCH --mem=2GB          
-    #SBATCH --job-name=layouts     
-    #SBATCH --output=output/outputs/layouts_%A_%a.out
-    #SBATCH --error=output/errors/layouts_%A_%a.err
-    #SBATCH -p RM-shared              
-    #SBATCH -A <ALLOCATION_ID>   
-    TOTAL_CONFIGS=<TOTAL_CONFIGS> 
-    BATCH_SIZE=1000       
+  # SLURM configuration
+    #===================================================================
+    #SBATCH --time=4:00:00       # Time limit per configuration
+    #SBATCH --ntasks-per-node=1  # Number of tasks per node
+    #SBATCH --cpus-per-task=2    # Number of CPUs per task   
+    #SBATCH --mem=2GB            # Memory allocation
+    #SBATCH --job-name=layout    # Job name
+    #SBATCH --output=output/outputs/layout_%A_%a.out # Output file
+    #SBATCH --error=output/errors/layout_%A_%a.err # Error file
+    #SBATCH -p RM-shared         # Regular Memory-shared
+    #SBATCH -A <ALLOCATION_ID>   # Your allocation ID (e.g., med250002p)
+    #===================================================================
     ```
 
-  slurm_submit_batches.sh:
+  slurm_quota_smart_array_submit.sh:
 
     ```bash
-    TOTAL_CONFIGS=<TOTAL_CONFIGS>
-    BATCH_SIZE=1000                   
-    CHUNK_SIZE=5                        
+    # Configuration
+    TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (e.g., 65520)
+    BATCH_SIZE=1000                    # Configs per batch file
+    ARRAY_SIZE=1000                    # Maximum array tasks per job
+    MAX_CONCURRENT=500                 # Maximum concurrent tasks
+    CHUNK_SIZE=4                       # Number of array jobs to submit at once
+    config_pre=output/configs1/config_ # Config file path prefix
+    config_post=.yaml                  # Config file suffix
     ```
 
   ### Run scripts
@@ -215,11 +218,8 @@ by NSF and Pittsburgh Supercomputing Center computing resources
     # Use screen
     screen -S submission
 
-    # Run a single test job
-    sbatch --export=BATCH_NUM=0 --array=0 slurm_batchmaking.sh
-
     # Run all batches as a slurm job
-    sbatch --time=8:00:00 slurm_submit_batches.sh
+    bash slurm_quota_smart_array_submit.sh [--rescan]
     ```
 
   ### Monitor jobs

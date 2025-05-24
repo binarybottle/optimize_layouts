@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """
 Analyze layout optimization results and create scatter plots of scores.
+
+python3 analyze_results.py --results-dir output/layouts
+python3 analyze_results.py --max-files 1000
+python3 analyze_results.py --debug
+python3 analyze_results.py --results-dir output/layouts --median-mad-only
+
 """
 import os
 import sys
@@ -70,19 +76,27 @@ def parse_result_csv(filepath):
             return None
             
         results = []
-        if header_row + 1 < len(data_section):  # Make sure there's data after the header
-            data_row = data_section[header_row + 1]
-            
+        
+        # Process ALL data rows after the header, not just the first one
+        for row_idx in range(header_row + 1, len(data_section)):
+            data_row = data_section[row_idx].strip()
+            if not data_row:  # Skip empty lines
+                continue
+                
             # Debug print
-            if 'debug' in globals() and debug:
-                print(f"Processing data row: {data_row[:50]}...")
+            if 'debug' in globals() and debug and row_idx < header_row + 3:
+                print(f"Processing data row {row_idx}: {data_row[:50]}...")
             
             # Parse CSV row properly
             reader = csv.reader([data_row])
-            row_data = next(reader)
+            try:
+                row_data = next(reader)
+            except:
+                print(f"Could not parse row {row_idx} in {filepath}")
+                continue
             
             # Debug print
-            if 'debug' in globals() and debug:
+            if 'debug' in globals() and debug and row_idx < header_row + 3:
                 print(f"Parsed row data: {row_data[:4]}...")
             
             # Simply look for the score columns by position
@@ -107,8 +121,9 @@ def parse_result_csv(filepath):
                 item_score_idx = 4
                 item_pair_score_idx = 5
             else:
-                print(f"Not enough columns in {filepath}, found {len(row_data)}")
-                return None  # Not enough columns
+                if 'debug' in globals() and debug:
+                    print(f"Not enough columns in {filepath} row {row_idx}, found {len(row_data)}")
+                continue  # Skip this row
                 
             # Extract data
             items = row_data[items_idx].strip('"') if items_idx < len(row_data) else ""
@@ -125,25 +140,29 @@ def parse_result_csv(filepath):
             try:
                 rank = int(row_data[rank_idx].strip('"')) if rank_idx < len(row_data) else 1
             except ValueError:
-                print(f"Could not parse rank from {row_data[rank_idx]}")
+                if 'debug' in globals() and debug:
+                    print(f"Could not parse rank from {row_data[rank_idx]}")
                 rank = 1
             
             try:
                 total_score = float(row_data[total_score_idx].strip('"'))
             except (ValueError, IndexError) as e:
-                print(f"Error parsing total score: {e}")
-                total_score = 0.0
+                if 'debug' in globals() and debug:
+                    print(f"Error parsing total score: {e}")
+                continue  # Skip this row
             
             try:
                 item_score = float(row_data[item_score_idx].strip('"'))
             except (ValueError, IndexError) as e:
-                print(f"Error parsing item score: {e}")
+                if 'debug' in globals() and debug:
+                    print(f"Error parsing item score: {e}")
                 item_score = 0.0
             
             try:
                 item_pair_score = float(row_data[item_pair_score_idx].strip('"'))
             except (ValueError, IndexError) as e:
-                print(f"Error parsing item-pair score: {e}")
+                if 'debug' in globals() and debug:
+                    print(f"Error parsing item-pair score: {e}")
                 item_pair_score = 0.0
                 
             # Clean up special characters in positions string
@@ -190,6 +209,9 @@ def parse_result_csv(filepath):
             }
             
             results.append(result)
+        
+        if 'debug' in globals() and debug:
+            print(f"Successfully parsed {len(results)} rows from {filepath}")
                 
         return results
             
@@ -198,7 +220,7 @@ def parse_result_csv(filepath):
         import traceback
         traceback.print_exc()
         return None
-
+    
 def load_results(results_dir, max_files=None):
     """Load layout result files and return a dataframe."""
     all_results = []
@@ -605,16 +627,256 @@ def analyze_results(df):
     print(f"  Items: {df.loc[best_pair_idx, 'items']}")
     print(f"  Positions: {df.loc[best_pair_idx, 'positions']}")
 
+def parse_result_csv_scores_only(filepath):
+    """Parse a layout results CSV file and extract only the total scores (memory efficient)."""
+    try:
+        # First check if file exists
+        if not os.path.exists(filepath):
+            return None
+            
+        # Check file size
+        file_size = os.path.getsize(filepath)
+        if file_size == 0:
+            return None
+            
+        # Now try to read the file
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        if not lines:
+            return None
+            
+        # Skip header section (configuration info)
+        header_end = 0
+        for i, line in enumerate(lines):
+            line = line.strip()
+            if not line:  # Empty line marks end of header
+                header_end = i
+                break
+        
+        # Find the data header
+        data_section = lines[header_end+1:]
+        header_row = None
+        
+        for i, line in enumerate(data_section):
+            if 'Total score' in line:
+                header_row = i
+                break
+        
+        if header_row is None:
+            return None
+            
+        total_scores = []
+        
+        # Process ALL data rows after the header
+        for row_idx in range(header_row + 1, len(data_section)):
+            data_row = data_section[row_idx].strip()
+            if not data_row:  # Skip empty lines
+                continue
+                
+            # Parse CSV row
+            reader = csv.reader([data_row])
+            try:
+                row_data = next(reader)
+            except:
+                continue
+            
+            # Extract just the total score (assuming it's column 5 in 8-column format)
+            total_score_idx = 5 if len(row_data) >= 8 else 3
+            
+            try:
+                total_score = float(row_data[total_score_idx].strip('"'))
+                total_scores.append(total_score)
+            except (ValueError, IndexError):
+                continue
+                
+        return total_scores
+            
+    except Exception as e:
+        return None
+
+def load_results_grouped_by_file(results_dir, max_files=None):
+    """Load layout result files and return a dictionary grouped by file."""
+    results_by_file = {}
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return {}
+    
+    print(f"Found {len(files)} files to process")
+    
+    # Process each file
+    successful_files = 0
+    for i, filepath in enumerate(files):
+        if i % 1000 == 0:  # Print progress every 1000 files
+            print(f"Processing file {i+1}/{len(files)}: {os.path.basename(filepath)}")
+        
+        results = parse_result_csv(filepath)
+        if results:
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            results_by_file[file_key] = results
+            successful_files += 1
+    
+    print(f"Successfully parsed {successful_files}/{len(files)} files")
+    
+    return results_by_file
+
+def calculate_mad(values):
+    """Calculate Median Absolute Deviation."""
+    median_val = np.median(values)
+    mad = np.median(np.abs(values - median_val))
+    return mad
+
+def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot without loading all data into memory."""
+    if save_path is None:
+        save_path = 'median_mad_by_file_efficient.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)}: {os.path.basename(filepath)}")
+        
+        # Get just the scores for this file
+        total_scores = parse_result_csv_scores_only(filepath)
+        
+        if total_scores and len(total_scores) > 0:
+            # Calculate median and MAD immediately
+            scores_array = np.array(total_scores)
+            median_score = np.median(scores_array)
+            mad_score = calculate_mad(scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': median_score,
+                'mad': mad_score,
+                'count': len(total_scores),
+                'min_score': float(np.min(scores_array)),
+                'max_score': float(np.max(scores_array))
+            })
+            
+            # Debug info for first few files
+            #if i < 5:
+            #    print(f"DEBUG: File {file_key}: {len(total_scores)} scores, median={median_score:.6f}, MAD={mad_score:.6f}")
+    
+    if not file_stats:
+        print("No file statistics calculated!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files")
+    
+    # Sort by file key for consistent ordering
+    file_stats.sort(key=lambda x: x['file_key'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    print(f"Plotting {len(file_stats)} files...")
+    print(f"DEBUG: Layouts per file - min: {min(counts)}, max: {max(counts)}, avg: {np.mean(counts):.1f}")
+    print(f"DEBUG: Median range: {min(medians):.6f} to {max(medians):.6f}")
+    print(f"DEBUG: MAD range: {min(mads):.6f} to {max(mads):.6f}")
+    print(f"DEBUG: MAD as % of median: {np.mean([m/med*100 for m, med in zip(mads, medians) if med > 0]):.2f}%")
+    
+    # Create the plot
+    plt.figure(figsize=(20, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points in red on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (each file contains ~1000 layouts)')
+    plt.ylabel('Median Total Score')
+    plt.title(f'Median Total Scores with MAD Error Bars\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.02, 0.02, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='upper right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated median-MAD plot (saved as {save_path})")
+    
+    # Save summary statistics (much smaller file)
+    summary_df = pd.DataFrame(file_stats)
+    summary_df.to_csv('file_median_mad_summary_efficient.csv', index=False)
+    print("File statistics saved to file_median_mad_summary_efficient.csv")
+    
+    return file_stats
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
     parser.add_argument('--results-dir', type=str, default='output/layouts',
-                       help='Directory containing result files')
+                        help='Directory containing result files')
     parser.add_argument('--max-files', type=int, default=None,
-                       help='Maximum number of files to process (default: all)')
+                        help='Maximum number of files to process (default: all)')
     parser.add_argument('--debug', action='store_true', default=False,
-                       help='Enable debug output')
+                        help='Enable debug output')
+    parser.add_argument('--median-mad-only', action='store_true', default=False,
+                        help='Only generate the median-MAD plot (faster for large datasets)')
     args = parser.parse_args()
     
+    print(f"Arguments parsed successfully!")
+    print(f"median_mad_only = {args.median_mad_only}")
+    print(f"results_dir = {args.results_dir}")
+
     # Enable more verbose output if debug flag is set
     global debug
     debug = args.debug
@@ -635,6 +897,13 @@ def main():
         
         print(f"Found {len(csv_files)} CSV files to process")
         
+
+        # If only median-MAD plot is requested, use memory-efficient approach  
+        if args.median_mad_only:
+            print("Processing files one at a time (memory-efficient approach)...")
+            plot_median_mad_memory_efficient(args.results_dir, max_files=args.max_files)
+            return
+                
         if debug:
             # Print first few files for debugging
             print("First few files:")
@@ -662,7 +931,7 @@ def main():
             print(df.columns.tolist())
             print("\nFirst few rows:")
             print(df.head(3))
-        
+
         try:
             # Generate original plots
             plot_scores_scatter(df, save_path=f'scores_scatter.png')
