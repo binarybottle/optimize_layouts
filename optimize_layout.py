@@ -47,6 +47,8 @@ elif os.path.exists('/tmp') and os.access('/tmp', os.W_OK):
     config.CACHE_DIR = numba_cache
 config.THREADING_LAYER = 'safe'  # Less threading overhead
 
+scoring_mode = 'combined' #'item_only' #'pair_only', 'combined'
+
 #-----------------------------------------------------------------------------
 # Loading, validating, and saving functions
 #-----------------------------------------------------------------------------
@@ -843,12 +845,17 @@ def calculate_score_for_new_items(
     else:
         total_pair_score = 0.0  # No interactions to score
 
-    # Calculate final score
-    if new_item_count + total_pair_count > 0:
-        total_score = new_item_score * total_pair_score
-    else:
-        total_score = 0.0  # No interactions to score
-        
+    # Calculate final score based on mode
+    if scoring_mode == 'item_only':
+        total_score = new_item_score
+    elif scoring_mode == 'pair_only':
+        total_score = total_pair_score
+    else:  # combined mode
+        if new_item_count + total_pair_count > 0:
+            total_score = new_item_score * total_pair_score 
+        else:
+            total_score = 0.0
+
     return total_score, new_item_score, total_pair_score
 
 @jit(nopython=True, fastmath=True)
@@ -1083,8 +1090,13 @@ def calculate_upper_bound(
     #-------------------------------------------------------------------------
     # Combine components
     #-------------------------------------------------------------------------
-    combined_score = max_normalized_item_component + max_normalized_pair_component
-    
+    if scoring_mode == 'item_only':
+        combined_score = max_normalized_item_component
+    elif scoring_mode == 'pair_only':
+        combined_score = max_normalized_pair_component
+    else: 
+        combined_score = max_normalized_item_component * max_normalized_pair_component
+
     return combined_score
 
 def analyze_upper_bound_quality(

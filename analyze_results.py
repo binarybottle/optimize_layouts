@@ -5,7 +5,8 @@ Analyze layout optimization results and create scatter plots of scores.
 python3 analyze_results.py --results-dir output/layouts
 python3 analyze_results.py --max-files 1000
 python3 analyze_results.py --debug
-python3 analyze_results.py --results-dir output/layouts --median-mad-only
+python3 analyze_results.py --median-mad-only
+python3 analyze_results.py --scoring-comparison
 
 """
 import os
@@ -286,7 +287,7 @@ def plot_scores_scatter(df, save_path=None):
     item_pair_col = 'item_pair_score'
     title_prefix = ''
     if save_path is None:
-        save_path = 'raw_scores_scatter.png'
+        save_path = 'raw_scores_by_total.png'
     
     # Sort by the total score
     df_sorted = df.sort_values(total_col)
@@ -628,7 +629,7 @@ def analyze_results(df):
     print(f"  Positions: {df.loc[best_pair_idx, 'positions']}")
 
 def parse_result_csv_scores_only(filepath):
-    """Parse a layout results CSV file and extract only the total scores (memory efficient)."""
+    """Parse a layout results CSV file and extract only the scores (memory efficient)."""
     try:
         # First check if file exists
         if not os.path.exists(filepath):
@@ -667,6 +668,8 @@ def parse_result_csv_scores_only(filepath):
             return None
             
         total_scores = []
+        item_scores = []
+        item_pair_scores = []
         
         # Process ALL data rows after the header
         for row_idx in range(header_row + 1, len(data_section)):
@@ -681,20 +684,37 @@ def parse_result_csv_scores_only(filepath):
             except:
                 continue
             
-            # Extract just the total score (assuming it's column 5 in 8-column format)
-            total_score_idx = 5 if len(row_data) >= 8 else 3
+            # Extract scores based on format
+            if len(row_data) >= 8:  # Full format
+                total_score_idx = 5
+                item_score_idx = 6
+                item_pair_score_idx = 7
+            elif len(row_data) >= 6:  # Shorter format
+                total_score_idx = 3
+                item_score_idx = 4
+                item_pair_score_idx = 5
+            else:
+                continue
             
             try:
                 total_score = float(row_data[total_score_idx].strip('"'))
+                item_score = float(row_data[item_score_idx].strip('"'))
+                item_pair_score = float(row_data[item_pair_score_idx].strip('"'))
+                
                 total_scores.append(total_score)
+                item_scores.append(item_score)
+                item_pair_scores.append(item_pair_score)
             except (ValueError, IndexError):
                 continue
                 
-        return total_scores
+        return {
+            'total_scores': total_scores,
+            'item_scores': item_scores,
+            'item_pair_scores': item_pair_scores
+        }
             
     except Exception as e:
         return None
-
 def load_results_grouped_by_file(results_dir, max_files=None):
     """Load layout result files and return a dictionary grouped by file."""
     results_by_file = {}
@@ -735,7 +755,7 @@ def calculate_mad(values):
 def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None):
     """Create median-MAD plot without loading all data into memory."""
     if save_path is None:
-        save_path = 'median_mad_by_file_efficient.png'
+        save_path = 'median_by_total.png'
     
     # Find CSV files
     files = glob.glob(f"{results_dir}/layout_results_*.csv")
@@ -755,12 +775,12 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
         if i % 5000 == 0:
             print(f"Processing file {i+1}/{len(files)}: {os.path.basename(filepath)}")
         
-        # Get just the scores for this file
-        total_scores = parse_result_csv_scores_only(filepath)
-        
-        if total_scores and len(total_scores) > 0:
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+
+        if scores_data and scores_data['total_scores'] and len(scores_data['total_scores']) > 0:
             # Calculate median and MAD immediately
-            scores_array = np.array(total_scores)
+            scores_array = np.array(scores_data['total_scores'])
             median_score = np.median(scores_array)
             mad_score = calculate_mad(scores_array)
             
@@ -770,15 +790,11 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
                 'file_key': file_key,
                 'median': median_score,
                 'mad': mad_score,
-                'count': len(total_scores),
+                'count': len(scores_data['total_scores']),
                 'min_score': float(np.min(scores_array)),
                 'max_score': float(np.max(scores_array))
             })
-            
-            # Debug info for first few files
-            #if i < 5:
-            #    print(f"DEBUG: File {file_key}: {len(total_scores)} scores, median={median_score:.6f}, MAD={mad_score:.6f}")
-    
+
     if not file_stats:
         print("No file statistics calculated!")
         return
@@ -801,7 +817,7 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
     print(f"DEBUG: MAD as % of median: {np.mean([m/med*100 for m, med in zip(mads, medians) if med > 0]):.2f}%")
     
     # Create the plot
-    plt.figure(figsize=(20, 8))
+    plt.figure(figsize=(24, 8))
     
     # First plot error bars in black
     plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
@@ -839,7 +855,7 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
         f"Range: {min_median:.6f} to {max_median:.6f}"
     ]
     
-    plt.figtext(0.02, 0.02, '\n'.join(stats_text), fontsize=10)
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
     
     # Add a legend
     from matplotlib.lines import Line2D
@@ -847,7 +863,7 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
         Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Score'),
         Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
     ]
-    plt.legend(handles=legend_elements, loc='upper right')
+    plt.legend(handles=legend_elements, loc='lower right')
     
     # Save the plot
     plt.tight_layout()
@@ -861,6 +877,797 @@ def plot_median_mad_memory_efficient(results_dir, max_files=None, save_path=None
     
     return file_stats
 
+def plot_median_mad_item_scores(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot for item scores without loading all data into memory."""
+    if save_path is None:
+        save_path = 'median_by_item.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process for item scores")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)} for item scores: {os.path.basename(filepath)}")
+        
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+        
+        if scores_data and scores_data['item_scores'] and len(scores_data['item_scores']) > 0:
+            # Calculate median and MAD immediately
+            scores_array = np.array(scores_data['item_scores'])
+            median_score = np.median(scores_array)
+            mad_score = calculate_mad(scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': median_score,
+                'mad': mad_score,
+                'count': len(scores_data['item_scores']),
+                'min_score': float(np.min(scores_array)),
+                'max_score': float(np.max(scores_array))
+            })
+    
+    if not file_stats:
+        print("No file statistics calculated for item scores!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files for item scores")
+    
+    # Sort by file key for consistent ordering
+    file_stats.sort(key=lambda x: x['file_key'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    # Create the plot
+    plt.figure(figsize=(24, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (each file contains ~1000 layouts)')
+    plt.ylabel('Median Item Score (1-key)')
+    plt.title(f'Median Item Scores with MAD Error Bars\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Item Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='lower right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated item scores median-MAD plot (saved as {save_path})")
+    
+    return file_stats
+
+def plot_median_mad_item_pair_scores(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot for item-pair scores without loading all data into memory."""
+    if save_path is None:
+        save_path = 'median_by_item_pair.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process for item-pair scores")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)} for item-pair scores: {os.path.basename(filepath)}")
+        
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+        
+        if scores_data and scores_data['item_pair_scores'] and len(scores_data['item_pair_scores']) > 0:
+            # Calculate median and MAD immediately
+            scores_array = np.array(scores_data['item_pair_scores'])
+            median_score = np.median(scores_array)
+            mad_score = calculate_mad(scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': median_score,
+                'mad': mad_score,
+                'count': len(scores_data['item_pair_scores']),
+                'min_score': float(np.min(scores_array)),
+                'max_score': float(np.max(scores_array))
+            })
+    
+    if not file_stats:
+        print("No file statistics calculated for item-pair scores!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files for item-pair scores")
+    
+    # Sort by file key for consistent ordering
+    file_stats.sort(key=lambda x: x['file_key'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    # Create the plot
+    plt.figure(figsize=(24, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (each file contains ~1000 layouts)')
+    plt.ylabel('Median Item-Pair Score (2-key)')
+    plt.title(f'Median Item-Pair Scores with MAD Error Bars\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Item-Pair Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='lower right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated item-pair scores median-MAD plot (saved as {save_path})")
+    
+    return file_stats
+
+def plot_median_mad_memory_efficient_sorted(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot sorted by total score median without loading all data into memory."""
+    if save_path is None:
+        save_path = 'median_by_total_sorted.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process (sorted by total score)")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)}: {os.path.basename(filepath)}")
+        
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+
+        if scores_data and scores_data['total_scores'] and len(scores_data['total_scores']) > 0:
+            # Calculate median and MAD immediately
+            scores_array = np.array(scores_data['total_scores'])
+            median_score = np.median(scores_array)
+            mad_score = calculate_mad(scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': median_score,
+                'mad': mad_score,
+                'count': len(scores_data['total_scores']),
+                'min_score': float(np.min(scores_array)),
+                'max_score': float(np.max(scores_array))
+            })
+
+    if not file_stats:
+        print("No file statistics calculated!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files")
+    
+    # Sort by median total score (ascending)
+    file_stats.sort(key=lambda x: x['median'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    print(f"Plotting {len(file_stats)} files...")
+    print(f"DEBUG: Layouts per file - min: {min(counts)}, max: {max(counts)}, avg: {np.mean(counts):.1f}")
+    print(f"DEBUG: Median range: {min(medians):.6f} to {max(medians):.6f}")
+    print(f"DEBUG: MAD range: {min(mads):.6f} to {max(mads):.6f}")
+    print(f"DEBUG: MAD as % of median: {np.mean([m/med*100 for m, med in zip(mads, medians) if med > 0]):.2f}%")
+    
+    # Create the plot
+    plt.figure(figsize=(24, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points in red on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (sorted by median total score)')
+    plt.ylabel('Median Total Score')
+    plt.title(f'Median Total Scores with MAD Error Bars (Sorted by Total Score)\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='lower right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated median-MAD plot sorted by total score (saved as {save_path})")
+    
+    return file_stats
+
+def plot_median_mad_item_scores_sorted(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot for item scores sorted by total score median."""
+    if save_path is None:
+        save_path = 'median_by_item_sorted.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process for item scores (sorted by total score)")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)} for item scores: {os.path.basename(filepath)}")
+        
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+        
+        if scores_data and scores_data['item_scores'] and len(scores_data['item_scores']) > 0 and scores_data['total_scores']:
+            # Calculate median and MAD for item scores
+            item_scores_array = np.array(scores_data['item_scores'])
+            item_median_score = np.median(item_scores_array)
+            item_mad_score = calculate_mad(item_scores_array)
+            
+            # Calculate median total score for sorting
+            total_scores_array = np.array(scores_data['total_scores'])
+            total_median_score = np.median(total_scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': item_median_score,
+                'mad': item_mad_score,
+                'total_median': total_median_score,  # For sorting
+                'count': len(scores_data['item_scores']),
+                'min_score': float(np.min(item_scores_array)),
+                'max_score': float(np.max(item_scores_array))
+            })
+    
+    if not file_stats:
+        print("No file statistics calculated for item scores!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files for item scores")
+    
+    # Sort by median total score (ascending)
+    file_stats.sort(key=lambda x: x['total_median'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    # Create the plot
+    plt.figure(figsize=(24, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (sorted by median total score)')
+    plt.ylabel('Median Item Score (1-key)')
+    plt.title(f'Median Item Scores with MAD Error Bars (Sorted by Total Score)\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Item Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='lower right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated item scores median-MAD plot sorted by total score (saved as {save_path})")
+    
+    return file_stats
+
+def plot_median_mad_item_pair_scores_sorted(results_dir, max_files=None, save_path=None):
+    """Create median-MAD plot for item-pair scores sorted by total score median."""
+    if save_path is None:
+        save_path = 'median_by_item_pair_sorted.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        return
+    
+    print(f"Found {len(files)} files to process for item-pair scores (sorted by total score)")
+    
+    file_stats = []
+    
+    # Process files one at a time
+    for i, filepath in enumerate(files):
+        if i % 5000 == 0:
+            print(f"Processing file {i+1}/{len(files)} for item-pair scores: {os.path.basename(filepath)}")
+        
+        # Get scores for this file
+        scores_data = parse_result_csv_scores_only(filepath)
+        
+        if scores_data and scores_data['item_pair_scores'] and len(scores_data['item_pair_scores']) > 0 and scores_data['total_scores']:
+            # Calculate median and MAD for item-pair scores
+            item_pair_scores_array = np.array(scores_data['item_pair_scores'])
+            item_pair_median_score = np.median(item_pair_scores_array)
+            item_pair_mad_score = calculate_mad(item_pair_scores_array)
+            
+            # Calculate median total score for sorting
+            total_scores_array = np.array(scores_data['total_scores'])
+            total_median_score = np.median(total_scores_array)
+            
+            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            
+            file_stats.append({
+                'file_key': file_key,
+                'median': item_pair_median_score,
+                'mad': item_pair_mad_score,
+                'total_median': total_median_score,  # For sorting
+                'count': len(scores_data['item_pair_scores']),
+                'min_score': float(np.min(item_pair_scores_array)),
+                'max_score': float(np.max(item_pair_scores_array))
+            })
+    
+    if not file_stats:
+        print("No file statistics calculated for item-pair scores!")
+        return
+    
+    print(f"Successfully processed {len(file_stats)} files for item-pair scores")
+    
+    # Sort by median total score (ascending)
+    file_stats.sort(key=lambda x: x['total_median'])
+    
+    # Extract data for plotting
+    medians = [stat['median'] for stat in file_stats]
+    mads = [stat['mad'] for stat in file_stats]
+    counts = [stat['count'] for stat in file_stats]
+    file_indices = range(len(file_stats))
+    
+    # Create the plot
+    plt.figure(figsize=(24, 8))
+    
+    # First plot error bars in black
+    plt.errorbar(file_indices, medians, yerr=mads, fmt='none', 
+                 capsize=1, elinewidth=1, color='black', alpha=0.6, zorder=1)
+    
+    # Then plot the median points on top
+    plt.scatter(file_indices, medians, s=4, color='red', alpha=0.8, 
+               edgecolors='none', zorder=2)
+    
+    # Add labels and title
+    plt.xlabel('File Index (sorted by median total score)')
+    plt.ylabel('Median Item-Pair Score (2-key)')
+    plt.title(f'Median Item-Pair Scores with MAD Error Bars (Sorted by Total Score)\n({len(file_stats)} files, avg {np.mean(counts):.0f} layouts each)')
+    plt.grid(True, alpha=0.3)
+    
+    # Set x-axis to show reasonable tick marks
+    if len(file_stats) > 50:
+        tick_step = max(1, len(file_stats) // 50)
+        plt.xticks(range(0, len(file_stats), tick_step))
+    
+    # Add statistics text
+    overall_median = np.median(medians)
+    overall_mad = calculate_mad(np.array(medians))
+    min_median = min(medians)
+    max_median = max(medians)
+    avg_mad = np.mean(mads)
+    
+    stats_text = [
+        f"Files processed: {len(file_stats)}",
+        f"Total layouts: {sum(counts):,}",
+        f"Layouts per file: ~{np.mean(counts):.0f}",
+        f"Median of medians: {overall_median:.6f}",
+        f"MAD of medians: {overall_mad:.6f}",
+        f"Average within-file MAD: {avg_mad:.6f}",
+        f"Range: {min_median:.6f} to {max_median:.6f}"
+    ]
+    
+    plt.figtext(0.05, 0.1, '\n'.join(stats_text), fontsize=10)
+    
+    # Add a legend
+    from matplotlib.lines import Line2D
+    legend_elements = [
+        Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=6, label='Median Item-Pair Score'),
+        Line2D([0], [0], color='black', linewidth=2, label='MAD Error Bars')
+    ]
+    plt.legend(handles=legend_elements, loc='lower right')
+    
+    # Save the plot
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Generated item-pair scores median-MAD plot sorted by total score (saved as {save_path})")
+    
+    return file_stats
+
+def plot_scoring_comparison(results_dir, max_files=None, 
+                          item_min=0.08, item_max=0.13,
+                          pair_min=0.214, pair_max=0.228,
+                          item_weight=0.3, pair_weight=0.7,
+                          save_path=None):
+    """
+    Compare current total scores with weighted normalized scores.
+    
+    Parameters:
+    - item_min, item_max: Range for normalizing item scores
+    - pair_min, pair_max: Range for normalizing pair scores  
+    - item_weight, pair_weight: Weights for the normalized sum
+    """
+    if save_path is None:
+        save_path = f'scoring_comparison_w{item_weight:.1f}_{pair_weight:.1f}.png'
+    
+    # Find CSV files
+    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    if max_files:
+        files = files[:max_files]
+    
+    if not files:
+        print(f"No CSV files found")
+        return
+    
+    print(f"Comparing scoring methods on {len(files)} files...")
+    print(f"Item range: [{item_min:.3f}, {item_max:.3f}], weight: {item_weight:.1f}")
+    print(f"Pair range: [{pair_min:.3f}, {pair_max:.3f}], weight: {pair_weight:.1f}")
+    
+    all_data = []
+    
+    # Collect data from files
+    for i, filepath in enumerate(files):
+        if i % 1000 == 0:
+            print(f"Processing file {i+1}/{len(files)}")
+        
+        scores_data = parse_result_csv_scores_only(filepath)
+        
+        if (scores_data and 
+            scores_data['total_scores'] and 
+            scores_data['item_scores'] and 
+            scores_data['item_pair_scores']):
+            
+            # Get all layouts from this file
+            for j in range(len(scores_data['total_scores'])):
+                current_total = scores_data['total_scores'][j]
+                item_score = scores_data['item_scores'][j]
+                pair_score = scores_data['item_pair_scores'][j]
+                
+                # Calculate normalized weighted score
+                item_norm = (item_score - item_min) / (item_max - item_min)
+                pair_norm = (pair_score - pair_min) / (pair_max - pair_min)
+                weighted_score = item_weight * item_norm + pair_weight * pair_norm
+                
+                all_data.append({
+                    'current_total': current_total,
+                    'weighted_score': weighted_score,
+                    'item_score': item_score,
+                    'pair_score': pair_score,
+                    'item_norm': item_norm,
+                    'pair_norm': pair_norm
+                })
+    
+    if not all_data:
+        print("No data collected!")
+        return
+    
+    print(f"Collected {len(all_data)} layout scores for comparison")
+    
+    # Convert to arrays for analysis
+    current_scores = np.array([d['current_total'] for d in all_data])
+    weighted_scores = np.array([d['weighted_score'] for d in all_data])
+    item_scores = np.array([d['item_score'] for d in all_data])
+    pair_scores = np.array([d['pair_score'] for d in all_data])
+    
+    # Calculate correlation
+    correlation = np.corrcoef(current_scores, weighted_scores)[0, 1]
+    
+    # Calculate rank correlation (Spearman)
+    from scipy.stats import spearmanr
+    rank_correlation, _ = spearmanr(current_scores, weighted_scores)
+    
+    print(f"Pearson correlation: {correlation:.4f}")
+    print(f"Spearman rank correlation: {rank_correlation:.4f}")
+    
+    # Create comparison plots
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # 1. Scatter plot: Current vs Weighted
+    ax1.scatter(current_scores, weighted_scores, alpha=0.5, s=1)
+    ax1.set_xlabel('Current Total Score (multiplication)')
+    ax1.set_ylabel('Weighted Normalized Score')
+    ax1.set_title(f'Score Comparison\nPearson r={correlation:.3f}, Spearman ρ={rank_correlation:.3f}')
+    ax1.grid(True, alpha=0.3)
+    
+    # Add diagonal line for reference
+    min_val = min(ax1.get_xlim()[0], ax1.get_ylim()[0])
+    max_val = max(ax1.get_xlim()[1], ax1.get_ylim()[1])
+    # ax1.plot([min_val, max_val], [min_val, max_val], 'r--', alpha=0.5, label='y=x')
+    
+    # 2. Histogram comparison
+    ax2.hist(current_scores, bins=50, alpha=0.7, label='Current (mult)', density=True)
+    ax2.hist(weighted_scores, bins=50, alpha=0.7, label='Weighted norm', density=True)
+    ax2.set_xlabel('Score')
+    ax2.set_ylabel('Density')
+    ax2.set_title('Score Distributions')
+    ax2.legend()
+    ax2.grid(True, alpha=0.3)
+    
+    # 3. Top N comparison
+    n_top = min(1000, len(all_data) // 10)  # Top 10% or 1000, whichever is smaller
+    
+    # Get top N by each method
+    current_top_idx = np.argsort(current_scores)[-n_top:]
+    weighted_top_idx = np.argsort(weighted_scores)[-n_top:]
+    
+    # Calculate overlap
+    overlap = len(set(current_top_idx) & set(weighted_top_idx))
+    overlap_pct = overlap / n_top * 100
+    
+    ax3.scatter(current_scores[current_top_idx], weighted_scores[current_top_idx], 
+               alpha=0.7, s=2, color='red', label=f'Top {n_top} by current')
+    ax3.scatter(current_scores[weighted_top_idx], weighted_scores[weighted_top_idx], 
+               alpha=0.7, s=2, color='blue', label=f'Top {n_top} by weighted')
+    ax3.set_xlabel('Current Total Score')
+    ax3.set_ylabel('Weighted Normalized Score')
+    ax3.set_title(f'Top {n_top} Layouts\nOverlap: {overlap} ({overlap_pct:.1f}%)')
+    ax3.legend()
+    ax3.grid(True, alpha=0.3)
+    
+    # 4. Component analysis
+    # Color points by which score component dominates in current method
+    item_contribution = item_scores / current_scores
+    colors = item_contribution
+    scatter = ax4.scatter(item_scores, pair_scores, c=colors, cmap='RdYlBu', 
+                         alpha=0.6, s=1)
+    ax4.set_xlabel('Item Score')
+    ax4.set_ylabel('Item-Pair Score')
+    ax4.set_title('Score Components\n(Color = Item contribution to current total)')
+    plt.colorbar(scatter, ax=ax4)
+    ax4.grid(True, alpha=0.3)
+    
+    # Add summary statistics
+    stats_text = [
+        f"Layouts analyzed: {len(all_data):,}",
+        f"Current score range: {current_scores.min():.5f} to {current_scores.max():.5f}",
+        f"Weighted score range: {weighted_scores.min():.3f} to {weighted_scores.max():.3f}",
+        f"Item range used: [{item_min:.3f}, {item_max:.3f}]",
+        f"Pair range used: [{pair_min:.3f}, {pair_max:.3f}]",
+        f"Weights: {item_weight:.1f} item + {pair_weight:.1f} pair",
+        f"Top {n_top} overlap: {overlap_pct:.1f}%"
+    ]
+    
+    plt.figtext(0.02, 0.02, '\n'.join(stats_text), fontsize=9)
+    
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches='tight')
+    print(f"Scoring comparison plot saved as {save_path}")
+    
+    # Return summary for further analysis
+    return {
+        'pearson_correlation': correlation,
+        'spearman_correlation': rank_correlation,
+        'top_n_overlap_percent': overlap_pct,
+        'current_scores': current_scores,
+        'weighted_scores': weighted_scores,
+        'n_layouts': len(all_data)
+    }
+
+# Convenience function to try different weight combinations
+def compare_multiple_weightings(results_dir, max_files=None,
+                               item_min=0.08, item_max=0.13,
+                               pair_min=0.214, pair_max=0.228):
+    """Compare several different weight combinations."""
+    
+    weight_combinations = [
+        (0.5, 0.5),  # Equal weights
+        (0.3, 0.7),  # Favor pairs
+        (0.2, 0.8),  # Heavily favor pairs  
+        (0.7, 0.3),  # Favor items
+        (0.1, 0.9),  # Almost only pairs
+    ]
+    
+    results = []
+    
+    for item_w, pair_w in weight_combinations:
+        print(f"\n=== Testing weights: {item_w:.1f} item + {pair_w:.1f} pair ===")
+        
+        result = plot_scoring_comparison(
+            results_dir, max_files=max_files,
+            item_min=item_min, item_max=item_max,
+            pair_min=pair_min, pair_max=pair_max,
+            item_weight=item_w, pair_weight=pair_w,
+            save_path=f'scoring_comparison_{item_w:.1f}_{pair_w:.1f}.png'
+        )
+        
+        if result:
+            result['weights'] = (item_w, pair_w)
+            results.append(result)
+            print(f"Pearson: {result['pearson_correlation']:.3f}, "
+                  f"Spearman: {result['spearman_correlation']:.3f}, "
+                  f"Top overlap: {result['top_n_overlap_percent']:.1f}%")
+    
+    return results
+
 def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results.')
     parser.add_argument('--results-dir', type=str, default='output/layouts',
@@ -871,6 +1678,8 @@ def main():
                         help='Enable debug output')
     parser.add_argument('--median-mad-only', action='store_true', default=False,
                         help='Only generate the median-MAD plot (faster for large datasets)')
+    parser.add_argument('--scoring-comparison', action='store_true',
+                        help='Generate scoring method comparison plots')
     args = parser.parse_args()
     
     print(f"Arguments parsed successfully!")
@@ -902,6 +1711,22 @@ def main():
         if args.median_mad_only:
             print("Processing files one at a time (memory-efficient approach)...")
             plot_median_mad_memory_efficient(args.results_dir, max_files=args.max_files)
+            plot_median_mad_item_scores(args.results_dir, max_files=args.max_files)
+            plot_median_mad_item_pair_scores(args.results_dir, max_files=args.max_files)
+            plot_median_mad_memory_efficient_sorted(args.results_dir, max_files=args.max_files)
+            plot_median_mad_item_scores_sorted(args.results_dir, max_files=args.max_files)
+            plot_median_mad_item_pair_scores_sorted(args.results_dir, max_files=args.max_files)
+            return
+
+        if args.scoring_comparison:
+            print("Comparing scoring methods...")
+            
+            # Single comparison with default ranges
+            plot_scoring_comparison(args.results_dir, max_files=args.max_files)
+            
+            # Try multiple weight combinations  
+            compare_multiple_weightings(args.results_dir, max_files=args.max_files)
+            
             return
                 
         if debug:
@@ -934,7 +1759,7 @@ def main():
 
         try:
             # Generate original plots
-            plot_scores_scatter(df, save_path=f'scores_scatter.png')
+            plot_scores_scatter(df, save_path=f'scores_by_total.png')
             
             # Generate new plots
             plot_scores_by_item_score(df, save_path=f'scores_by_1key.png')
