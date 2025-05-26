@@ -42,7 +42,6 @@ import pandas as pd
 from tqdm import tqdm
 from numba import jit, config
 import gc
-from scipy.optimize import linear_sum_assignment
 
 import os
 from math import perm
@@ -62,10 +61,8 @@ from optimization_engine import (
     clear_caches,
     LayoutScorer,
     UpperBoundCalculator,
-    # ADD these new imports:
     ParetoFront,
-    MultiObjectiveOptimizer,
-    run_multi_objective_optimization
+    MultiObjectiveOptimizer
 )
 
 # Temporarily disable JIT for debugging
@@ -1982,6 +1979,48 @@ def validate_bounds_statistically(
 #-----------------------------------------------------------------------------
 # Main function and pipeline
 #-----------------------------------------------------------------------------
+def run_multi_objective_optimization(config: dict, 
+                                   norm_item_scores: dict, norm_item_pair_scores: dict,
+                                   norm_position_scores: dict, norm_position_pair_scores: dict,
+                                   max_solutions: int = None, time_limit: float = None):
+    """Run multi-objective optimization and return results."""
+    
+    # Get parameters from config
+    items_to_assign = config['optimization']['items_to_assign']
+    positions_to_assign = config['optimization']['positions_to_assign']
+    items_to_constrain = config['optimization'].get('items_to_constrain', '')
+    positions_to_constrain = config['optimization'].get('positions_to_constrain', '')
+    items_assigned = config['optimization'].get('items_assigned', '')
+    positions_assigned = config['optimization'].get('positions_assigned', '')
+    
+    # Prepare arrays
+    arrays = prepare_arrays(
+        items_to_assign, positions_to_assign,
+        norm_item_scores, norm_item_pair_scores, 
+        norm_position_scores, norm_position_pair_scores,
+        1.0, 1.0,  # missing scores
+        items_assigned, positions_assigned
+    )
+    
+    # Create scorer
+    scorer, _ = create_optimization_system(arrays, config)
+    
+    # Create multi-objective optimizer
+    optimizer = MultiObjectiveOptimizer(
+        scorer=scorer,
+        items_to_assign=items_to_assign,
+        available_positions=positions_to_assign,
+        items_to_constrain=items_to_constrain,
+        positions_to_constrain=positions_to_constrain,
+        items_assigned=items_assigned,
+        positions_assigned=positions_assigned
+    )
+    
+    # Run optimization
+    pareto_front = optimizer.optimize(max_solutions=max_solutions, time_limit=time_limit)
+    
+    return pareto_front, optimizer
+
 def run_multi_objective_mode(config: dict, verbose: bool = False,
                            max_solutions: int = 20, time_limit: float = 60.0) -> None:
     """
@@ -2031,12 +2070,12 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
     items_assigned = config['optimization'].get('items_assigned', '')
     positions_assigned = config['optimization'].get('positions_assigned', '')
     
-    for i, (layout, objectives) in enumerate(solutions[:10]):  # Show top 10
+    for i, (layout, objectives) in enumerate(solutions[:3]):   # Show top 3
         print(f"\nSolution #{i+1}:")
         
         # Create mapping dictionary
         item_mapping = {item: positions_to_assign[pos] for item, pos in 
-                       zip(items_to_assign, layout) if pos >= 0}
+                    zip(items_to_assign, layout) if pos >= 0}
         
         # Build complete mapping including pre-assigned items
         complete_mapping = dict(zip(items_assigned, positions_assigned))
@@ -2051,6 +2090,45 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
         all_positions = ''.join(complete_mapping.values())
         print(f"  Layout: {all_items} -> {all_positions}")
         
+        # VERBOSE OUTPUT FOR MOO
+        if verbose:
+            print(f"\n  Detailed Analysis for Solution #{i+1}:")
+            
+            # Show objective trade-offs compared to other solutions
+            if len(solutions) > 1:
+                print("  Objective Rankings (among all Pareto solutions):")
+                for obj_idx, obj_name in enumerate(objective_names):
+                    all_obj_values = [sol[1][obj_idx] for sol in solutions]
+                    sorted_values = sorted(all_obj_values, reverse=True)
+                    rank = sorted_values.index(objectives[obj_idx]) + 1
+                    percentile = (len(sorted_values) - rank + 1) / len(sorted_values) * 100
+                    print(f"    {obj_name}: Rank {rank}/{len(solutions)} ({percentile:.1f}th percentile)")
+            
+            # Calculate component contributions
+            total_score = sum(objectives)
+            if total_score > 0:
+                print("  Objective Contributions:")
+                for obj_name, obj_value in zip(objective_names, objectives):
+                    percentage = (obj_value / total_score) * 100
+                    print(f"    {obj_name}: {percentage:.1f}% of total score")
+            
+            # Show individual item contributions (if scorer available)
+            try:
+                # This would require access to the scorer, which we don't have here
+                # For now, just show the basic breakdown
+                print("  Layout Quality Metrics:")
+                print(f"    Total items placed: {len([pos for pos in layout if pos >= 0])}")
+                print(f"    Items with pre-assigned: {len(complete_mapping)}")
+                
+                # Show position utilization
+                used_positions = set(layout[layout >= 0]) if hasattr(layout, 'dtype') else set(pos for pos in layout if pos >= 0)
+                total_positions = len(positions_to_assign)
+                utilization = len(used_positions) / total_positions * 100
+                print(f"    Position utilization: {len(used_positions)}/{total_positions} ({utilization:.1f}%)")
+                
+            except Exception as e:
+                print(f"    (Detailed metrics unavailable: {e})")
+        
         # Display keyboard if requested
         if config['visualization'].get('print_keyboard', True):
             visualize_keyboard_layout(
@@ -2058,7 +2136,7 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
                 title=f"Pareto Solution #{i+1}",
                 config=config
             )
-    
+                
     # Analysis of trade-offs
     if len(objective_names) >= 2 and len(solutions) > 1:
         print(f"\n" + "="*50)
@@ -2137,6 +2215,10 @@ def optimize_layout(config: dict, verbose: bool = False,
     """
     Main optimization function. Uses branch-and-bound search.
     """
+    print("=" * 60)
+    print("SINGLE-OBJECTIVE OPTIMIZATION MODE")
+    print("=" * 60)
+
     start_time = time.time()
 
     # Validate configuration

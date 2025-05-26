@@ -22,7 +22,7 @@ import gc
 #-----------------------------------------------------------------------------
 
 @jit(nopython=True, fastmath=True)
-def _calculate_score_components_jit(mapping, item_scores, item_pair_matrix, position_matrix,
+def _calculate_score_components_jit(mapping, item_scores_array, item_pair_matrix, position_matrix,
                                    cross_score, cross_count, scoring_mode_int):
     """JIT-compiled scoring function for performance."""
     n_items = len(mapping)
@@ -39,7 +39,7 @@ def _calculate_score_components_jit(mapping, item_scores, item_pair_matrix, posi
             else:
                 pos_val = position_matrix[pos, 0] if position_matrix.shape[1] > 0 else 1.0
             
-            item_score += item_scores[i] * pos_val
+            item_score += item_scores_array[i] * pos_val
             
             # Add pair scores
             for j in range(i + 1, n_items):
@@ -53,18 +53,18 @@ def _calculate_score_components_jit(mapping, item_scores, item_pair_matrix, posi
                     pair_score += item_pair_matrix[i, j] * pos_val * pos_j_val
     
     # Calculate total score based on mode
-    if scoring_mode_int == 0:  # AVERAGE
-        total_items = 0
-        for pos in mapping:
-            if pos >= 0:
-                total_items += 1
-        if total_items > 0:
-            total_score = (item_score + pair_score + cross_score) / total_items
-        else:
-            total_score = 0.0
-    else:  # SUM
-        total_score = item_score + pair_score + cross_score
-    
+    if scoring_mode_int == 0:  # WEIGHTED_AVERAGE (recommended)
+        # Weighted average keeps scores in [0,1] range
+        total_weight = 3.0  # item + pair + cross weights
+        total_score = (item_score + pair_score + cross_score) / total_weight
+    elif scoring_mode_int == 1:  # NORMALIZED_SUM 
+        # Normalize sum to [0,1] range
+        max_possible_sum = 3.0  # Since each component is in [0,1]
+        raw_sum = item_score + pair_score + cross_score
+        total_score = raw_sum / max_possible_sum
+    else:  # GEOMETRIC MEAN
+        # Each already in [0,1] range    
+        total_score = (item_score * pair_score * cross_score) ** (1/3)
     return total_score, item_score, pair_score
 
 #-----------------------------------------------------------------------------
@@ -78,7 +78,7 @@ class LayoutScorer:
     """
     
     def __init__(self, 
-                 item_scores: np.ndarray,
+                 item_scores_array: np.ndarray,
                  item_pair_matrix: np.ndarray, 
                  position_matrix: np.ndarray,
                  cross_item_pair_matrix: Optional[np.ndarray] = None,
@@ -87,7 +87,7 @@ class LayoutScorer:
                  reverse_cross_position_pair_matrix: Optional[np.ndarray] = None,
                  scoring_mode: str = 'combined'):
         
-        self.item_scores = item_scores.astype(np.float32)
+        self.item_scores_array = item_scores_array.astype(np.float32)
         self.item_pair_matrix = item_pair_matrix.astype(np.float32)
         self.position_matrix = position_matrix.astype(np.float32)
         self.cross_item_pair_matrix = cross_item_pair_matrix
@@ -109,7 +109,7 @@ class LayoutScorer:
         self._bound_cache = {}
         
         # Pre-compute frequently used values
-        self.n_items = len(item_scores)
+        self.n_items = len(item_scores_array)
         self.n_positions = position_matrix.shape[0]
         self.has_cross_interactions = cross_item_pair_matrix is not None
         
@@ -119,8 +119,8 @@ class LayoutScorer:
         self.sorted_position_scores = position_diagonal[self.positions_by_quality]
         
         # Pre-sort items by quality
-        self.items_by_quality = np.argsort(item_scores)[::-1]  # Descending order
-        self.sorted_item_scores = item_scores[self.items_by_quality]
+        self.items_by_quality = np.argsort(item_scores_array)[::-1]  # Descending order
+        self.sorted_item_scores = item_scores_array[self.items_by_quality]
     
     def score_layout(self, mapping: np.ndarray, return_components: bool = False):
         """
@@ -168,7 +168,7 @@ class LayoutScorer:
         # Use JIT-compiled function for main scoring
         total_score, item_score, pair_score = _calculate_score_components_jit(
             mapping, 
-            self.item_scores, 
+            self.item_scores_array, 
             self.item_pair_matrix, 
             self.position_matrix,
             cross_score,
@@ -230,43 +230,132 @@ class UpperBoundCalculator:
         
     def calculate_upper_bound(self, partial_mapping: np.ndarray, used_positions: np.ndarray) -> float:
         """
-        Calculate theoretical maximum upper bound based on actual remaining potential.
+        Calculate theoretical maximum upper bound using the SAME scoring method as LayoutScorer.
         """
-        current_score = self.scorer.score_layout(partial_mapping)
-        
         # Find unplaced items and available positions
         unplaced_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
         available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
         
         if not unplaced_items or not available_positions:
-            return current_score
+            # No improvements possible, return current score
+            return self.scorer.score_layout(partial_mapping)
         
-        # Calculate maximum possible contributions
-        max_item_contribution = self._calculate_max_item_contribution(unplaced_items, available_positions)
-        max_pair_contribution = self._calculate_max_pair_contribution(unplaced_items, available_positions)
-        max_cross_contribution = self._calculate_max_cross_contribution(unplaced_items, available_positions)
+        # Calculate CURRENT component scores (need to decompose current total)
+        current_item_score, current_pair_score, current_cross_score = self._decompose_current_scores(partial_mapping)
         
-        # Theoretical maximum = current + all maximum possible additions
-        theoretical_max = current_score + max_item_contribution + max_pair_contribution + max_cross_contribution
+        # Calculate MAXIMUM POSSIBLE component scores
+        max_item_score = current_item_score + self._calculate_max_item_contribution(unplaced_items, available_positions)
+        max_pair_score = current_pair_score + self._calculate_max_pair_contribution(unplaced_items, available_positions) 
+        max_cross_score = current_cross_score + self._calculate_max_cross_contribution(unplaced_items, available_positions)
         
-        # Debug output for violations
-        #if hasattr(self, '_debug_count'):
-        #    self._debug_count += 1
-        #else:
-        #    self._debug_count = 1
-        # 
-        #if self._debug_count <= 3:  # Only show first 3 to avoid spam
-        #    print(f"\nDEBUG Bound Calculation #{self._debug_count}:")
-        #    print(f"  Current score: {current_score:.6f}")
-        #    print(f"  Max item contrib: {max_item_contribution:.6f}")
-        #    print(f"  Max pair contrib: {max_pair_contribution:.6f}")
-        #    print(f"  Max cross contrib: {max_cross_contribution:.6f}")
-        #    print(f"  Theoretical max: {theoretical_max:.6f}")
-        #    print(f"  Unplaced items: {len(unplaced_items)}")
-        #    print(f"  Available positions: {len(available_positions)}")
+        # Apply the SAME scoring combination method as LayoutScorer
+        theoretical_max = self._combine_scores(max_item_score, max_pair_score, max_cross_score)
         
         return theoretical_max
 
+    def _decompose_current_scores(self, partial_mapping: np.ndarray) -> tuple:
+        """
+        Calculate current item, pair, and cross scores separately.
+        This avoids the problem of trying to add to an already-combined score.
+        """
+        # Calculate each component score for the current partial layout
+        current_item_score = self._calculate_current_item_score(partial_mapping)
+        current_pair_score = self._calculate_current_pair_score(partial_mapping)
+        current_cross_score = self._calculate_current_cross_score(partial_mapping)
+        
+        return current_item_score, current_pair_score, current_cross_score
+
+    def _combine_scores(self, item_score: float, pair_score: float, cross_score: float) -> float:
+        """
+        Combine component scores using the SAME method as LayoutScorer.
+        This ensures bound calculation consistency.
+        """
+        # Get scoring mode from scorer (or pass it in)
+        scoring_mode_int = self._get_scoring_mode()
+        
+        if scoring_mode_int == 0:  # WEIGHTED_AVERAGE
+            total_weight = 3.0
+            return (item_score + pair_score + cross_score) / total_weight
+        elif scoring_mode_int == 1:  # NORMALIZED_SUM
+            max_possible_sum = 3.0
+            raw_sum = item_score + pair_score + cross_score
+            return raw_sum / max_possible_sum
+        else:  # GEOMETRIC_MEAN
+            return (item_score * pair_score * cross_score) ** (1/3)
+
+    def _calculate_current_item_score(self, partial_mapping: np.ndarray) -> float:
+        """Calculate item score contribution from current placement."""
+        item_score = 0.0
+        placed_count = 0
+        
+        for i, pos in enumerate(partial_mapping):
+            if pos >= 0:  # Item is placed
+                item_score += self.scorer.item_scores_array[i] * self.scorer.position_matrix[pos, pos]
+                placed_count += 1
+        
+        return item_score / max(1, placed_count) if placed_count > 0 else 0.0
+
+    def _calculate_current_pair_score(self, partial_mapping: np.ndarray) -> float:
+        """Calculate pair score contribution from current placement."""
+        pair_score = 0.0
+        pair_count = 0
+        
+        for i in range(len(partial_mapping)):
+            pos_i = partial_mapping[i]
+            if pos_i < 0:
+                continue
+                
+            for j in range(i + 1, len(partial_mapping)):
+                pos_j = partial_mapping[j]
+                if pos_j < 0:
+                    continue
+                    
+                # Both items are placed - calculate their pair contribution
+                item_pair_score = self.scorer.item_pair_matrix[i, j]
+                position_pair_score = self.scorer.position_matrix[pos_i, pos_j]
+                pair_score += item_pair_score * position_pair_score
+                pair_count += 1
+        
+        return pair_score / max(1, pair_count) if pair_count > 0 else 0.0
+
+    def _calculate_current_cross_score(self, partial_mapping):
+        if self.scorer.cross_position_pair_matrix is None:
+            return 0.0
+            
+        cross_score = 0.0
+        cross_count = 0  # Initialize the counter variable
+        
+        rows, cols = self.scorer.cross_position_pair_matrix.shape
+        rows_item, cols_item = self.scorer.cross_item_pair_matrix.shape
+        
+        for i, pos_i in enumerate(partial_mapping):
+            if pos_i == -1:
+                continue
+            for j, pos_j in enumerate(partial_mapping):
+                if pos_j == -1:
+                    continue
+                
+                # Skip indices outside the matrix bounds
+                if pos_i >= rows or pos_j >= cols:
+                    continue
+                
+                if i >= rows_item or j >= cols_item:
+                    continue
+                    
+                cross_pos_score = self.scorer.cross_position_pair_matrix[pos_i, pos_j]
+                cross_item_score = self.scorer.cross_item_pair_matrix[i, j]
+                cross_score += cross_item_score * cross_pos_score
+                cross_count += 1
+        
+        return cross_score / max(1, cross_count) if cross_count > 0 else 0.0
+
+    def _get_scoring_mode(self) -> int:
+        """Get scoring mode from the scorer."""
+        # You'll need to add this to your LayoutScorer class:
+        return getattr(self.scorer, 'scoring_mode_int', 3)  # Default to geometric mean
+        
+        
+        
     def _calculate_max_item_contribution(self, unplaced_items, available_positions):
         """Calculate maximum possible item score contributions."""
         max_contribution = 0.0
@@ -280,7 +369,7 @@ class UpperBoundCalculator:
                 else:
                     pos_score = self.scorer.position_matrix[pos]
                 
-                item_score = self.scorer.item_scores[item] * pos_score
+                item_score = self.scorer.item_scores_array[item] * pos_score
                 best_score = max(best_score, item_score)
             
             max_contribution += best_score
@@ -363,13 +452,13 @@ class UpperBoundCalculator:
             return self._assignment_cache[cache_key]
         
         # Get item and position scores
-        item_scores = self.scorer.item_scores[unplaced_items]
+        item_scores_array = self.scorer.item_scores_array[unplaced_items]
         position_scores = np.diag(self.scorer.position_matrix)[available_positions]
         
         # Create benefit matrix (use negative for minimization problem)
         if len(available_positions) >= len(unplaced_items):
             # More positions than items - use rectangular assignment
-            benefit_matrix = np.outer(item_scores, position_scores)
+            benefit_matrix = np.outer(item_scores_array, position_scores)
             cost_matrix = -benefit_matrix
             
             # Pad if necessary
@@ -388,12 +477,12 @@ class UpperBoundCalculator:
             
         else:
             # More items than positions - use greedy assignment of best items to best positions
-            sorted_items = np.argsort(item_scores)[::-1]  # Best items first
+            sorted_items = np.argsort(item_scores_array)[::-1]  # Best items first
             sorted_positions = np.argsort(position_scores)[::-1]  # Best positions first
             
             optimal_score = 0.0
             for i in range(len(available_positions)):
-                optimal_score += item_scores[sorted_items[i]] * position_scores[sorted_positions[i]]
+                optimal_score += item_scores_array[sorted_items[i]] * position_scores[sorted_positions[i]]
             optimal_score /= len(available_positions)
         
         # Cache and return
@@ -794,10 +883,10 @@ def create_optimization_system(arrays: tuple, config: dict,
     """
     # Unpack arrays
     if len(arrays) > 3:
-        item_scores, item_pair_matrix, position_matrix, cross_item_pair_matrix, cross_position_pair_matrix, reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix = arrays
+        item_scores_array, item_pair_matrix, position_matrix, cross_item_pair_matrix, cross_position_pair_matrix, reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix = arrays
         
         scorer = LayoutScorer(
-            item_scores=item_scores,
+            item_scores_array=item_scores_array, 
             item_pair_matrix=item_pair_matrix,
             position_matrix=position_matrix,
             cross_item_pair_matrix=cross_item_pair_matrix,
@@ -807,10 +896,10 @@ def create_optimization_system(arrays: tuple, config: dict,
             scoring_mode=scoring_mode
         )
     else:
-        item_scores, item_pair_matrix, position_matrix = arrays
+        item_scores_array, item_pair_matrix, position_matrix = arrays
         
         scorer = LayoutScorer(
-            item_scores=item_scores,
+            item_scores_array=item_scores_array, 
             item_pair_matrix=item_pair_matrix,
             position_matrix=position_matrix,
             scoring_mode=scoring_mode
@@ -905,7 +994,7 @@ def clear_caches(scorer: LayoutScorer):
 # Integration with optimize_layout.py
 #-----------------------------------------------------------------------------
 
-def calculate_score_for_new_items(mapping, position_score_matrix, item_scores, 
+def calculate_score_for_new_items(mapping, position_score_matrix, item_scores_array, 
                                          item_pair_score_matrix, cross_item_pair_matrix=None,
                                          cross_position_pair_matrix=None,
                                          reverse_cross_item_pair_matrix=None,
@@ -915,7 +1004,7 @@ def calculate_score_for_new_items(mapping, position_score_matrix, item_scores,
     Uses the LayoutScorer for consistency.
     """
     scorer = LayoutScorer(
-        item_scores=item_scores,
+        item_scores_array=item_scores_array, 
         item_pair_matrix=item_pair_score_matrix,
         position_matrix=position_score_matrix,
         cross_item_pair_matrix=cross_item_pair_matrix,
@@ -926,7 +1015,7 @@ def calculate_score_for_new_items(mapping, position_score_matrix, item_scores,
     
     return scorer.score_layout(mapping, return_components=True)
 
-def calculate_upper_bound(mapping, used, position_score_matrix, item_scores,
+def calculate_upper_bound(mapping, used, position_score_matrix, item_scores_array,
                                  item_pair_score_matrix, cross_item_pair_matrix=None,
                                  cross_position_pair_matrix=None,
                                  reverse_cross_item_pair_matrix=None,
@@ -937,7 +1026,7 @@ def calculate_upper_bound(mapping, used, position_score_matrix, item_scores,
     Uses the bound calculator for much tighter bounds.
     """
     scorer = LayoutScorer(
-        item_scores=item_scores,
+        item_scores_array=item_scores_array,
         item_pair_matrix=item_pair_score_matrix,
         position_matrix=position_score_matrix,
         cross_item_pair_matrix=cross_item_pair_matrix,
@@ -948,8 +1037,6 @@ def calculate_upper_bound(mapping, used, position_score_matrix, item_scores,
     
     bound_calculator = UpperBoundCalculator(scorer)
     return bound_calculator.calculate_upper_bound(mapping, used)
-
-# Add these classes to the END of optimization_engine.py
 
 #-----------------------------------------------------------------------------
 # Multi-Objective Optimization Classes
@@ -1163,48 +1250,3 @@ class MultiObjectiveOptimizer:
         else:
             return [item_score, pair_score]
 
-#-----------------------------------------------------------------------------
-# Integration Functions for MOO
-#-----------------------------------------------------------------------------
-
-def run_multi_objective_optimization(config: dict, 
-                                   norm_item_scores: dict, norm_item_pair_scores: dict,
-                                   norm_position_scores: dict, norm_position_pair_scores: dict,
-                                   max_solutions: int = 20, time_limit: float = 60.0):
-    """Run multi-objective optimization and return results."""
-    
-    # Get parameters from config
-    items_to_assign = config['optimization']['items_to_assign']
-    positions_to_assign = config['optimization']['positions_to_assign']
-    items_to_constrain = config['optimization'].get('items_to_constrain', '')
-    positions_to_constrain = config['optimization'].get('positions_to_constrain', '')
-    items_assigned = config['optimization'].get('items_assigned', '')
-    positions_assigned = config['optimization'].get('positions_assigned', '')
-    
-    # Prepare arrays
-    arrays = prepare_arrays(
-        items_to_assign, positions_to_assign,
-        norm_item_scores, norm_item_pair_scores, 
-        norm_position_scores, norm_position_pair_scores,
-        1.0, 1.0,  # missing scores
-        items_assigned, positions_assigned
-    )
-    
-    # Create scorer
-    scorer, _ = create_optimization_system(arrays, config)
-    
-    # Create multi-objective optimizer
-    optimizer = MultiObjectiveOptimizer(
-        scorer=scorer,
-        items_to_assign=items_to_assign,
-        available_positions=positions_to_assign,
-        items_to_constrain=items_to_constrain,
-        positions_to_constrain=positions_to_constrain,
-        items_assigned=items_assigned,
-        positions_assigned=positions_assigned
-    )
-    
-    # Run optimization
-    pareto_front = optimizer.optimize(max_solutions=max_solutions, time_limit=time_limit)
-    
-    return pareto_front, optimizer
