@@ -29,7 +29,7 @@ import argparse
 
 # Temporarily disable JIT for debugging
 from numba import config
-config.DISABLE_JIT = True
+config.DISABLE_JIT = False
 
 scoring_mode = 'combined' #'item_only' #'pair_only', 'combined'
 
@@ -177,103 +177,6 @@ def validate_config(config):
             f"for constraint items ({len(items_to_constrain)})"
         )
 
-def prepare_arrays(
-    items_to_assign, positions_to_assign,
-    norm_item_scores, norm_item_pair_scores,
-    norm_position_scores, norm_position_pair_scores,
-    missing_item_pair_norm_score=1.0, missing_position_pair_norm_score=1.0,
-    items_assigned=None, positions_assigned=None):
-    """
-    Prepare arrays for optimization, including all assigned items.
-    """
-    # Convert to lists if not already
-    items_to_assign = list(items_to_assign)
-    positions_to_assign = list(positions_to_assign)
-    items_assigned = list(items_assigned or [])
-    positions_assigned = list(positions_assigned or [])
-    
-    # Get dimensions
-    n_items_to_assign = len(items_to_assign)
-    n_positions_to_assign = len(positions_to_assign)
-    n_items_assigned = len(items_assigned)
-    
-    # Create arrays just for the items being optimized
-    # (We'll handle interactions with assigned items separately)
-    
-    # Create position score matrix
-    position_score_matrix = np.zeros((n_positions_to_assign, n_positions_to_assign), dtype=np.float32)
-    for i, k1 in enumerate(positions_to_assign):
-        for j, k2 in enumerate(positions_to_assign):
-            if i == j:
-                position_score_matrix[i, j] = norm_position_scores.get(k1.lower(),
-                                                                       missing_position_pair_norm_score)
-            else:
-                position_score_matrix[i, j] = norm_position_pair_scores.get((k1.lower(), k2.lower()),
-                                                                            missing_position_pair_norm_score)
-    
-    # Create item score array
-    item_scores = np.array([
-        norm_item_scores.get(l.lower(), 0.0) for l in items_to_assign
-    ], dtype=np.float32)
-    
-    # Create item_pair score matrix
-    item_pair_score_matrix = np.zeros((n_items_to_assign, n_items_to_assign), dtype=np.float32)
-    for i, l1 in enumerate(items_to_assign):
-        for j, l2 in enumerate(items_to_assign):
-            item_pair_score_matrix[i, j] = norm_item_pair_scores.get((l1.lower(), l2.lower()),
-                                                                     missing_item_pair_norm_score)
-
-    # Verify all scores are normalized [0,1]
-    arrays_to_check = [
-        (item_scores, "Item scores"),
-        (item_pair_score_matrix, "Item pair scores"),
-        (position_score_matrix, "Position scores")
-    ]
-    
-    for arr, name in arrays_to_check:
-        if not np.all(np.isfinite(arr)):
-            raise ValueError(f"{name} contains non-finite values")
-        if np.any(arr < 0) or np.any(arr > 1):
-            raise ValueError(f"{name} must be normalized to [0,1] range")
-    
-    # Build cross-interaction matrices for assigned items
-    if items_assigned and positions_assigned:
-        # Create cross-item matrix (items_to_assign <-> items_assigned)
-        cross_item_pair_matrix = np.zeros((n_items_to_assign, n_items_assigned), dtype=np.float32)
-        for i, l1 in enumerate(items_to_assign):
-            for j, l2 in enumerate(items_assigned):
-                cross_item_pair_matrix[i, j] = norm_item_pair_scores.get((l1.lower(), l2.lower()),
-                                                                        missing_item_pair_norm_score)
-
-        # Create reverse cross-item matrix (items_assigned <-> items_to_assign)
-        reverse_cross_item_pair_matrix = np.zeros((n_items_assigned, n_items_to_assign), dtype=np.float32)
-        for j, l2 in enumerate(items_assigned):
-            for i, l1 in enumerate(items_to_assign):
-                reverse_cross_item_pair_matrix[j, i] = norm_item_pair_scores.get((l2.lower(), l1.lower()),
-                                                                            missing_item_pair_norm_score)
-
-        # Create cross-position matrix (positions_to_assign <-> positions_assigned)
-        cross_position_pair_matrix = np.zeros((n_positions_to_assign, len(positions_assigned)), dtype=np.float32)
-        for i, p1 in enumerate(positions_to_assign):
-            for j, p2 in enumerate(positions_assigned):
-                cross_position_pair_matrix[i, j] = norm_position_pair_scores.get((p1.lower(), p2.lower()),
-                                                                               missing_position_pair_norm_score)
-        # Create reverse cross-position matrix (positions_assigned <-> positions_to_assign)
-        reverse_cross_position_pair_matrix = np.zeros((len(positions_assigned), n_positions_to_assign), dtype=np.float32)
-        for j, p2 in enumerate(positions_assigned):
-            for i, p1 in enumerate(positions_to_assign):
-                reverse_cross_position_pair_matrix[j, i] = norm_position_pair_scores.get((p2.lower(), p1.lower()),
-                                                                                    missing_position_pair_norm_score)
-
-        # Return matrices including cross-interaction matrices in both directions
-        return (item_scores, item_pair_score_matrix, position_score_matrix, 
-                cross_item_pair_matrix, cross_position_pair_matrix,
-                reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix)
-  
-    else:
-        # No assigned items, just return the regular matrices
-        return item_scores, item_pair_score_matrix, position_score_matrix
-    
 def load_scores(config: dict):
     """Load scores."""
     norm_item_scores = {}
@@ -374,12 +277,118 @@ def load_scores(config: dict):
             print(f"  Row {idx}: '{pair}' contains undefined positions")
 
     return norm_item_scores, norm_item_pair_scores, norm_position_scores, norm_position_pair_scores
-   
-def validate_mapping(mapping: np.ndarray, constrained_item_indices: set, constrained_positions: set) -> bool:
-    """Validate that mapping follows all constraints."""
-    for idx in constrained_item_indices:
-        if mapping[idx] >= 0 and mapping[idx] not in constrained_positions:
-            return False
+
+def prepare_arrays(
+    items_to_assign, positions_to_assign,
+    norm_item_scores, norm_item_pair_scores,
+    norm_position_scores, norm_position_pair_scores,
+    missing_item_pair_norm_score=1.0, missing_position_pair_norm_score=1.0,
+    items_assigned=None, positions_assigned=None):
+    """
+    Prepare arrays for optimization, including all assigned items.
+    """
+    # Convert to lists if not already
+    items_to_assign = list(items_to_assign)
+    positions_to_assign = list(positions_to_assign)
+    items_assigned = list(items_assigned or [])
+    positions_assigned = list(positions_assigned or [])
+    
+    # Get dimensions
+    n_items_to_assign = len(items_to_assign)
+    n_positions_to_assign = len(positions_to_assign)
+    n_items_assigned = len(items_assigned)
+    
+    # Create arrays just for the items being optimized
+    # (We'll handle interactions with assigned items separately)
+    
+    # Create position score matrix
+    position_score_matrix = np.zeros((n_positions_to_assign, n_positions_to_assign), dtype=np.float32)
+    for i, k1 in enumerate(positions_to_assign):
+        for j, k2 in enumerate(positions_to_assign):
+            if i == j:
+                position_score_matrix[i, j] = norm_position_scores.get(k1.lower(),
+                                                                       missing_position_pair_norm_score)
+            else:
+                position_score_matrix[i, j] = norm_position_pair_scores.get((k1.lower(), k2.lower()),
+                                                                            missing_position_pair_norm_score)
+    
+    # Create item score array
+    item_scores = np.array([
+        norm_item_scores.get(l.lower(), 0.0) for l in items_to_assign
+    ], dtype=np.float32)
+    
+    # Create item_pair score matrix
+    item_pair_score_matrix = np.zeros((n_items_to_assign, n_items_to_assign), dtype=np.float32)
+    for i, l1 in enumerate(items_to_assign):
+        for j, l2 in enumerate(items_to_assign):
+            item_pair_score_matrix[i, j] = norm_item_pair_scores.get((l1.lower(), l2.lower()),
+                                                                     missing_item_pair_norm_score)
+
+    # Verify all scores are normalized [0,1]
+    arrays_to_check = [
+        (item_scores, "Item scores"),
+        (item_pair_score_matrix, "Item pair scores"),
+        (position_score_matrix, "Position scores")
+    ]
+    
+    for arr, name in arrays_to_check:
+        if not np.all(np.isfinite(arr)):
+            raise ValueError(f"{name} contains non-finite values")
+        if np.any(arr < 0) or np.any(arr > 1):
+            raise ValueError(f"{name} must be normalized to [0,1] range")
+    
+    # Build cross-interaction matrices for assigned items
+    if items_assigned and positions_assigned:
+        # Create cross-item matrix (items_to_assign <-> items_assigned)
+        cross_item_pair_matrix = np.zeros((n_items_to_assign, n_items_assigned), dtype=np.float32)
+        for i, l1 in enumerate(items_to_assign):
+            for j, l2 in enumerate(items_assigned):
+                cross_item_pair_matrix[i, j] = norm_item_pair_scores.get((l1.lower(), l2.lower()),
+                                                                        missing_item_pair_norm_score)
+
+        # Create reverse cross-item matrix (items_assigned <-> items_to_assign)
+        reverse_cross_item_pair_matrix = np.zeros((n_items_assigned, n_items_to_assign), dtype=np.float32)
+        for j, l2 in enumerate(items_assigned):
+            for i, l1 in enumerate(items_to_assign):
+                reverse_cross_item_pair_matrix[j, i] = norm_item_pair_scores.get((l2.lower(), l1.lower()),
+                                                                            missing_item_pair_norm_score)
+
+        # Create cross-position matrix (positions_to_assign <-> positions_assigned)
+        cross_position_pair_matrix = np.zeros((n_positions_to_assign, len(positions_assigned)), dtype=np.float32)
+        for i, p1 in enumerate(positions_to_assign):
+            for j, p2 in enumerate(positions_assigned):
+                cross_position_pair_matrix[i, j] = norm_position_pair_scores.get((p1.lower(), p2.lower()),
+                                                                               missing_position_pair_norm_score)
+        # Create reverse cross-position matrix (positions_assigned <-> positions_to_assign)
+        reverse_cross_position_pair_matrix = np.zeros((len(positions_assigned), n_positions_to_assign), dtype=np.float32)
+        for j, p2 in enumerate(positions_assigned):
+            for i, p1 in enumerate(positions_to_assign):
+                reverse_cross_position_pair_matrix[j, i] = norm_position_pair_scores.get((p2.lower(), p1.lower()),
+                                                                                    missing_position_pair_norm_score)
+
+        # Return matrices including cross-interaction matrices in both directions
+        return (item_scores, item_pair_score_matrix, position_score_matrix, 
+                cross_item_pair_matrix, cross_position_pair_matrix,
+                reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix)
+  
+    else:
+        # No assigned items, just return the regular matrices
+        return item_scores, item_pair_score_matrix, position_score_matrix
+       
+@jit(nopython=True, fastmath=True)
+def validate_mapping(mapping: np.ndarray, constrained_item_indices: np.ndarray, constrained_positions: np.ndarray) -> bool:
+    """JIT-compiled validation that mapping follows all constraints."""
+    for i in range(len(constrained_item_indices)):
+        idx = constrained_item_indices[i]
+        if mapping[idx] >= 0:
+            # Check if mapping[idx] is in constrained_positions
+            found = False
+            for j in range(len(constrained_positions)):
+                if mapping[idx] == constrained_positions[j]:
+                    found = True
+                    break
+            if not found:
+                return False
     return True
 
 def save_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict[str, dict]]],
@@ -923,120 +932,7 @@ def calculate_score_for_new_items(
             total_score = 0.0
             
     return total_score, new_item_score, total_pair_score
-
-@jit(nopython=True, fastmath=True)
-def calculate_exact_score_fast(
-    mapping: np.ndarray,
-    position_score_matrix: np.ndarray,
-    item_scores: np.ndarray,
-    item_pair_score_matrix: np.ndarray
-) -> float:
-    """
-    JIT-compiled exact score calculation for placed items.
-    """
-    new_item_score = np.float32(0.0)
-    new_pair_score = np.float32(0.0)
-    n_items = len(mapping)
-    new_item_count = 0
-    new_pair_count = 0
     
-    # Calculate item scores
-    for i in range(n_items):
-        pos_raw = mapping[i]
-        if pos_raw >= 0:
-            pos = int(pos_raw)
-            matrix_size = position_score_matrix.shape[0]
-            idx = pos * matrix_size + pos
-            value = position_score_matrix.flat[idx]
-            new_item_score += value * item_scores[i]
-            new_item_count += 1
-            
-    # Normalize item scores
-    if new_item_count > 0:
-        new_item_score /= new_item_count    
-    
-    # Calculate pair scores
-    for i in range(n_items):
-        pos_i_raw = mapping[i]
-        if pos_i_raw >= 0:
-            pos_i = int(pos_i_raw)
-            for j in range(i + 1, n_items):
-                pos_j_raw = mapping[j]
-                if pos_j_raw >= 0:
-                    pos_j = int(pos_j_raw)
-                    
-                    # Compute indices
-                    matrix_size = position_score_matrix.shape[0]
-                    idx_fwd = pos_i * matrix_size + pos_j
-                    idx_bck = pos_j * matrix_size + pos_i
-                    
-                    pos_fwd = position_score_matrix.flat[idx_fwd]
-                    pos_bck = position_score_matrix.flat[idx_bck]
-                    
-                    item_fwd = item_pair_score_matrix[i, j]
-                    item_bck = item_pair_score_matrix[j, i]
-                    
-                    fwd_score = pos_fwd * item_fwd
-                    bck_score = pos_bck * item_bck
-                    
-                    new_pair_score += (fwd_score + bck_score)
-                    new_pair_count += 2
-                    
-    # Normalize pair scores
-    if new_pair_count > 0:
-        new_pair_score /= new_pair_count
-    
-    # Final score based on scoring mode
-    if scoring_mode == 'item_only':
-        return new_item_score
-    elif scoring_mode == 'pair_only':
-        return new_pair_score
-    else:  # combined mode
-        return new_item_score * new_pair_score if new_item_count > 0 and new_pair_count > 0 else 0.0
-    
-@jit(nopython=True, fastmath=True)
-def calculate_upper_bound_fast(
-    mapping: np.ndarray,
-    used: np.ndarray,
-    position_score_matrix: np.ndarray,
-    item_scores: np.ndarray,
-    item_pair_score_matrix: np.ndarray
-) -> float:
-    """
-    Simplified upper bound calculation that guarantees validity.
-    """
-    # Count placed items
-    placed_count = 0
-    for i in range(len(mapping)):
-        if mapping[i] >= 0:
-            placed_count += 1
-    
-    # If nothing is placed, return maximum possible score
-    if placed_count == 0:
-        return 1.0
-    
-    # If everything is placed, return exact score
-    if placed_count == len(mapping):
-        # Calculate exact score
-        return calculate_exact_score_fast(mapping, position_score_matrix, 
-                                         item_scores, item_pair_score_matrix)
-    
-    # For partial solutions, use a weighted approach
-    # Calculate exact score for placed items
-    exact_score = calculate_exact_score_fast(mapping, position_score_matrix, 
-                                           item_scores, item_pair_score_matrix)
-    
-    # Use a linear interpolation between exact score and maximum possible score (1.0)
-    # based on how much of the solution is completed
-    completion_ratio = placed_count / len(mapping)
-    
-    # As we place more items, the bound gets tighter
-    # This guarantees the bound is always valid
-    upper_bound = exact_score * completion_ratio + 1.0 * (1.0 - completion_ratio)
-    
-    # This is guaranteed to be a valid upper bound
-    return upper_bound
-
 def calculate_upper_bound(
     mapping: np.ndarray,
     used: np.ndarray,

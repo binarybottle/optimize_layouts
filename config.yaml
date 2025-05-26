@@ -32,8 +32,8 @@ optimization:
   items_assigned:       "et"         # Items already assigned to positions
   positions_assigned:   "FD"         # Positions that are already filled 
 
-  items_to_assign:      "aoinsrhldcum"       # items to arrange in positions
-  positions_to_assign:  "RSEVAWCJKULO"       # available positions
+  items_to_assign:      "aoinsrhldc"       # items to arrange in positions
+  positions_to_assign:  "RSEVAWCJKU"       # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain, and
   # subset of positions_to_assign to constrain arrangement of items_to_constrain
