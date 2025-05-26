@@ -10,12 +10,14 @@ See README for more details.
 
 >> python optimize_layout.py
 """
+import sys
 import yaml
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 from numba import jit, config
 import gc
+from scipy.optimize import linear_sum_assignment
 
 import os
 from math import perm
@@ -24,6 +26,8 @@ from datetime import datetime, timedelta
 import csv
 from typing import List, Dict, Tuple
 import argparse
+
+scoring_mode = 'combined' #'item_only' #'pair_only', 'combined'
 
 # Save memory by using a temporary filesystem for the Numba cache:
 # 1. First try to use the job scheduler's temporary directory
@@ -46,8 +50,6 @@ elif os.path.exists('/tmp') and os.access('/tmp', os.W_OK):
     os.makedirs(numba_cache, exist_ok=True)
     config.CACHE_DIR = numba_cache
 config.THREADING_LAYER = 'safe'  # Less threading overhead
-
-scoring_mode = 'combined' #'item_only' #'pair_only', 'combined'
 
 #-----------------------------------------------------------------------------
 # Loading, validating, and saving functions
@@ -786,76 +788,90 @@ def calculate_score_for_new_items(
     """
     new_item_score = np.float32(0.0)
     new_pair_score = np.float32(0.0)
-    
-    # Get number of items
     n_items = len(mapping)
     new_item_count = 0
     new_pair_count = 0
-    #-----------------------------------------------------------------------
-    # Calculate total item score for new items
-    #-----------------------------------------------------------------------
-    for i in range(n_items):
-        pos = mapping[i]
-        if pos >= 0:
-            new_item_score += position_score_matrix[pos, pos] * item_scores[i]
-            new_item_count += 1
     
-    # Normalize item scores by the number of new items
+    # Calculate item scores
+    for i in range(n_items):
+        pos_raw = mapping[i]
+        if pos_raw >= 0:
+            # Convert using standard Python int (this works better in Numba)
+            pos = int(pos_raw)
+            # Access the matrix using flat indexing: row * n_cols + col
+            matrix_size = position_score_matrix.shape[0]
+            idx = pos * matrix_size + pos
+            value = position_score_matrix.flat[idx]
+            new_item_score += value * item_scores[i]
+            new_item_count += 1
+            
+    # Normalize item scores
     if new_item_count > 0:
         new_item_score /= new_item_count    
-    #-----------------------------------------------------------------------
-    # Calculate total item pair score (for new pairs & new/old interactions)
-    #-----------------------------------------------------------------------    
-    for i in range(n_items):
-        pos_i = mapping[i]
-        if pos_i >= 0:
-            # Pairs between items being optimized
-            for j in range(i + 1, n_items):
-                pos_j = mapping[j]
-                if pos_j >= 0:
-                    # Score both directions and add to total
-                    fwd_score = position_score_matrix[pos_i, pos_j] * item_pair_score_matrix[i, j]
-                    bck_score = position_score_matrix[pos_j, pos_i] * item_pair_score_matrix[j, i]
-                    new_pair_score += (fwd_score + bck_score)
-                    new_pair_count += 2  # Count both directions
     
-    # Normalize pair scores by the number of new pairs
+    # Calculate pair scores
+    for i in range(n_items):
+        pos_i_raw = mapping[i]
+        if pos_i_raw >= 0:
+            pos_i = int(pos_i_raw)
+            for j in range(i + 1, n_items):
+                pos_j_raw = mapping[j]
+                if pos_j_raw >= 0:
+                    pos_j = int(pos_j_raw)
+                    
+                    # Compute flat indices for the matrices
+                    matrix_size = position_score_matrix.shape[0]
+                    idx_fwd = pos_i * matrix_size + pos_j
+                    idx_bck = pos_j * matrix_size + pos_i
+                    
+                    # Get values using flat indexing
+                    pos_fwd = position_score_matrix.flat[idx_fwd]
+                    pos_bck = position_score_matrix.flat[idx_bck]
+                    
+                    # Get item pair values (these should be fine since i,j are Python ints)
+                    item_fwd = item_pair_score_matrix[i, j]
+                    item_bck = item_pair_score_matrix[j, i]
+                    
+                    fwd_score = pos_fwd * item_fwd
+                    bck_score = pos_bck * item_bck
+                    
+                    new_pair_score += (fwd_score + bck_score)
+                    new_pair_count += 2
+                    
+    # Normalize pair scores
     if new_pair_count > 0:
         new_pair_score /= new_pair_count
-    #-----------------------------------------------------------------------
-    # Add cross-interactions if we have pre-assigned items
-    #-----------------------------------------------------------------------
+        
+    # Add cross-interactions
     cross_pair_score, cross_pair_count = calculate_cross_interactions(
-                                            mapping, 
-                                            cross_item_pair_matrix, 
-                                            cross_position_pair_matrix,
-                                            reverse_cross_item_pair_matrix,
-                                            reverse_cross_position_pair_matrix)
-
-    # Normalize cross pair scores by the number of cross pairs
+        mapping,
+        cross_item_pair_matrix,
+        cross_position_pair_matrix,
+        reverse_cross_item_pair_matrix,
+        reverse_cross_position_pair_matrix)
+    
     if cross_pair_count > 0:
         cross_pair_score /= cross_pair_count
-    #-----------------------------------------------------------------------
+        
     # Calculate total score
-    #-----------------------------------------------------------------------
     total_pair_count = new_pair_count + cross_pair_count
     if total_pair_count > 0:
-        total_pair_score = ((new_pair_score * new_pair_count) + 
-                        (cross_pair_score * cross_pair_count)) / total_pair_count
+        total_pair_score = ((new_pair_score * new_pair_count) +
+                           (cross_pair_score * cross_pair_count)) / total_pair_count
     else:
-        total_pair_score = 0.0  # No interactions to score
-
-    # Calculate final score based on mode
+        total_pair_score = 0.0
+        
+    # Final score based on mode
     if scoring_mode == 'item_only':
         total_score = new_item_score
     elif scoring_mode == 'pair_only':
         total_score = total_pair_score
     else:  # combined mode
         if new_item_count + total_pair_count > 0:
-            total_score = new_item_score * total_pair_score 
+            total_score = new_item_score * total_pair_score
         else:
             total_score = 0.0
-
+            
     return total_score, new_item_score, total_pair_score
 
 @jit(nopython=True, fastmath=True)
@@ -868,51 +884,76 @@ def calculate_cross_interactions(
 ) -> Tuple[float, int]:
     """
     Calculate cross-interactions between assigned and unassigned items.
-    
-    Args:
-        mapping: Current mapping of items to positions (-1 for unassigned)
-        cross_item_pair_matrix: Pre-computed item pair scores for cross interactions (forward)
-        cross_position_pair_matrix: Pre-computed position pair scores for cross interactions (forward)
-        reverse_cross_item_pair_matrix: Pre-computed item pair scores for reverse direction
-        reverse_cross_position_pair_matrix: Pre-computed position pair scores for reverse direction
-        
-    Returns:
-        Tuple of (cross_interaction_score, interaction_count)
     """
     cross_interaction_score = 0.0
     interaction_count = 0
     
-    # Only calculate if we have cross-interaction matrices
     if (cross_item_pair_matrix is None or cross_position_pair_matrix is None or
         reverse_cross_item_pair_matrix is None or reverse_cross_position_pair_matrix is None):
-        return 0.0, 0  # Return both score and count
-    
+        return 0.0, 0
+        
     n_items_to_assign = len(mapping)
-    n_items_assigned = cross_item_pair_matrix.shape[1]  # Get from matrix dimension
+    n_items_assigned = cross_item_pair_matrix.shape[1]
     
-    # For each item being optimized
     for i in range(n_items_to_assign):
-        pos_i = mapping[i]
-        if pos_i < 0:  # Skip if not assigned yet
+        pos_i_raw = mapping[i]
+        if pos_i_raw < 0:
             continue
             
-        # For each pre-assigned item
+        pos_i = int(pos_i_raw)
+        
         for j in range(n_items_assigned):
-
-            # Forward interaction: new item → pre-assigned item
+            # Compute flat indices for position matrices
+            cross_pos_matrix_cols = cross_position_pair_matrix.shape[1]
+            rev_pos_matrix_cols = reverse_cross_position_pair_matrix.shape[1]
+            
+            # Forward direction matrices
             fwd_item_score = cross_item_pair_matrix[i, j]
-            fwd_pos_score = cross_position_pair_matrix[pos_i, j]
+            fwd_pos_idx = pos_i * cross_pos_matrix_cols + j
+            fwd_pos_score = cross_position_pair_matrix.flat[fwd_pos_idx]
+            
             cross_interaction_score += fwd_item_score * fwd_pos_score
             
-            # Backward interaction: pre-assigned item → new item
+            # Backward direction matrices
             bwd_item_score = reverse_cross_item_pair_matrix[j, i]
-            bwd_pos_score = reverse_cross_position_pair_matrix[j, pos_i]
+            bwd_pos_idx = j * rev_pos_matrix_cols + pos_i
+            bwd_pos_score = reverse_cross_position_pair_matrix.flat[bwd_pos_idx]
+            
             cross_interaction_score += bwd_item_score * bwd_pos_score
             
-            interaction_count += 2  # Count both directions
-    
+            interaction_count += 2
+            
     return cross_interaction_score, interaction_count
             
+@jit(nopython=True, fastmath=True)
+def prepare_bound_data(
+    partial_mapping, partial_used,
+    phase1_items, phase1_positions,
+    phase2_items, phase2_positions,
+    item_scores_full, item_pair_score_matrix_full,
+    position_score_matrix_full
+):
+    """JIT-compiled function to prepare data for bound calculation."""
+    # Just identify items and positions, don't try to create lists
+    # Return information that will allow the caller to create appropriate arrays
+    
+    # Count placed items
+    placed_count = 0
+    for i in range(phase1_items):
+        if partial_mapping[i] >= 0:
+            placed_count += 1
+    
+    # Count unplaced phase 1 items
+    unplaced_phase1_count = phase1_items - placed_count
+    
+    # Count available phase 1 positions
+    available_phase1_count = 0
+    for i in range(phase1_positions):
+        if not partial_used[i]:
+            available_phase1_count += 1
+    
+    return placed_count, unplaced_phase1_count, available_phase1_count
+
 @jit(nopython=True, fastmath=True)
 def calculate_upper_bound(
     mapping: np.ndarray,
@@ -930,32 +971,18 @@ def calculate_upper_bound(
 ) -> float:
     """
     Calculate upper bound on best possible score from this node.
-    
-    Args:
-        mapping: Current partial mapping of items to positions
-        used: Boolean array of used positions
-        position_score_matrix: Matrix of position/position-pair scores
-        item_scores: Array of item scores
-        item_pair_score_matrix: Matrix of item-pair scores
-        depth: Search depth (only used in multi-solution mode)
-        cross_item_pair_matrix: Matrix of cross-interactions 
-        cross_position_pair_matrix: Matrix of cross-interactions
-        items_assigned: List of already assigned items
-        positions_assigned: List of already assigned positions
-    
-    Returns:
-        Upper bound on best possible score from this node
+    Fixed to properly normalize all components.
     """
-    # Get current score from placed items
-    current_score, current_item_score, current_item_pair_score = calculate_score_for_new_items(
-                                            mapping, 
-                                            position_score_matrix, 
-                                            item_scores, 
-                                            item_pair_score_matrix,
-                                            cross_item_pair_matrix, 
-                                            cross_position_pair_matrix,
-                                            reverse_cross_item_pair_matrix, 
-                                            reverse_cross_position_pair_matrix)
+    # Get current score from placed items (already normalized)
+    current_score, current_item_score, current_pair_score = calculate_score_for_new_items(
+        mapping, 
+        position_score_matrix, 
+        item_scores, 
+        item_pair_score_matrix,
+        cross_item_pair_matrix, 
+        cross_position_pair_matrix,
+        reverse_cross_item_pair_matrix, 
+        reverse_cross_position_pair_matrix)
     
     # Find unplaced items and available positions
     unplaced = np.where(mapping < 0)[0]
@@ -965,140 +992,1058 @@ def calculate_upper_bound(
     if len(unplaced) == 0:
         return current_score
     
-    # Count placed items for correct normalization
-    n_placed_items = len(mapping) - len(unplaced)
-    n_total_items = len(mapping)
+    # Calculate exact counts for normalization
+    n_items = len(mapping)
+    n_placed = n_items - len(unplaced)
+    n_unplaced = len(unplaced)
+    
+    # Count of already-assigned items (from previous phase)
+    n_assigned = 0
+    if cross_item_pair_matrix is not None:
+        n_assigned = cross_item_pair_matrix.shape[1]
     
     #-------------------------------------------------------------------------
-    # Single-item component
+    # Item component upper bound
     #-------------------------------------------------------------------------
-    max_item_component_total = 0.0
+    # Current item score contribution (unnormalized)
+    current_item_total = current_item_score * n_placed
     
-    # Get position scores for remaining positions
+    # Maximum possible item score for unplaced items
+    max_unplaced_item_total = 0.0
+    
+    # Get scores for available positions and unplaced items
     position_values = np.zeros(len(available), dtype=np.float32)
     for i, pos in enumerate(available):
         position_values[i] = position_score_matrix[pos, pos]
-    position_values = np.sort(position_values)[::-1]  # Highest to lowest
+    position_values = np.sort(position_values)[::-1]
     
-    # Get scores for remaining items
     item_values = item_scores[unplaced]
-    item_values = np.sort(item_values)[::-1]  # Highest to lowest
-
-    # Maximum possible item component for unplaced items
-    len_values = min(len(position_values), len(item_values))
-    for i in range(len_values):
-        max_item_component_total += position_values[i] * item_values[i]
+    item_values = np.sort(item_values)[::-1]
     
-    # Current component is already calculated for placed items
-    current_item_component_total = current_item_score * n_placed_items
+    # Greedy matching for upper bound
+    n_to_match = min(len(position_values), len(item_values))
+    for i in range(n_to_match):
+        max_unplaced_item_total += position_values[i] * item_values[i]
     
-    # Calculate normalized item component 
-    max_normalized_item_component = 0.0
-    if n_total_items > 0:
-        max_normalized_item_component = (current_item_component_total + max_item_component_total) / n_total_items
+    # Normalize by total number of items
+    max_item_component = (current_item_total + max_unplaced_item_total) / n_items
     
     #-------------------------------------------------------------------------
-    # Paired-item component
+    # Pair component upper bound
     #-------------------------------------------------------------------------
-    # Initialize pair counting
-    placed = np.where(mapping >= 0)[0]
+    # Count current pairs (within placed items)
     n_placed_pairs = 0
-    n_potential_pairs = 0
-    placed_unplaced_pairs_total = 0.0
-    unplaced_pairs_total = 0.0
+    for i in range(n_items):
+        if mapping[i] >= 0:
+            for j in range(i + 1, n_items):
+                if mapping[j] >= 0:
+                    n_placed_pairs += 2  # Both directions
     
-    # 1. Count current placed pairs
-    for i in range(len(placed)):
-        for j in range(i + 1, len(placed)):
-            n_placed_pairs += 2  # Count both directions
-
-    # 2. Calculate max score for pairs between placed and unplaced
-    for p_idx in range(len(placed)):
-        p_item = placed[p_idx]
-        p_pos = mapping[p_item]
-        for u_idx in range(len(unplaced)):
-            u_item = unplaced[u_idx]
-            # For each unplaced item, find best position pairing with each placed item
+    # Current pair score contribution (unnormalized)
+    current_pair_total = current_pair_score * n_placed_pairs if n_placed_pairs > 0 else 0.0
+    
+    # Upper bound for future pairs
+    future_pair_total = 0.0
+    n_future_pairs = 0
+    
+    # 1. Pairs between placed and unplaced items
+    placed_indices = np.where(mapping >= 0)[0]
+    for p_idx in placed_indices:
+        p_pos = mapping[p_idx]
+        for u_idx in unplaced:
+            # Find best position for this unplaced item w.r.t. this placed item
             best_pair_score = 0.0
-            for a_idx in range(len(available)):
-                pos = available[a_idx]
-                # Calculate score in both directions
-                fwd_score = (item_pair_score_matrix[p_item, u_item] * 
-                            position_score_matrix[p_pos, pos])
-                bwd_score = (item_pair_score_matrix[u_item, p_item] * 
-                            position_score_matrix[pos, p_pos])
-                pair_score = fwd_score + bwd_score
-                if pair_score > best_pair_score:
-                    best_pair_score = pair_score
-            
-            placed_unplaced_pairs_total += best_pair_score
-            n_potential_pairs += 2  # Count both directions
+            for a_pos in available:
+                fwd = item_pair_score_matrix[p_idx, u_idx] * position_score_matrix[p_pos, a_pos]
+                bwd = item_pair_score_matrix[u_idx, p_idx] * position_score_matrix[a_pos, p_pos]
+                pair_score = fwd + bwd
+                best_pair_score = max(best_pair_score, pair_score)
+            future_pair_total += best_pair_score
+            n_future_pairs += 2
     
-    # 3. Calculate max score for pairs between unplaced items
-    # Create arrays for item pair scores and position pair scores
-    n_unplaced_pairs  = (len(unplaced)  * (len(unplaced)  - 1)) // 2
-    n_available_pairs = (len(available) * (len(available) - 1)) // 2
-    
-    if n_unplaced_pairs > 0 and n_available_pairs > 0:
-        item_pair_scores = np.zeros(n_unplaced_pairs,  dtype=np.float32)
-        pos_pair_scores  = np.zeros(n_available_pairs, dtype=np.float32)
+    # 2. Pairs among unplaced items
+    if n_unplaced >= 2:
+        # Collect all possible item pair scores
+        unplaced_item_pairs = []
+        for i in range(n_unplaced):
+            for j in range(i + 1, n_unplaced):
+                i_idx = unplaced[i]
+                j_idx = unplaced[j]
+                score = item_pair_score_matrix[i_idx, j_idx] + item_pair_score_matrix[j_idx, i_idx]
+                unplaced_item_pairs.append(score)
         
-        # Fill item pair scores array
-        pair_idx = 0
-        for i in range(len(unplaced)):
-            for j in range(i + 1, len(unplaced)):
-                i_item, j_item = unplaced[i], unplaced[j]
-                # Sum of scores in both directions
-                score = (item_pair_score_matrix[i_item, j_item] + 
-                         item_pair_score_matrix[j_item, i_item])
-                item_pair_scores[pair_idx] = score
-                pair_idx += 1
-        
-        # Fill position pair scores array
-        pair_idx = 0
+        # Collect all possible position pair scores
+        available_pos_pairs = []
         for i in range(len(available)):
             for j in range(i + 1, len(available)):
-                i_pos, j_pos = available[i], available[j]
-                # Sum of scores in both directions
-                score = (position_score_matrix[i_pos, j_pos] + 
-                         position_score_matrix[j_pos, i_pos])
-                pos_pair_scores[pair_idx] = score
-                pair_idx += 1
+                i_pos = available[i]
+                j_pos = available[j]
+                score = position_score_matrix[i_pos, j_pos] + position_score_matrix[j_pos, i_pos]
+                available_pos_pairs.append(score)
         
-        # Sort both arrays in descending order
-        item_pair_scores = np.sort(item_pair_scores)[::-1]
-        pos_pair_scores  = np.sort(pos_pair_scores)[::-1]
+        # Sort both in descending order
+        unplaced_item_pairs = np.array(unplaced_item_pairs)
+        available_pos_pairs = np.array(available_pos_pairs)
+        unplaced_item_pairs = np.sort(unplaced_item_pairs)[::-1]
+        available_pos_pairs = np.sort(available_pos_pairs)[::-1]
         
-        # Match highest item pair scores with highest position pair scores
-        n_pairs_to_match = min(len(item_pair_scores), len(pos_pair_scores))
-        for i in range(n_pairs_to_match):
-            unplaced_pairs_total += item_pair_scores[i] * pos_pair_scores[i] / 2.0  # Divide by 2 since we count both directions
-            n_potential_pairs += 2  # Count both directions
-
-    # Current pair component is already calculated and normalized
-    current_pair_component_total = current_item_pair_score * n_placed_pairs
+        # Greedy matching
+        n_pairs = min(len(unplaced_item_pairs), len(available_pos_pairs))
+        for i in range(n_pairs):
+            future_pair_total += unplaced_item_pairs[i] * available_pos_pairs[i] / 2.0
+            n_future_pairs += 2
     
-    # Combine all pair components
-    total_potential_pairs = n_placed_pairs + n_potential_pairs
-    future_pair_component_total = placed_unplaced_pairs_total + unplaced_pairs_total
+    # 3. Cross-interactions with already-assigned items
+    if n_assigned > 0 and cross_item_pair_matrix is not None:
+        # For each unplaced item, estimate best cross-interactions
+        for u_idx in unplaced:
+            for a_idx in range(n_assigned):
+                # Find best position for this cross-interaction
+                best_cross_score = 0.0
+                for a_pos in available:
+                    fwd = cross_item_pair_matrix[u_idx, a_idx] * cross_position_pair_matrix[a_pos, a_idx]
+                    bwd = reverse_cross_item_pair_matrix[a_idx, u_idx] * reverse_cross_position_pair_matrix[a_idx, a_pos]
+                    cross_score = fwd + bwd
+                    best_cross_score = max(best_cross_score, cross_score)
+                future_pair_total += best_cross_score
+                n_future_pairs += 2
     
-    # Calculate normalized pair component
-    max_normalized_pair_component = 0.0
-    if total_potential_pairs > 0:
-        max_normalized_pair_component = (current_pair_component_total + future_pair_component_total) / total_potential_pairs
+    # Total pairs for normalization
+    total_pairs = n_placed_pairs + n_future_pairs
+    
+    # Normalize pair component
+    max_pair_component = 0.0
+    if total_pairs > 0:
+        max_pair_component = (current_pair_total + future_pair_total) / total_pairs
     
     #-------------------------------------------------------------------------
-    # Combine components
+    # Combine components based on scoring mode
     #-------------------------------------------------------------------------
     if scoring_mode == 'item_only':
-        combined_score = max_normalized_item_component
+        return max_item_component
     elif scoring_mode == 'pair_only':
-        combined_score = max_normalized_pair_component
-    else: 
-        combined_score = max_normalized_item_component * max_normalized_pair_component
+        return max_pair_component
+    else:  # combined
+        return max_item_component * max_pair_component
+    
+@jit(nopython=True, fastmath=True)
+def compute_placed_score(placed_item_indices, placed_position_indices, item_scores_full, item_pair_score_matrix_full, position_score_matrix_full):
+    """JIT-compiled function to compute score of placed items."""
+    score = 0.0
+    
+    # Check if there are any placed items
+    n_placed = len(placed_item_indices)
+    if n_placed == 0:
+        return score
+    
+    # Individual scores
+    for i in range(n_placed):
+        item_idx = placed_item_indices[i]
+        pos_idx = placed_position_indices[i]
+        score += item_scores_full[item_idx] * position_score_matrix_full[pos_idx, pos_idx]
+    
+    # Pair scores
+    for i in range(n_placed):
+        for j in range(i + 1, n_placed):
+            item_i = placed_item_indices[i]
+            item_j = placed_item_indices[j]
+            pos_i = placed_position_indices[i] 
+            pos_j = placed_position_indices[j]
+            
+            score += item_pair_score_matrix_full[item_i, item_j] * position_score_matrix_full[pos_i, pos_j]
+            score += item_pair_score_matrix_full[item_j, item_i] * position_score_matrix_full[pos_j, pos_i]
+    
+    return score
 
-    return combined_score
+def compute_individual_assignment(all_unplaced, all_available, item_scores_full, position_score_matrix_full):
+    """Compute individual assignments using Hungarian algorithm."""
+    from scipy.optimize import linear_sum_assignment
+    
+    n_unplaced = len(all_unplaced)
+    n_available = len(all_available)
+    
+    if n_unplaced == 0 or n_available == 0:
+        return 0.0
+        
+    # Create cost matrix
+    max_dim = max(n_unplaced, n_available)
+    cost_matrix = np.zeros((max_dim, max_dim))
+    
+    # Fill cost matrix (negative because we're maximizing)
+    for i in range(n_unplaced):
+        for j in range(n_available):
+            item_idx = all_unplaced[i]
+            pos_idx = all_available[j]
+            cost_matrix[i, j] = -(item_scores_full[item_idx] * 
+                                 position_score_matrix_full[pos_idx, pos_idx])
+    
+    # Fill unused entries
+    if n_unplaced < max_dim or n_available < max_dim:
+        for i in range(n_unplaced, max_dim):
+            cost_matrix[i, :] = 0  # No penalty for not using these rows
+        for j in range(n_available, max_dim):
+            cost_matrix[:, j] = 0  # No penalty for not using these columns
+    
+    # Run Hungarian algorithm
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Calculate score
+    score = 0.0
+    for i, j in zip(row_ind, col_ind):
+        if i < n_unplaced and j < n_available:  # Only count real assignments
+            item_idx = all_unplaced[i]
+            pos_idx = all_available[j]
+            score -= cost_matrix[i, j]  # Negative because we stored negative scores
+    
+    return score
 
+@jit(nopython=True, fastmath=True)
+def compute_pair_scores(all_unplaced_array, all_available_array, item_pair_score_matrix_full, position_score_matrix_full):
+    """
+    JIT-compiled function to compute pair score bounds.
+    Uses the greedy approach of matching highest item pair scores with highest position pair scores.
+    
+    Args:
+        all_unplaced_array: NumPy array of indices of unplaced items
+        all_available_array: NumPy array of indices of available positions
+        item_pair_score_matrix_full: Matrix of item pair scores
+        position_score_matrix_full: Matrix of position pair scores
+    
+    Returns:
+        Upper bound on the pair score component
+    """
+    score = 0.0
+    
+    n_unplaced = len(all_unplaced_array)
+    n_available = len(all_available_array)
+    
+    if n_unplaced <= 1 or n_available <= 1:
+        return score
+    
+    # Calculate number of pairs
+    n_item_pairs = n_unplaced * (n_unplaced - 1) // 2
+    n_pos_pairs = n_available * (n_available - 1) // 2
+    
+    # Create arrays to hold pair scores
+    item_pair_scores = np.zeros(n_item_pairs, dtype=np.float32)
+    pos_pair_scores = np.zeros(n_pos_pairs, dtype=np.float32)
+    
+    # Extract item pair scores (both directions)
+    idx = 0
+    for i in range(n_unplaced):
+        for j in range(i + 1, n_unplaced):
+            item_i = all_unplaced_array[i]
+            item_j = all_unplaced_array[j]
+            # Sum of both directions
+            item_pair_scores[idx] = (item_pair_score_matrix_full[item_i, item_j] + 
+                                     item_pair_score_matrix_full[item_j, item_i])
+            idx += 1
+    
+    # Extract position pair scores (both directions)
+    idx = 0
+    for i in range(n_available):
+        for j in range(i + 1, n_available):
+            pos_i = all_available_array[i]
+            pos_j = all_available_array[j]
+            # Sum of both directions
+            pos_pair_scores[idx] = (position_score_matrix_full[pos_i, pos_j] + 
+                                   position_score_matrix_full[pos_j, pos_i])
+            idx += 1
+    
+    # Sort scores in descending order
+    item_pair_scores = np.sort(item_pair_scores)[::-1]
+    pos_pair_scores = np.sort(pos_pair_scores)[::-1]
+    
+    # Match highest item pair scores with highest position pair scores
+    n_pairs = min(n_item_pairs, n_pos_pairs)
+    for i in range(n_pairs):
+        # Divide by 2 because we counted both directions
+        score += (item_pair_scores[i] * pos_pair_scores[i]) / 2.0
+    
+    return score
+
+@jit(nopython=True, fastmath=True)
+def compute_cross_interactions(placed_items_idxs, placed_items_pos, all_unplaced_array, all_available_array, 
+                              item_pair_score_matrix_full, position_score_matrix_full):
+    """
+    JIT-compiled function to compute cross-interaction bounds.
+    For each placed item, find best possible interactions with unplaced items.
+    
+    Args:
+        placed_items_idxs: NumPy array of indices of placed items
+        placed_items_pos: NumPy array of positions of placed items
+        all_unplaced_array: NumPy array of indices of unplaced items
+        all_available_array: NumPy array of indices of available positions
+        item_pair_score_matrix_full: Matrix of item pair scores
+        position_score_matrix_full: Matrix of position pair scores
+    
+    Returns:
+        Upper bound on the cross-interaction component
+    """
+    score = 0.0
+    
+    n_placed = len(placed_items_idxs)
+    n_unplaced = len(all_unplaced_array)
+    n_available = len(all_available_array)
+    
+    if n_placed == 0 or n_unplaced == 0 or n_available == 0:
+        return score
+    
+    # For each placed item, find best possible interaction with each unplaced item
+    for p in range(n_placed):
+        item_idx = placed_items_idxs[p]
+        pos_idx = placed_items_pos[p]
+        
+        for u in range(n_unplaced):
+            unplaced_idx = all_unplaced_array[u]
+            best_score = 0.0
+            
+            # Find best position for this unplaced item
+            for a in range(n_available):
+                avail_pos = all_available_array[a]
+                
+                # Forward direction (placed -> unplaced)
+                fwd = (item_pair_score_matrix_full[item_idx, unplaced_idx] * 
+                      position_score_matrix_full[pos_idx, avail_pos])
+                
+                # Backward direction (unplaced -> placed)
+                bwd = (item_pair_score_matrix_full[unplaced_idx, item_idx] * 
+                      position_score_matrix_full[avail_pos, pos_idx])
+                
+                # Total interaction score
+                pair_score = fwd + bwd
+                
+                if pair_score > best_score:
+                    best_score = pair_score
+            
+            # Add best possible score for this pair
+            score += best_score
+    
+    return score
+
+@jit(nopython=True)
+def get_next_item(
+    mapping: np.ndarray,
+    constrained_items: np.ndarray = None  # Change to numpy array
+) -> int:
+    """
+    Get next item to place, prioritizing constrained items if provided.
+    """
+    # Handle no constraints case
+    if constrained_items is None or len(constrained_items) == 0:
+        # Find first unplaced item
+        for item in range(len(mapping)):
+            if mapping[item] < 0:
+                return item
+        return -1
+        
+    # Handle constrained items
+    for item in constrained_items:
+        if mapping[item] < 0:
+            return item
+            
+    # If all constrained items placed, find next unplaced item
+    for item in range(len(mapping)):
+        if mapping[item] < 0:
+            return item
+            
+    return -1
+
+def prepare_complete_arrays(
+    items, positions,
+    norm_item_scores, norm_item_pair_scores,
+    norm_position_scores, norm_position_pair_scores,
+    missing_item_pair_norm_score=1.0, missing_position_pair_norm_score=1.0):
+    """
+    Prepare arrays for scoring the complete layout.
+    """
+    n_items = len(items)  # Total number of items
+    n_positions = len(positions)  # Total number of positions
+    
+    # Create position score matrix for ALL positions
+    position_score_matrix = np.zeros((n_positions, n_positions), dtype=np.float32)
+    for i, pos1 in enumerate(positions):
+        for j, pos2 in enumerate(positions):
+            if i == j:
+                position_score_matrix[i, j] = norm_position_scores.get(pos1.lower(), 0.0)
+            else:
+                position_score_matrix[i, j] = norm_position_pair_scores.get((pos1.lower(), pos2.lower()), 
+                                                                        missing_position_pair_norm_score)
+    
+    # Create item score array for ALL items
+    item_scores = np.array([
+        norm_item_scores.get(item.lower(), 0.0) for item in items
+    ], dtype=np.float32)
+    
+    # Create item_pair score matrix for ALL items
+    item_pair_score_matrix = np.zeros((n_items, n_items), dtype=np.float32)
+    for i, item1 in enumerate(items):
+        for j, item2 in enumerate(items):
+            if i != j:  # Only needed for i != j pairs
+                item_pair_score_matrix[i, j] = norm_item_pair_scores.get((item1.lower(), item2.lower()),
+                                                                       missing_item_pair_norm_score)
+    
+    # Create direct mapping for evaluating a complete layout
+    mapping = np.arange(n_items, dtype=np.int16)
+    
+    return mapping, item_scores, item_pair_score_matrix, position_score_matrix
+
+def complete_and_score_full_layout(
+    partial_mapping: np.ndarray,
+    partial_used: np.ndarray,
+    items_to_assign: str,
+    positions_to_assign: str,
+    items_assigned: str,
+    positions_assigned: str,
+    norm_item_scores: dict,
+    norm_item_pair_scores: dict,
+    norm_position_scores: dict,
+    norm_position_pair_scores: dict
+) -> Tuple[np.ndarray, float, float]:
+    """
+    Complete a partial mapping greedily and score the full 23-24 key layout.
+    Returns (completed_mapping, total_score, cross_interaction_percentage).
+    """
+    # Complete phase 1 greedily
+    mapping = partial_mapping.copy()
+    used = partial_used.copy()
+    
+    for i in range(len(mapping)):
+        if mapping[i] < 0:
+            available = [p for p in range(len(used)) if not used[p]]
+            if available:
+                mapping[i] = available[0]
+                used[mapping[i]] = True
+    
+    # Now create the full layout including phase 2 items
+    # For phase 2, just assign remaining items to remaining positions in order
+    phase2_items = [item for item in items_assigned]
+    phase2_positions = [pos for i, pos in enumerate(positions_assigned)]
+    
+    # Build complete item and position lists
+    all_items = list(items_to_assign) + phase2_items
+    all_positions = list(positions_to_assign) + phase2_positions
+    
+    # Create complete mapping array
+    complete_mapping = np.zeros(len(all_items), dtype=np.int16)
+    
+    # Fill in phase 1 mappings
+    for i, pos_idx in enumerate(mapping):
+        complete_mapping[i] = pos_idx
+    
+    # Fill in phase 2 mappings (they go to positions after phase 1)
+    phase2_start_idx = len(items_to_assign)
+    for i, item in enumerate(phase2_items):
+        complete_mapping[phase2_start_idx + i] = len(positions_to_assign) + i
+    
+    # Prepare arrays for scoring
+    arrays = prepare_complete_arrays(
+        all_items, all_positions,
+        norm_item_scores, norm_item_pair_scores,
+        norm_position_scores, norm_position_pair_scores
+    )
+    
+    final_mapping, item_scores_full, item_pair_score_matrix_full, position_score_matrix_full = arrays
+    
+    # Calculate scores including internal new item scores and potentially cross-interactions
+    # if the matrices are passed
+    total_score, item_score, pair_score = calculate_score_for_new_items(
+        complete_mapping,
+        position_score_matrix_full,
+        item_scores_full,
+        item_pair_score_matrix_full,
+        # Here's the critical part - we're passing None for cross-interaction matrices
+        None, None, None, None  # This means cross-interactions won't be included
+    )
+    
+    # Now separately calculate the cross-interactions
+    cross_score = 0.0
+    cross_count = 0
+    phase1_indices = set(range(len(items_to_assign)))
+    phase2_indices = set(range(len(items_to_assign), len(all_items)))
+    
+    for i in phase1_indices:
+        for j in phase2_indices:
+            pos_i = complete_mapping[i]
+            pos_j = complete_mapping[j]
+            # Both directions
+            cross_score += (item_pair_score_matrix_full[i, j] * position_score_matrix_full[pos_i, pos_j])
+            cross_score += (item_pair_score_matrix_full[j, i] * position_score_matrix_full[pos_j, pos_i])
+            cross_count += 2
+    
+    # Normalize cross_score by count
+    normalized_cross_score = cross_score / cross_count if cross_count > 0 else 0.0
+    
+    # Calculate percentages properly
+    # pair_score is already normalized internal pair interactions
+    # We need to combine normalized values with the right weights
+    if cross_count > 0 or pair_score > 0:
+        # Get the raw counts
+        n_items = len(items_to_assign)
+        internal_pair_count = n_items * (n_items - 1)  # Both directions
+        
+        # Weighted average of normalized scores
+        total_pair_score = ((pair_score * internal_pair_count) + 
+                           (normalized_cross_score * cross_count)) / (internal_pair_count + cross_count)
+                           
+        # Percentage calculation
+    if internal_pair_count + cross_count > 0:
+        cross_percentage = (normalized_cross_score * cross_count) / ((total_pair_score * (internal_pair_count + cross_count))) * 100
+    else:
+        cross_percentage = 0.0
+    
+    # For total score including cross interactions
+    if scoring_mode == 'item_only':
+        final_total_score = item_score
+    elif scoring_mode == 'pair_only':
+        final_total_score = total_pair_score
+    else:  # combined mode
+        final_total_score = item_score * total_pair_score
+    
+    return complete_mapping, final_total_score, cross_percentage
+
+def branch_and_bound_optimal_nsolutions(
+    arrays: tuple,
+    config: dict,
+    n_solutions: int = 5,
+    norm_item_scores: Dict = None,
+    norm_position_scores: Dict = None,
+    norm_item_pair_scores: Dict = None,
+    norm_position_pair_scores: Dict = None,
+    missing_item_pair_norm_score: float = 1.0,
+    missing_position_pair_norm_score: float = 1.0,
+    validate_bounds: bool = False
+) -> List[Tuple[float, Dict[str, str], Dict]]:
+    """
+    Branch and bound implementation using depth-first search. 
+    
+    Uses DFS instead of best-first search because:
+    1. DFS requires only O(depth) memory vs O(width^depth) for best-first
+    2. Simpler implementation without heap management complexity
+    3. With a mathematically sound upper bound for pruning, 
+       the search order doesn't affect optimality
+    
+    Search is conducted in two phases:
+    Phase 1:
+      - Finds all valid arrangements of constrained items ('e', 't') 
+        in constrained positions (F, D, J, K).
+      - Each arrangement marks positions as used/assigned.
+
+    Phase 2: For each Phase 1 solution, arrange remaining items
+      - For each valid arrangement from Phase 1
+        - Uses ONLY the positions that weren't assigned during Phase 1.
+          For example, if a Phase 1 solution put 'e' in F and 't' in J, 
+          then Phase 2 would use remaining positions (not F or J)
+          to arrange the remaining items.
+
+    Args:
+        arrays: Tuple of (item_scores, item_pair_score_matrix, position_score_matrix)
+        config: Configuration dictionary with optimization parameters
+        n_solutions: Number of top solutions to maintain
+
+    Returns:
+        Tuple containing:
+        - List of (score, mapping, detailed_scores) tuples
+        - Total number of permutations processed
+    """
+    debug_print = False
+    pruned_by_bound = 0
+    
+    # Get items and positions from config
+    items_to_assign = config['optimization']['items_to_assign']
+    positions_to_assign = config['optimization']['positions_to_assign']
+    items_to_constrain = config['optimization'].get('items_to_constrain', '')
+    positions_to_constrain = config['optimization'].get('positions_to_constrain', '')
+    items_assigned = config['optimization'].get('items_assigned', '')
+    positions_assigned = config['optimization'].get('positions_assigned', '')
+    
+    # Initialize dimensions and arrays
+    n_items_to_assign = len(items_to_assign)
+    n_positions_to_assign = len(positions_to_assign)
+    permutations_completed = 0
+
+    # Unpack arrays based on whether cross-interaction matrices are included
+    if len(arrays) > 3:
+        item_scores, item_pair_score_matrix, position_score_matrix, cross_item_pair_matrix, cross_position_pair_matrix, reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix = arrays
+    else:
+        item_scores, item_pair_score_matrix, position_score_matrix = arrays
+        cross_item_pair_matrix = None
+        cross_position_pair_matrix = None
+        reverse_cross_item_pair_matrix = None
+        reverse_cross_position_pair_matrix = None
+        
+    # Initialize search structures
+    solutions = []  # Will store (score, scores, mapping) tuples
+    worst_top_n_score = np.float32(-np.inf)
+    
+    # Initialize mapping and used positions
+    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int16)
+    initial_used = np.zeros(n_positions_to_assign, dtype=np.bool_)
+
+    # Track statistics
+    processed_nodes = 0
+    pruned_count = 0
+    explored_count = 0
+    last_progress_update = 0
+    progress_update_interval = 1000000  # Print progress every X permutations
+
+    # Handle pre-assigned items
+    if items_assigned:
+        item_to_idx = {item: idx for idx, item in enumerate(items_to_assign)}
+        position_to_pos = {position: pos for pos, position in enumerate(positions_to_assign)}
+        
+        for item, position in zip(items_assigned, positions_assigned):
+            if item in item_to_idx and position in position_to_pos:
+                idx = item_to_idx[item]
+                pos = position_to_pos[position]
+                initial_mapping[idx] = pos
+                initial_used[pos] = True
+                if debug_print:
+                    print(f"Pre-assigned: {item} -> {position} (position {pos})")
+        
+    # Calculate phase perms
+    if items_to_constrain:
+        # Set up constraint tracking
+        constrained_items = set(items_to_constrain.lower())
+        constrained_positions = set(i for i, position in enumerate(positions_to_assign) 
+                                if position.upper() in positions_to_constrain.upper())
+        constrained_item_indices = set(i for i, item in enumerate(items_to_assign) 
+                                    if item in constrained_items)
+        n_constrained = len(constrained_items)
+
+        total_perms_phase1 = perm(len(constrained_positions), len(constrained_items))
+    else:
+        constrained_items = None
+        constrained_positions = None
+        constrained_item_indices = None
+        n_constrained = 0
+        total_perms_phase1 = 0
+
+    n_phase2_remaining_items = n_items_to_assign - n_constrained
+    n_phase2_available_positions = n_positions_to_assign - n_constrained
+    n_perms_per_phase1_solution = perm(n_phase2_available_positions, n_phase2_remaining_items)
+    total_perms_phase2 = n_perms_per_phase1_solution * total_perms_phase1
+
+    if n_constrained:
+        print(f"\nPhase 1 (constrained items): {total_perms_phase1:,} permutations")
+        print(f"Phase 2 (remaining items): {total_perms_phase2:,} permutations")
+    
+    #-------------------------------------------------------------------------
+    # Phase 1: Find all valid arrangements of constrained items
+    #-------------------------------------------------------------------------
+    def phase1_dfs(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: tqdm) -> List[Tuple[np.ndarray, np.ndarray]]:
+        """DFS for Phase 1 (constrained items)."""
+        solutions = []
+        
+        # Found a valid phase 1 arrangement
+        if all(mapping[i] >= 0 for i in constrained_item_indices):
+            solutions.append((mapping.copy(), used.copy()))
+            pbar.update(1)
+            return solutions
+            
+        # Try next constrained item
+        current_item_idx = -1
+        for i in constrained_item_indices:
+            if mapping[i] < 0:
+                current_item_idx = i
+                break
+                
+        # Try each constrained position
+        for pos in constrained_positions:
+            if not used[pos]:
+                # Store original values for backtracking
+                old_value = mapping[current_item_idx]
+                
+                # Make changes in-place
+                mapping[current_item_idx] = pos
+                used[pos] = True
+                
+                # Recursive call with the modified arrays
+                sub_solutions = phase1_dfs(mapping, used, depth + 1, pbar)
+                solutions.extend(sub_solutions)
+                
+                # Backtrack: restore original state
+                mapping[current_item_idx] = old_value
+                used[pos] = False
+
+        return solutions
+
+    if n_constrained:
+        phase1_solutions = []
+        with tqdm(total=total_perms_phase1, desc="Phase 1", unit='perms') as pbar:
+            phase1_solutions = phase1_dfs(initial_mapping, initial_used, 0, pbar)      
+        print(f"\nFound {len(phase1_solutions)} valid phase 1 arrangements")
+    
+    #-------------------------------------------------------------------------
+    # Phase 2: For each Phase 1 solution, arrange remaining items
+    #-------------------------------------------------------------------------
+    def phase2_dfs(initial_mapping, initial_used, initial_depth, pbar):
+        """Iterative version of DFS for Phase 2 using an explicit stack."""
+        # Stack entries: (mapping, used, depth, path_str)
+        stack = [(initial_mapping.copy(), initial_used.copy(), initial_depth, "")]
+        
+        # Use nonlocal variables from outer function
+        nonlocal solutions, worst_top_n_score, processed_nodes, pruned_count, explored_count
+        nonlocal last_progress_update, permutations_completed
+
+        # Initialize the counter for negative bounds
+        negative_bound_count = 0
+
+        while stack:
+            # Get current state from stack
+            mapping, used, depth, path_str = stack.pop()
+            
+            # Count this node as processed
+            processed_nodes += 1
+            
+            # Do garbage collection periodically
+            if processed_nodes % 100000 == 0:
+                gc.collect()
+                gc.collect() # Force a second collection pass
+            
+            # Update progress periodically
+            if processed_nodes - last_progress_update >= progress_update_interval:
+                pbar.update(processed_nodes - last_progress_update)
+                last_progress_update = processed_nodes
+                if debug_print:
+                    print(f"\nProgress: {processed_nodes:,} permutations processed")
+                    print(f"Pruned: {pruned_count:,}, Explored: {explored_count:,}")
+                    print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
+                    if solutions:
+                        print(f"Current best score: {solutions[-1][0]:.9f}")
+            
+            # Process complete solutions
+            if depth == n_items_to_assign:
+                permutations_completed += 1
+                if n_constrained:
+                    if not validate_mapping(mapping, constrained_item_indices, constrained_positions):
+                        continue  # Skip to next stack item
+                
+                # Calculate score
+                total_score, item_component, item_pair_component = calculate_score_for_new_items(
+                    mapping, 
+                    position_score_matrix, 
+                    item_scores, 
+                    item_pair_score_matrix,
+                    cross_item_pair_matrix, 
+                    cross_position_pair_matrix,
+                    reverse_cross_item_pair_matrix, 
+                    reverse_cross_position_pair_matrix
+                )
+                
+                # Check if solution qualifies
+                worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
+                margin = total_score - worst_minus_epsilon
+                if len(solutions) < n_solutions or margin > 0:
+                    solution = (
+                        total_score, item_component, item_pair_component, mapping.tolist()
+                    )
+                    solutions.append(solution)
+                    solutions.sort(key=lambda x: x[0])
+                    if len(solutions) > n_solutions:
+                        solutions.pop(0)
+                    worst_top_n_score = solutions[0][0]
+                
+                # Skip to next stack item
+                continue
+            
+            # Find next unassigned item
+            current_item_idx = get_next_item(mapping)
+            if current_item_idx == -1:
+                continue  # Skip to next stack item
+            
+            # Update path for debugging
+            if debug_print:
+                new_path = path_str + items_to_assign[current_item_idx]
+            
+            # Get valid positions
+            if n_constrained and current_item_idx in constrained_item_indices:
+                valid_positions = [pos for pos in constrained_positions if not used[pos]]
+            else:
+                valid_positions = [pos for pos in range(n_positions_to_assign) if not used[pos]]
+            
+            if debug_print:
+                print(f"\nPlacing item {items_to_assign[current_item_idx]} (idx {current_item_idx})")
+                print("Current mapping: ", mapping)
+                print(f"Valid positions: {valid_positions} ({[positions_to_assign[p] for p in valid_positions]})")
+            
+            # Try positions in reverse order (so first one is popped first)
+            for pos in reversed(valid_positions):
+                if debug_print:
+                    print(f"  Trying {items_to_assign[current_item_idx]} in position {positions_to_assign[pos]}")
+                
+                # Temporarily modify the mapping and used arrays in-place (just for the pruning decision)
+                mapping[current_item_idx] = pos
+                used[pos] = True
+                
+                # Pruning decision
+                should_prune = False
+                if len(solutions) > 0:
+
+                    # Prepare full arrays if not already done
+                    if 'item_scores_full' not in locals():
+                        all_items = items_to_assign + items_assigned
+                        all_positions = positions_to_assign + positions_assigned
+                        arrays_full = prepare_arrays(
+                            all_items, all_positions,
+                            norm_item_scores, norm_item_pair_scores,
+                            norm_position_scores, norm_position_pair_scores,
+                            missing_item_pair_norm_score, missing_position_pair_norm_score
+                        )
+                        item_scores_full, item_pair_score_matrix_full, position_score_matrix_full = arrays_full[:3]
+
+                    upper_bound = calculate_upper_bound(
+                        mapping, used,
+                        position_score_matrix_full,
+                        item_scores_full, 
+                        item_pair_score_matrix_full,
+                        cross_item_pair_matrix=cross_item_pair_matrix,
+                        cross_position_pair_matrix=cross_position_pair_matrix,
+                        reverse_cross_item_pair_matrix=reverse_cross_item_pair_matrix,
+                        reverse_cross_position_pair_matrix=reverse_cross_position_pair_matrix,
+                        items_assigned=items_assigned,
+                        positions_assigned=positions_assigned
+                    )
+                    
+                    # Validate the bound
+                    if validate_bounds and len(solutions) > 0:
+                        # Calculate parameters for the debug function
+                        n_phase1_items = len(items_to_assign)
+                        n_phase1_positions = len(positions_to_assign)
+                        n_phase2_items = len(items_assigned) if items_assigned else 0
+                        n_phase2_positions = len(positions_assigned) if positions_assigned else 0
+                        
+                        # Get the full arrays if not already calculated
+                        if 'item_scores_full' not in locals():
+                            all_items = items_to_assign + items_assigned
+                            all_positions = positions_to_assign + positions_assigned
+                            arrays_full = prepare_arrays(
+                                all_items, all_positions,
+                                norm_item_scores, norm_item_pair_scores,
+                                norm_position_scores, norm_position_pair_scores,
+                                missing_item_pair_norm_score, missing_position_pair_norm_score
+                            )
+                            item_scores_full, item_pair_score_matrix_full, position_score_matrix_full = arrays_full[:3]
+                        
+                        # Debug the bound
+                        gap, _, _ = debug_upper_bound(
+                            mapping, used,
+                            n_phase1_items, n_phase1_positions,
+                            n_phase2_items, n_phase2_positions,
+                            item_scores_full, item_pair_score_matrix_full,
+                            position_score_matrix_full,
+                            items_to_assign, positions_to_assign,
+                            items_assigned, positions_assigned,
+                            norm_item_scores, norm_item_pair_scores,
+                            norm_position_scores, norm_position_pair_scores,
+                            verbose=False
+                        )
+
+                        if gap < 0:
+                            print(f"\n⚠️ Invalid bound detected: {gap:.6f}")
+                            negative_bound_count += 1
+
+                    margin = upper_bound - worst_top_n_score
+                    
+                    epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
+                    if margin < epsilon:
+                        should_prune = True
+                
+                # Restore the original state before making a copy
+                mapping[current_item_idx] = -1  # Restore to unassigned
+                used[pos] = False
+                
+                if should_prune:
+                    pruned_count += 1
+                    pruned_by_bound += 1
+                else:
+                    explored_count += 1
+                    # Only make copies when needed (after pruning decision)
+                    new_mapping = mapping.copy()
+                    new_mapping[current_item_idx] = pos
+                    new_used = used.copy()
+                    new_used[pos] = True
+                    
+                    # Add to stack
+                    stack.append((
+                        new_mapping,
+                        new_used,
+                        depth + 1,
+                        new_path if debug_print else ""
+                    ))
+
+        print(f"Pruned by bounds: {pruned_by_bound}/{processed_nodes} nodes ({pruned_by_bound/processed_nodes*100:.2f}%)")
+
+        if validate_bounds and negative_bound_count > 0:
+            print(f"\n⚠️ Warning: {negative_bound_count} invalid bounds detected during optimization!")
+            print("This may mean the optimization did not find the true optimal solution.")
+
+    current_phase1_solution_index = 0
+
+    # Estimate the total number of nodes in the search tree (an approximation)
+    estimated_nodes = total_perms_phase2 * 1.5  # Add some buffer for internal nodes
+
+    with tqdm(total=estimated_nodes, desc="Phase 2", unit=' nodes') as pbar:
+        if n_constrained:
+            for phase1_mapping, phase1_used in phase1_solutions:
+                print(f"\nProcessing Phase 1 solution {current_phase1_solution_index + 1}/{len(phase1_solutions)}")
+                
+                # Calculate initial depth based on assigned items
+                initial_depth = sum(1 for i in range(n_items_to_assign) if phase1_mapping[i] >= 0)
+                
+                # Start DFS from this phase 1 solution
+                phase2_dfs(phase1_mapping, phase1_used, initial_depth, pbar)
+                
+                current_phase1_solution_index += 1
+        else:
+            # Calculate initial depth based on assigned items
+            initial_depth = sum(1 for i in range(n_items_to_assign))
+            
+            # Start DFS from this phase 1 solution
+            phase2_dfs(initial_mapping, initial_used, 0, pbar)
+
+    # Convert final solutions to return format
+    return_solutions = []
+    for score, item_score, item_pair_score, mapping_list in reversed(solutions):
+        mapping = np.array(mapping_list, dtype=np.int16)
+        item_mapping = dict(zip(items_to_assign, [positions_to_assign[i] for i in mapping]))
+        
+        # Build complete mapping including pre-assigned items
+        complete_mapping = dict(zip(items_assigned, positions_assigned))
+        complete_mapping.update(item_mapping)
+        all_items = list(complete_mapping.keys())
+        all_positions = list(complete_mapping.values())
+        
+        # Calculate score for the complete layout if there are pre-assigned items
+        if items_assigned:
+            # Prepare arrays for the complete layout
+            complete_mapping_array, complete_item_scores, complete_item_pair_score_matrix, complete_position_score_matrix = (
+                prepare_complete_arrays(
+                    all_items, all_positions, 
+                    norm_item_scores, norm_item_pair_scores,
+                    norm_position_scores, norm_position_pair_scores,
+                    missing_item_pair_norm_score, missing_position_pair_norm_score
+                )
+            )
+            
+            # Calculate score for the complete layout
+            complete_score, complete_item_score, complete_item_pair_score = (
+                calculate_score_for_new_items(
+                    complete_mapping_array,
+                    complete_position_score_matrix, 
+                    complete_item_scores,
+                    complete_item_pair_score_matrix,
+                    None,  # cross_item_pair_matrix
+                    None,  # cross_position_pair_matrix
+                    None,  # reverse_cross_item_pair_matrix
+                    None   # reverse_cross_position_pair_matrix
+                )
+            )
+            
+            # Use the complete scores
+            score = complete_score
+            item_score = complete_item_score
+            item_pair_score = complete_item_pair_score
+        
+        return_solutions.append((
+            score,
+            item_mapping,
+            {'total': {
+                'total_score': score,
+                'item_pair_score': item_pair_score,
+                'item_score': item_score
+            }}
+        ))
+
+    # Ensure progress bar is fully updated at the end
+    if processed_nodes > last_progress_update:
+        pbar.update(processed_nodes - last_progress_update)
+    
+    # Print final statistics
+    print(f"\nFinal statistics:")
+    print(f"Permutations completed: {permutations_completed:,}")
+    print(f"Nodes processed: {processed_nodes:,}")
+    print(f"Branches pruned: {pruned_count:,}")
+    print(f"Branches explored: {explored_count:,}")
+    if pruned_count + explored_count > 0:
+        print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
+    
+    return return_solutions, processed_nodes, permutations_completed
+
+#-----------------------------------------------------------------------------
+# Debugging functions
+#-----------------------------------------------------------------------------
+def debug_upper_bound(
+    mapping: np.ndarray,
+    used: np.ndarray,
+    phase1_items: int,
+    phase1_positions: int,
+    phase2_items: int,
+    phase2_positions: int,
+    item_scores_full: np.ndarray,
+    item_pair_score_matrix_full: np.ndarray,
+    position_score_matrix_full: np.ndarray,
+    items_to_assign: str,
+    positions_to_assign: str,
+    items_assigned: str,
+    positions_assigned: str,
+    norm_item_scores: dict,
+    norm_item_pair_scores: dict,
+    norm_position_scores: dict,
+    norm_position_pair_scores: dict,
+    verbose: bool = True
+):
+    """
+    Debug the full layout upper bound calculation by comparing it with a completed solution.
+    This helps identify issues where the upper bound is incorrectly lower than
+    an achievable score, which would lead to incorrect pruning during optimization.
+    """
+    # Calculate the full layout upper bound
+    full_upper_bound = calculate_upper_bound(
+        mapping, used,
+        position_score_matrix_full,
+        item_scores_full,
+        item_pair_score_matrix_full,
+        cross_item_pair_matrix=None,
+        cross_position_pair_matrix=None,
+        reverse_cross_item_pair_matrix=None,
+        reverse_cross_position_pair_matrix=None,
+        items_assigned=items_assigned,
+        positions_assigned=positions_assigned
+    )
+    
+    # Complete the solution greedily and score it
+    completed_mapping, actual_score, cross_percentage = complete_and_score_full_layout(
+        mapping.copy(), used.copy(),
+        items_to_assign, positions_to_assign,
+        items_assigned, positions_assigned,
+        norm_item_scores, norm_item_pair_scores,
+        norm_position_scores, norm_position_pair_scores
+    )
+    
+    # This should NEVER be negative!
+    gap = full_upper_bound - actual_score
+    if gap < 0:
+        if verbose:
+            print(f"ERROR: Full upper bound {full_upper_bound:.6f} < actual {actual_score:.6f}")
+            print(f"Gap: {gap:.6f}")
+            print(f"Mapping: {mapping}")
+            
+            # Additional debugging information
+            print("\nDetailed breakdown:")
+            
+            print(f"Phase 1 items: {phase1_items}, positions: {phase1_positions}")
+            print(f"Phase 2 items: {phase2_items}, positions: {phase2_positions}")
+            
+            # Calculate metrics for the completed solution
+            print(f"Cross-interaction percentage in completed solution: {cross_percentage:.1f}%")
+    else:
+        if verbose:
+            print(f"Valid full upper bound: {full_upper_bound:.6f} >= actual {actual_score:.6f}")
+            print(f"Gap: {gap:.6f}")
+    
+    return gap, full_upper_bound, actual_score
+      
 def analyze_upper_bound_quality(
     config, 
     sample_size=1000, 
@@ -1357,474 +2302,154 @@ def analyze_upper_bound_quality(
     print("\nSuggested buffer value: Choose the smallest buffer that has <1% risk of pruning good solutions")
     print("=== END ANALYSIS ===\n")
 
-@jit(nopython=True)
-def get_next_item(
-    mapping: np.ndarray,
-    constrained_items: np.ndarray = None  # Change to numpy array
-) -> int:
+def validate_bounds_statistically(
+    config, 
+    n_trials=10000, 
+    print_progress=True
+):
     """
-    Get next item to place, prioritizing constrained items if provided.
-    """
-    # Handle no constraints case
-    if constrained_items is None or len(constrained_items) == 0:
-        # Find first unplaced item
-        for item in range(len(mapping)):
-            if mapping[item] < 0:
-                return item
-        return -1
-        
-    # Handle constrained items
-    for item in constrained_items:
-        if mapping[item] < 0:
-            return item
-            
-    # If all constrained items placed, find next unplaced item
-    for item in range(len(mapping)):
-        if mapping[item] < 0:
-            return item
-            
-    return -1
-
-def prepare_complete_arrays(
-    items, positions,
-    norm_item_scores, norm_item_pair_scores,
-    norm_position_scores, norm_position_pair_scores,
-    missing_item_pair_norm_score=1.0, missing_position_pair_norm_score=1.0):
-    """
-    Prepare arrays for scoring the complete layout.
-    """
-    n_items = len(items)  # Total number of items
-    n_positions = len(positions)  # Total number of positions
+    Statistically validate that upper bounds are never lower than achievable scores
+    by testing many random partial mappings.
     
-    # Create position score matrix for ALL positions
-    position_score_matrix = np.zeros((n_positions, n_positions), dtype=np.float32)
-    for i, pos1 in enumerate(positions):
-        for j, pos2 in enumerate(positions):
-            if i == j:
-                position_score_matrix[i, j] = norm_position_scores.get(pos1.lower(), 0.0)
-            else:
-                position_score_matrix[i, j] = norm_position_pair_scores.get((pos1.lower(), pos2.lower()), 
-                                                                        missing_position_pair_norm_score)
-    
-    # Create item score array for ALL items
-    item_scores = np.array([
-        norm_item_scores.get(item.lower(), 0.0) for item in items
-    ], dtype=np.float32)
-    
-    # Create item_pair score matrix for ALL items
-    item_pair_score_matrix = np.zeros((n_items, n_items), dtype=np.float32)
-    for i, item1 in enumerate(items):
-        for j, item2 in enumerate(items):
-            if i != j:  # Only needed for i != j pairs
-                item_pair_score_matrix[i, j] = norm_item_pair_scores.get((item1.lower(), item2.lower()),
-                                                                       missing_item_pair_norm_score)
-    
-    # Create direct mapping for evaluating a complete layout
-    mapping = np.arange(n_items, dtype=np.int16)
-    
-    return mapping, item_scores, item_pair_score_matrix, position_score_matrix
-
-def branch_and_bound_optimal_nsolutions(
-    arrays: tuple,
-    config: dict,
-    n_solutions: int = 5,
-    norm_item_scores: Dict = None,
-    norm_position_scores: Dict = None,
-    norm_item_pair_scores: Dict = None,
-    norm_position_pair_scores: Dict = None,
-    missing_item_pair_norm_score: float = 1.0,
-    missing_position_pair_norm_score: float = 1.0
-) -> List[Tuple[float, Dict[str, str], Dict]]:
-    """
-    Branch and bound implementation using depth-first search. 
-    
-    Uses DFS instead of best-first search because:
-    1. DFS requires only O(depth) memory vs O(width^depth) for best-first
-    2. Simpler implementation without heap management complexity
-    3. With a mathematically sound upper bound for pruning, 
-       the search order doesn't affect optimality
-    
-    Search is conducted in two phases:
-    Phase 1:
-      - Finds all valid arrangements of constrained items ('e', 't') 
-        in constrained positions (F, D, J, K).
-      - Each arrangement marks positions as used/assigned.
-
-    Phase 2: For each Phase 1 solution, arrange remaining items
-      - For each valid arrangement from Phase 1
-        - Uses ONLY the positions that weren't assigned during Phase 1.
-          For example, if a Phase 1 solution put 'e' in F and 't' in J, 
-          then Phase 2 would use remaining positions (not F or J)
-          to arrange the remaining items.
-
     Args:
-        arrays: Tuple of (item_scores, item_pair_score_matrix, position_score_matrix)
-        config: Configuration dictionary with optimization parameters
-        n_solutions: Number of top solutions to maintain
-
+        config: Configuration dictionary
+        n_trials: Number of random trials to run
+        print_progress: Whether to print progress
+        
     Returns:
-        Tuple containing:
-        - List of (score, mapping, detailed_scores) tuples
-        - Total number of permutations processed
+        dict: Statistics about bound validity and tightness
     """
-    debug_print = False
-    
-    # Get items and positions from config
+    # Load data
     items_to_assign = config['optimization']['items_to_assign']
     positions_to_assign = config['optimization']['positions_to_assign']
-    items_to_constrain = config['optimization'].get('items_to_constrain', '')
-    positions_to_constrain = config['optimization'].get('positions_to_constrain', '')
     items_assigned = config['optimization'].get('items_assigned', '')
     positions_assigned = config['optimization'].get('positions_assigned', '')
     
-    # Initialize dimensions and arrays
-    n_items_to_assign = len(items_to_assign)
-    n_positions_to_assign = len(positions_to_assign)
-    permutations_completed = 0
-
-    # Unpack arrays based on whether cross-interaction matrices are included
-    if len(arrays) > 3:
-        item_scores, item_pair_score_matrix, position_score_matrix, cross_item_pair_matrix, cross_position_pair_matrix, reverse_cross_item_pair_matrix, reverse_cross_position_pair_matrix = arrays
+    # Load scores
+    norm_item_scores, norm_item_pair_scores, norm_position_scores, norm_position_pair_scores = load_scores(config)
+    
+    # Prepare full arrays
+    all_items = items_to_assign + items_assigned
+    all_positions = positions_to_assign + positions_assigned
+    arrays_full = prepare_arrays(
+        all_items, all_positions,
+        norm_item_scores, norm_item_pair_scores,
+        norm_position_scores, norm_position_pair_scores
+    )
+    item_scores_full, item_pair_score_matrix_full, position_score_matrix_full = arrays_full[:3]
+    
+    # Setup for trials
+    n_items = len(items_to_assign)
+    n_positions = len(positions_to_assign)
+    phase1_items = len(items_to_assign)
+    phase1_positions = len(positions_to_assign)
+    phase2_items = len(items_assigned)
+    phase2_positions = len(positions_assigned)
+    
+    gaps = []
+    depths = []
+    invalid_bounds = 0
+    
+    # Run trials
+    iterator = tqdm(range(n_trials)) if print_progress else range(n_trials)
+    for _ in iterator:
+        # Generate random partial mapping
+        depth = np.random.randint(0, min(n_items, 6))  # Random depth up to 5
+        depths.append(depth)
+        
+        # Create random partial mapping at this depth
+        mapping = np.full(n_items, -1, dtype=np.int16)
+        used = np.zeros(n_positions, dtype=np.bool_)
+        
+        # Randomly place 'depth' number of items
+        positions = list(range(n_positions))
+        np.random.shuffle(positions)
+        for i in range(depth):
+            if i < n_items:  # Make sure we don't go out of bounds
+                mapping[i] = positions[i]
+                used[positions[i]] = True
+        
+        # Calculate upper bound
+        upper_bound = calculate_upper_bound(
+            mapping, used,
+            position_score_matrix_full,
+            item_scores_full,
+            item_pair_score_matrix_full,
+            cross_item_pair_matrix=None,
+            cross_position_pair_matrix=None,
+            reverse_cross_item_pair_matrix=None,
+            reverse_cross_position_pair_matrix=None,
+            items_assigned=items_assigned,
+            positions_assigned=positions_assigned
+        )
+        
+        # Complete solution and get actual score
+        completed_mapping, actual_score, _ = complete_and_score_full_layout(
+            mapping.copy(), used.copy(),
+            items_to_assign, positions_to_assign,
+            items_assigned, positions_assigned,
+            norm_item_scores, norm_item_pair_scores,
+            norm_position_scores, norm_position_pair_scores
+        )
+        
+        # Calculate gap and check validity
+        gap = upper_bound - actual_score
+        gaps.append(gap)
+        
+        if gap < 0:
+            invalid_bounds += 1
+            if print_progress:
+                print(f"\nInvalid bound detected: {upper_bound:.6f} < {actual_score:.6f}")
+                print(f"Gap: {gap:.6f}, Depth: {depth}")
+    
+    # Analyze results
+    min_gap = min(gaps)
+    max_gap = max(gaps)
+    avg_gap = sum(gaps) / len(gaps)
+    
+    # Results by depth
+    depth_stats = {}
+    for d in sorted(set(depths)):
+        d_gaps = [gaps[i] for i in range(len(gaps)) if depths[i] == d]
+        depth_stats[d] = {
+            'count': len(d_gaps),
+            'min_gap': min(d_gaps),
+            'avg_gap': sum(d_gaps) / len(d_gaps),
+            'invalid': sum(1 for g in d_gaps if g < 0)
+        }
+    
+    # Print results
+    print("\n=== UPPER BOUND VALIDATION RESULTS ===")
+    if invalid_bounds == 0:
+        print(f"✅ VALID: All {n_trials} bounds were valid!")
     else:
-        item_scores, item_pair_score_matrix, position_score_matrix = arrays
-        cross_item_pair_matrix = None
-        cross_position_pair_matrix = None
-        reverse_cross_item_pair_matrix = None
-        reverse_cross_position_pair_matrix = None
-        
-    # Initialize search structures
-    solutions = []  # Will store (score, scores, mapping) tuples
-    worst_top_n_score = np.float32(-np.inf)
+        print(f"❌ INVALID: Found {invalid_bounds}/{n_trials} invalid bounds ({invalid_bounds/n_trials*100:.2f}%)")
     
-    # Initialize mapping and used positions
-    initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int16)
-    initial_used = np.zeros(n_positions_to_assign, dtype=np.bool_)
-
-    # Track statistics
-    processed_nodes = 0
-    pruned_count = 0
-    explored_count = 0
-    last_progress_update = 0
-    progress_update_interval = 1000000  # Print progress every X permutations
-
-    # Handle pre-assigned items
-    if items_assigned:
-        item_to_idx = {item: idx for idx, item in enumerate(items_to_assign)}
-        position_to_pos = {position: pos for pos, position in enumerate(positions_to_assign)}
-        
-        for item, position in zip(items_assigned, positions_assigned):
-            if item in item_to_idx and position in position_to_pos:
-                idx = item_to_idx[item]
-                pos = position_to_pos[position]
-                initial_mapping[idx] = pos
-                initial_used[pos] = True
-                if debug_print:
-                    print(f"Pre-assigned: {item} -> {position} (position {pos})")
-        
-    # Calculate phase perms
-    if items_to_constrain:
-        # Set up constraint tracking
-        constrained_items = set(items_to_constrain.lower())
-        constrained_positions = set(i for i, position in enumerate(positions_to_assign) 
-                                if position.upper() in positions_to_constrain.upper())
-        constrained_item_indices = set(i for i, item in enumerate(items_to_assign) 
-                                    if item in constrained_items)
-        n_constrained = len(constrained_items)
-
-        total_perms_phase1 = perm(len(constrained_positions), len(constrained_items))
+    print(f"\nGap Statistics:")
+    print(f"  Minimum gap: {min_gap:.6f}")
+    print(f"  Maximum gap: {max_gap:.6f}")
+    print(f"  Average gap: {avg_gap:.6f}")
+    
+    print("\nDepth-wise Analysis:")
+    for d, stats in depth_stats.items():
+        print(f"  Depth {d}: {stats['count']} trials, avg gap {stats['avg_gap']:.6f}, " + 
+              (f"❌ {stats['invalid']} invalid" if stats['invalid'] > 0 else "✅ valid"))
+    
+    if invalid_bounds > 0:
+        print("\n⚠️ Your upper bound calculation is incorrect and may prune optimal solutions!")
     else:
-        constrained_items = None
-        constrained_positions = None
-        constrained_item_indices = None
-        n_constrained = 0
-        total_perms_phase1 = 0
-
-    n_phase2_remaining_items = n_items_to_assign - n_constrained
-    n_phase2_available_positions = n_positions_to_assign - n_constrained
-    n_perms_per_phase1_solution = perm(n_phase2_available_positions, n_phase2_remaining_items)
-    total_perms_phase2 = n_perms_per_phase1_solution * total_perms_phase1
-
-    if n_constrained:
-        print(f"\nPhase 1 (constrained items): {total_perms_phase1:,} permutations")
-        print(f"Phase 2 (remaining items): {total_perms_phase2:,} permutations")
+        print("\n✅ Your upper bound calculation appears to be valid.")
+        print(f"   Average gap of {avg_gap:.6f} (smaller gaps mean tighter bounds and more efficient pruning)")
     
-    #-------------------------------------------------------------------------
-    # Phase 1: Find all valid arrangements of constrained items
-    #-------------------------------------------------------------------------
-    def phase1_dfs(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: tqdm) -> List[Tuple[np.ndarray, np.ndarray]]:
-        """DFS for Phase 1 (constrained items)."""
-        solutions = []
-        
-        # Found a valid phase 1 arrangement
-        if all(mapping[i] >= 0 for i in constrained_item_indices):
-            solutions.append((mapping.copy(), used.copy()))
-            pbar.update(1)
-            return solutions
-            
-        # Try next constrained item
-        current_item_idx = -1
-        for i in constrained_item_indices:
-            if mapping[i] < 0:
-                current_item_idx = i
-                break
-                
-        # Try each constrained position
-        for pos in constrained_positions:
-            if not used[pos]:
-                # Store original values for backtracking
-                old_value = mapping[current_item_idx]
-                
-                # Make changes in-place
-                mapping[current_item_idx] = pos
-                used[pos] = True
-                
-                # Recursive call with the modified arrays
-                sub_solutions = phase1_dfs(mapping, used, depth + 1, pbar)
-                solutions.extend(sub_solutions)
-                
-                # Backtrack: restore original state
-                mapping[current_item_idx] = old_value
-                used[pos] = False
-
-        return solutions
-
-    if n_constrained:
-        phase1_solutions = []
-        with tqdm(total=total_perms_phase1, desc="Phase 1", unit='perms') as pbar:
-            phase1_solutions = phase1_dfs(initial_mapping, initial_used, 0, pbar)      
-        print(f"\nFound {len(phase1_solutions)} valid phase 1 arrangements")
-    
-    #-------------------------------------------------------------------------
-    # Phase 2: For each Phase 1 solution, arrange remaining items
-    #-------------------------------------------------------------------------
-    def phase2_dfs(initial_mapping, initial_used, initial_depth, pbar):
-        """Iterative version of DFS for Phase 2 using an explicit stack."""
-        # Stack entries: (mapping, used, depth, path_str)
-        stack = [(initial_mapping.copy(), initial_used.copy(), initial_depth, "")]
-        
-        # Use nonlocal variables from outer function
-        nonlocal solutions, worst_top_n_score, processed_nodes, pruned_count, explored_count
-        nonlocal last_progress_update, permutations_completed
-        
-        while stack:
-            # Get current state from stack
-            mapping, used, depth, path_str = stack.pop()
-            
-            # Count this node as processed
-            processed_nodes += 1
-            
-            # Do garbage collection periodically
-            if processed_nodes % 100000 == 0:
-                gc.collect()
-                gc.collect() # Force a second collection pass
-            
-            # Update progress periodically
-            if processed_nodes - last_progress_update >= progress_update_interval:
-                pbar.update(processed_nodes - last_progress_update)
-                last_progress_update = processed_nodes
-                if debug_print:
-                    print(f"\nProgress: {processed_nodes:,} permutations processed")
-                    print(f"Pruned: {pruned_count:,}, Explored: {explored_count:,}")
-                    print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
-                    if solutions:
-                        print(f"Current best score: {solutions[-1][0]:.9f}")
-            
-            # Process complete solutions
-            if depth == n_items_to_assign:
-                permutations_completed += 1
-                if n_constrained:
-                    if not validate_mapping(mapping, constrained_item_indices, constrained_positions):
-                        continue  # Skip to next stack item
-                
-                # Calculate score
-                total_score, item_component, item_pair_component = calculate_score_for_new_items(
-                    mapping, 
-                    position_score_matrix, 
-                    item_scores, 
-                    item_pair_score_matrix,
-                    cross_item_pair_matrix, 
-                    cross_position_pair_matrix,
-                    reverse_cross_item_pair_matrix, 
-                    reverse_cross_position_pair_matrix
-                )
-                
-                # Check if solution qualifies
-                worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
-                margin = total_score - worst_minus_epsilon
-                if len(solutions) < n_solutions or margin > 0:
-                    solution = (
-                        total_score, item_component, item_pair_component, mapping.tolist()
-                    )
-                    solutions.append(solution)
-                    solutions.sort(key=lambda x: x[0])
-                    if len(solutions) > n_solutions:
-                        solutions.pop(0)
-                    worst_top_n_score = solutions[0][0]
-                
-                # Skip to next stack item
-                continue
-            
-            # Find next unassigned item
-            current_item_idx = get_next_item(mapping)
-            if current_item_idx == -1:
-                continue  # Skip to next stack item
-            
-            # Update path for debugging
-            if debug_print:
-                new_path = path_str + items_to_assign[current_item_idx]
-            
-            # Get valid positions
-            if n_constrained and current_item_idx in constrained_item_indices:
-                valid_positions = [pos for pos in constrained_positions if not used[pos]]
-            else:
-                valid_positions = [pos for pos in range(n_positions_to_assign) if not used[pos]]
-            
-            if debug_print:
-                print(f"\nPlacing item {items_to_assign[current_item_idx]} (idx {current_item_idx})")
-                print("Current mapping: ", mapping)
-                print(f"Valid positions: {valid_positions} ({[positions_to_assign[p] for p in valid_positions]})")
-            
-            # Try positions in reverse order (so first one is popped first)
-            for pos in reversed(valid_positions):
-                if debug_print:
-                    print(f"  Trying {items_to_assign[current_item_idx]} in position {positions_to_assign[pos]}")
-                
-                # Temporarily modify the mapping and used arrays in-place (just for the pruning decision)
-                mapping[current_item_idx] = pos
-                used[pos] = True
-                
-                # Pruning decision
-                should_prune = False
-                if len(solutions) > 0:
-                    upper_bound = calculate_upper_bound(
-                        mapping, used, position_score_matrix, 
-                        item_scores, item_pair_score_matrix,
-                        cross_item_pair_matrix=cross_item_pair_matrix,
-                        cross_position_pair_matrix=cross_position_pair_matrix,
-                        reverse_cross_item_pair_matrix=reverse_cross_item_pair_matrix,
-                        reverse_cross_position_pair_matrix=reverse_cross_position_pair_matrix,
-                        items_assigned=items_assigned, positions_assigned=positions_assigned
-                    )
-                    
-                    margin = upper_bound - worst_top_n_score
-                    
-                    epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
-                    if margin < epsilon:
-                        should_prune = True
-                
-                # Restore the original state before making a copy
-                mapping[current_item_idx] = -1  # Restore to unassigned
-                used[pos] = False
-                
-                if should_prune:
-                    pruned_count += 1
-                else:
-                    explored_count += 1
-                    # Only make copies when needed (after pruning decision)
-                    new_mapping = mapping.copy()
-                    new_mapping[current_item_idx] = pos
-                    new_used = used.copy()
-                    new_used[pos] = True
-                    
-                    # Add to stack
-                    stack.append((
-                        new_mapping,
-                        new_used,
-                        depth + 1,
-                        new_path if debug_print else ""
-                    ))
-                    
-    current_phase1_solution_index = 0
-
-    # Estimate the total number of nodes in the search tree (an approximation)
-    estimated_nodes = total_perms_phase2 * 1.5  # Add some buffer for internal nodes
-
-    with tqdm(total=estimated_nodes, desc="Phase 2", unit=' nodes') as pbar:
-        if n_constrained:
-            for phase1_mapping, phase1_used in phase1_solutions:
-                print(f"\nProcessing Phase 1 solution {current_phase1_solution_index + 1}/{len(phase1_solutions)}")
-                
-                # Calculate initial depth based on assigned items
-                initial_depth = sum(1 for i in range(n_items_to_assign) if phase1_mapping[i] >= 0)
-                
-                # Start DFS from this phase 1 solution
-                phase2_dfs(phase1_mapping, phase1_used, initial_depth, pbar)
-                
-                current_phase1_solution_index += 1
-        else:
-            # Calculate initial depth based on assigned items
-            initial_depth = sum(1 for i in range(n_items_to_assign))
-            
-            # Start DFS from this phase 1 solution
-            phase2_dfs(initial_mapping, initial_used, 0, pbar)
-
-    # Convert final solutions to return format
-    return_solutions = []
-    for score, item_score, item_pair_score, mapping_list in reversed(solutions):
-        mapping = np.array(mapping_list, dtype=np.int16)
-        item_mapping = dict(zip(items_to_assign, [positions_to_assign[i] for i in mapping]))
-        
-        # Build complete mapping including pre-assigned items
-        complete_mapping = dict(zip(items_assigned, positions_assigned))
-        complete_mapping.update(item_mapping)
-        all_items = list(complete_mapping.keys())
-        all_positions = list(complete_mapping.values())
-        
-        # Calculate score for the complete layout if there are pre-assigned items
-        if items_assigned:
-            # Prepare arrays for the complete layout
-            complete_mapping_array, complete_item_scores, complete_item_pair_score_matrix, complete_position_score_matrix = (
-                prepare_complete_arrays(
-                    all_items, all_positions, 
-                    norm_item_scores, norm_item_pair_scores,
-                    norm_position_scores, norm_position_pair_scores,
-                    missing_item_pair_norm_score, missing_position_pair_norm_score
-                )
-            )
-            
-            # Calculate score for the complete layout
-            complete_score, complete_item_score, complete_item_pair_score = (
-                calculate_score_for_new_items(
-                    complete_mapping_array,
-                    complete_position_score_matrix, 
-                    complete_item_scores,
-                    complete_item_pair_score_matrix,
-                    None,  # cross_item_pair_matrix
-                    None,  # cross_position_pair_matrix
-                    None,  # reverse_cross_item_pair_matrix
-                    None   # reverse_cross_position_pair_matrix
-                )
-            )
-            
-            # Use the complete scores
-            score = complete_score
-            item_score = complete_item_score
-            item_pair_score = complete_item_pair_score
-        
-        return_solutions.append((
-            score,
-            item_mapping,
-            {'total': {
-                'total_score': score,
-                'item_pair_score': item_pair_score,
-                'item_score': item_score
-            }}
-        ))
-
-    # Ensure progress bar is fully updated at the end
-    if processed_nodes > last_progress_update:
-        pbar.update(processed_nodes - last_progress_update)
-    
-    # Print final statistics
-    print(f"\nFinal statistics:")
-    print(f"Permutations completed: {permutations_completed:,}")
-    print(f"Nodes processed: {processed_nodes:,}")
-    print(f"Branches pruned: {pruned_count:,}")
-    print(f"Branches explored: {explored_count:,}")
-    if pruned_count + explored_count > 0:
-        print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
-    
-    return return_solutions, processed_nodes, permutations_completed
+    return {
+        'valid': invalid_bounds == 0,
+        'invalid_count': invalid_bounds,
+        'trials': n_trials,
+        'min_gap': min_gap,
+        'avg_gap': avg_gap,
+        'max_gap': max_gap,
+        'depth_stats': depth_stats
+    }
 
 #-----------------------------------------------------------------------------
 # Main function and pipeline
@@ -1913,7 +2538,8 @@ def optimize_layout(config: dict, verbose: bool = False,
         norm_item_pair_scores=norm_item_pair_scores,  
         norm_position_pair_scores=norm_position_pair_scores,
         missing_item_pair_norm_score=missing_item_pair_norm_score,
-        missing_position_pair_norm_score=missing_position_pair_norm_score
+        missing_position_pair_norm_score=missing_position_pair_norm_score,
+        validate_bounds=validate_bounds
     )
     
     # Before printing results, recalculate scores for the complete layout
@@ -1990,16 +2616,30 @@ if __name__ == "__main__":
         # Parse command line arguments
         parser = argparse.ArgumentParser(description='Optimize keyboard layout.')
         parser.add_argument('--config', type=str, default='config.yaml',
-                          help='Path to configuration file (default: config.yaml)')
+                        help='Path to configuration file (default: config.yaml)')
         parser.add_argument('--verbose', action='store_true',
-                          help='Print detailed scoring information')
+                        help='Print detailed scoring information')
         args = parser.parse_args()
         
         start_time = time.time()
         
         # Load configuration from specified path
         config = load_config(args.config)
-        
+
+        # Validate bounds
+        validate_bounds = True  # Set to True for debugging runs
+        if validate_bounds:
+            print("Validating upper bounds statistically...")
+            # Run statistical validation of bounds
+            validate_results = validate_bounds_statistically(
+                config, 
+                n_trials=1000  # Fewer trials for quicker validation
+            )
+            if not validate_results['valid']:
+                print("ERROR: Upper bound validation failed. Optimization may not find optimal solutions.")
+                if input("Continue anyway? (y/n): ").lower() != 'y':
+                    sys.exit(1)
+
         # Optimize the layout
         optimize_layout(config, 
                         verbose=args.verbose, 
