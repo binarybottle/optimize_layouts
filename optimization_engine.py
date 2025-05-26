@@ -22,7 +22,7 @@ import gc
 #-----------------------------------------------------------------------------
 
 @jit(nopython=True, fastmath=True)
-def _calculate_score_components_jit(mapping, item_scores_array, item_pair_matrix, position_matrix,
+def _calculate_score_components_jit(mapping, item_scores, item_pair_matrix, position_matrix,
                                    cross_score, cross_count, scoring_mode_int):
     """JIT-compiled scoring function for performance."""
     n_items = len(mapping)
@@ -39,7 +39,7 @@ def _calculate_score_components_jit(mapping, item_scores_array, item_pair_matrix
             else:
                 pos_val = position_matrix[pos, 0] if position_matrix.shape[1] > 0 else 1.0
             
-            item_score += item_scores_array[i] * pos_val
+            item_score += item_scores[i] * pos_val
             
             # Add pair scores
             for j in range(i + 1, n_items):
@@ -51,20 +51,29 @@ def _calculate_score_components_jit(mapping, item_scores_array, item_pair_matrix
                         pos_j_val = position_matrix[pos_j, 0] if position_matrix.shape[1] > 0 else 1.0
                     
                     pair_score += item_pair_matrix[i, j] * pos_val * pos_j_val
+
+    # Normalize scores
+    if n_items > 0:
+        item_score = item_score / n_items
     
-    # Calculate total score based on mode
-    if scoring_mode_int == 0:  # WEIGHTED_AVERAGE (recommended)
-        # Weighted average keeps scores in [0,1] range
-        total_weight = 3.0  # item + pair + cross weights
-        total_score = (item_score + pair_score + cross_score) / total_weight
-    elif scoring_mode_int == 1:  # NORMALIZED_SUM 
-        # Normalize sum to [0,1] range
-        max_possible_sum = 3.0  # Since each component is in [0,1]
-        raw_sum = item_score + pair_score + cross_score
-        total_score = raw_sum / max_possible_sum
-    else:  # GEOMETRIC MEAN
-        # Each already in [0,1] range    
-        total_score = (item_score * pair_score * cross_score) ** (1/3)
+    n_pairs = n_items * (n_items - 1) // 2
+    if n_pairs > 0:
+        pair_score = pair_score / n_pairs
+    
+    if cross_count > 0:
+        cross_score = cross_score / cross_count
+
+    # Calculate total score based on mode - THIS IS THE KEY FIX
+    if scoring_mode_int == 0:  # item_only
+        total_score = item_score
+    elif scoring_mode_int == 1:  # pair_only
+        # Include both internal pairs and cross-interactions for pair_only mode
+        total_score = pair_score + cross_score
+    else:  # combined (scoring_mode_int == 2)
+        # For combined mode, multiply item score with total pair score (internal + cross)
+        total_pair_score = pair_score + cross_score
+        total_score = item_score * total_pair_score
+    
     return total_score, item_score, pair_score
 
 #-----------------------------------------------------------------------------
@@ -270,18 +279,16 @@ class UpperBoundCalculator:
         Combine component scores using the SAME method as LayoutScorer.
         This ensures bound calculation consistency.
         """
-        # Get scoring mode from scorer (or pass it in)
-        scoring_mode_int = self._get_scoring_mode()
+        # Get scoring mode from scorer
+        scoring_mode_int = getattr(self.scorer, 'scoring_mode_int', 2)
         
-        if scoring_mode_int == 0:  # WEIGHTED_AVERAGE
-            total_weight = 3.0
-            return (item_score + pair_score + cross_score) / total_weight
-        elif scoring_mode_int == 1:  # NORMALIZED_SUM
-            max_possible_sum = 3.0
-            raw_sum = item_score + pair_score + cross_score
-            return raw_sum / max_possible_sum
-        else:  # GEOMETRIC_MEAN
-            return (item_score * pair_score * cross_score) ** (1/3)
+        if scoring_mode_int == 0:  # item_only
+            return item_score
+        elif scoring_mode_int == 1:  # pair_only
+            return pair_score + cross_score
+        else:  # combined (scoring_mode_int == 2)
+            total_pair_score = pair_score + cross_score
+            return item_score * total_pair_score
 
     def _calculate_current_item_score(self, partial_mapping: np.ndarray) -> float:
         """Calculate item score contribution from current placement."""
@@ -348,14 +355,7 @@ class UpperBoundCalculator:
                 cross_count += 1
         
         return cross_score / max(1, cross_count) if cross_count > 0 else 0.0
-
-    def _get_scoring_mode(self) -> int:
-        """Get scoring mode from the scorer."""
-        # You'll need to add this to your LayoutScorer class:
-        return getattr(self.scorer, 'scoring_mode_int', 3)  # Default to geometric mean
-        
-        
-        
+                
     def _calculate_max_item_contribution(self, unplaced_items, available_positions):
         """Calculate maximum possible item score contributions."""
         max_contribution = 0.0
@@ -705,26 +705,7 @@ class ComprehensiveValidator:
         print("Testing cross-interaction accuracy...")
         
         if not scorer.has_cross_interactions:
-            return {'status': 'PASS', 'message': 'No cross-interactions to test'}
-        
-        #print(f"DEBUG: Scorer has cross-interactions: {scorer.has_cross_interactions}")
-        #print(f"DEBUG: Cross item pair matrix: {scorer.cross_item_pair_matrix is not None}")
-        #print(f"DEBUG: Cross position pair matrix: {scorer.cross_position_pair_matrix is not None}")
-        
-        # Check if matrices have any non-zero values
-        #if scorer.cross_item_pair_matrix is not None:
-        #    non_zero_count = np.count_nonzero(scorer.cross_item_pair_matrix)
-        #    print(f"DEBUG: Cross item matrix non-zero entries: {non_zero_count}")
-        #    print(f"DEBUG: Cross item matrix shape: {scorer.cross_item_pair_matrix.shape}")
-        #    if non_zero_count > 0:
-        #        print(f"DEBUG: Sample non-zero values: {scorer.cross_item_pair_matrix[scorer.cross_item_pair_matrix != 0][:5]}")
-        
-        #if scorer.cross_position_pair_matrix is not None:
-        #    non_zero_count = np.count_nonzero(scorer.cross_position_pair_matrix)
-        #    print(f"DEBUG: Cross position matrix non-zero entries: {non_zero_count}")
-        #    print(f"DEBUG: Cross position matrix shape: {scorer.cross_position_pair_matrix.shape}")
-        #    if non_zero_count > 0:
-        #        print(f"DEBUG: Sample non-zero values: {scorer.cross_position_pair_matrix[scorer.cross_position_pair_matrix != 0][:5]}")
+            return {'passed': 'TRUE', 'message': 'No cross-interactions to test'}
         
         # Create realistic test case
         n_items = min(scorer.n_items, 4)
@@ -733,16 +714,8 @@ class ComprehensiveValidator:
         for i in range(min(2, n_items, scorer.n_positions)):
             mapping[i] = i
         
-        #print(f"DEBUG: Test mapping: {mapping}")
-        
-        # Test cross-interaction calculation directly
-        #if scorer.has_cross_interactions:
-        #    cross_score, cross_count = scorer._calculate_cross_interactions(mapping)
-        #    print(f"DEBUG: Direct cross-interaction calculation: score={cross_score}, count={cross_count}")
-        
         # Score with and without cross-interactions
         score_with_cross = scorer.score_layout(mapping)
-        #print(f"DEBUG: Score with cross-interactions: {score_with_cross}")
         
         # Temporarily disable cross-interactions
         original_cross = scorer.cross_item_pair_matrix
@@ -758,7 +731,6 @@ class ComprehensiveValidator:
         scorer._score_cache.clear()
         
         score_without_cross = scorer.score_layout(mapping)
-        #print(f"DEBUG: Score without cross-interactions: {score_without_cross}")
         
         # Restore cross-interactions
         scorer.cross_item_pair_matrix = original_cross
@@ -772,7 +744,7 @@ class ComprehensiveValidator:
         #print(f"DEBUG: Cross-interaction contribution: {cross_contribution}")
         
         return {
-            'status': 'PASS',
+            'passed': 'TRUE',
             'message': f'Cross-interaction contribution: {cross_contribution:.6f}'
         }
     
@@ -828,7 +800,7 @@ class ComprehensiveValidator:
         
         return {
             'passed': failures == 0,
-            'details': f"{failures}/{len(edge_cases)} edge cases failed"
+            'details': f"{failures}/{len(edge_cases)} edge cases didn't pass"
         }
     
     def _test_constraint_scenarios(self, scorer: LayoutScorer,
