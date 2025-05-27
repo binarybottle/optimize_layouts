@@ -227,20 +227,9 @@ class LayoutScorer:
             
             # Normalize cross-interactions
             if cross_count > 0:
-                cross_score = cross_raw / cross_count  # normalized value
-            
-            print(f"SCORE_LAYOUT DEBUG:")
-            print(f"  Cross raw: {cross_raw}")
-            print(f"  Cross count: {cross_count}")
-            print(f"  Cross normalized: {cross_score}")  # ← Now shows normalized value
-            
-            # See how it gets combined with other components
-            print(f"  Item component: {item_score}")
-            print(f"  Pair component: {pair_score}")
-            print(f"  Cross component (normalized): {cross_score}")  # ← Fixed display
-
-
-        return item_score, pair_score, cross_score  # normalized cross_score
+                cross_score = cross_raw / cross_count
+        
+        return item_score, pair_score, cross_score
 
     def _calculate_score_components(self, mapping: np.ndarray) -> Tuple[float, float, float]:
         """
@@ -1120,7 +1109,7 @@ class MultiObjectiveUpperBoundCalculator:
         unplaced_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
         available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
         
-        # Calculate current scores
+        # Calculate current scores using the NEW method
         current_item, current_pair, current_cross = self.scorer.score_layout_components(partial_mapping)
         
         # Calculate maximum possible additions
@@ -1309,9 +1298,9 @@ class MultiObjectiveOptimizer:
         # Create multi-objective upper bound calculator
         self.upper_bound_calc = MultiObjectiveUpperBoundCalculator(scorer)
         
-        # Use existing ParetoFront class
-        objective_names = ['Item Score', 'Pair Score', 'Cross-Interaction Score']
-        self.pareto_front = ParetoFront(objective_names)
+        # Pareto front storage: List of (mapping, objectives) tuples
+        self.pareto_front = []
+        self.pareto_objectives = []  # Just the objective values for quick dominance checking
         
         # Constraint setup
         self.constrained_items = set(items_to_constrain.lower()) if items_to_constrain else set()
@@ -1325,22 +1314,52 @@ class MultiObjectiveOptimizer:
         self.nodes_pruned = 0
         self.solutions_found = 0
         
-    def optimize(self, max_solutions: int = 50, time_limit: float = 60.0):
-        """Run multi-objective optimization with Pareto-based pruning."""
-        print(f"Running Multi-Objective Optimization...")
+    def optimize(self, max_solutions: int = None, time_limit: float = None):
+        """Run multi-objective optimization with optional limits."""
+        # Determine search strategy based on limits
+        if max_solutions is None and time_limit is None:
+            print("Running Multi-Objective Optimization...")
+            print("Target: Find ALL Pareto-optimal solutions (unlimited search)")
+            search_type = "complete"
+        elif time_limit is not None:
+            print("Running Multi-Objective Optimization...")
+            print(f"Target: Find all Pareto solutions within {time_limit}s")
+            if max_solutions is not None:
+                print(f"Will return best {max_solutions} if more are found")
+            search_type = "time-limited"
+        else:  # max_solutions only
+            print("Running Multi-Objective Optimization...")
+            print(f"Target: Find first {max_solutions} Pareto solutions")
+            search_type = "count-limited"
+        
         print(f"Objectives: Item Score, Pair Score, Cross-Interaction Score")
         
+        import time  # error if removed
         start_time = time.time()
         
         # Initialize search
         n_items = len(self.items_to_assign)
         n_positions = len(self.available_positions)
         
+        # Calculate and display search space
+        import math
+        if n_positions >= n_items:
+            search_space = math.factorial(n_positions) // math.factorial(n_positions - n_items)
+            print(f"Search space: {search_space:,} permutations ({n_items} items in {n_positions} positions)")
+            
+            # Warn about large search spaces without limits
+            if search_space > 10_000_000 and time_limit is None:
+                print(f"⚠️  WARNING: Large search space ({search_space:,} permutations)")
+                print(f"   Consider adding --time-limit or --max-solutions for practical runtime")
+                import time
+                print("   Continuing in 3 seconds... (Ctrl+C to cancel)")
+                time.sleep(3)
+        
         # Create initial partial mapping
         initial_mapping = np.full(n_items, -1, dtype=int)
         initial_used = np.zeros(n_positions, dtype=bool)
         
-        # Apply pre-assigned constraints if any
+        # Apply pre-assigned constraints
         if self.items_assigned:
             item_to_idx = {item: idx for idx, item in enumerate(self.items_to_assign)}
             position_to_pos = {position: pos for pos, position in enumerate(self.available_positions)}
@@ -1352,62 +1371,139 @@ class MultiObjectiveOptimizer:
                     initial_mapping[idx] = pos
                     initial_used[pos] = True
         
-        # Start recursive search
+        # Start search
+        print(f"Starting search...")
         self._search_recursive(initial_mapping, initial_used, max_solutions, time_limit, start_time)
         
-        return self.pareto_front.get_solutions()
+        elapsed = time.time() - start_time
+        total_found = len(self.pareto_front)
+        
+        # Handle solution selection if needed
+        if max_solutions is not None and total_found > max_solutions:
+            print(f"Found {total_found} Pareto solutions, selecting best {max_solutions}...")
+            
+            # Sort by combined score for selection
+            pareto_with_scores = []
+            for layout, objectives in self.pareto_front:
+                combined = sum(objectives)  # Simple sum for ranking
+                pareto_with_scores.append((combined, layout, objectives))
+            
+            pareto_with_scores.sort(key=lambda x: x[0], reverse=True)
+            
+            # Keep top solutions
+            self.pareto_front = [(layout, objectives) for _, layout, objectives in pareto_with_scores[:max_solutions]]
+            self.pareto_objectives = [objectives for _, _, objectives in pareto_with_scores[:max_solutions]]
+            
+            final_count = len(self.pareto_front)
+        else:
+            final_count = total_found
+        
+        # Report results
+        if search_type == "complete" and time_limit is None:
+            print(f"Complete search finished: {elapsed:.2f}s")
+        else:
+            print(f"Search completed: {elapsed:.2f}s")
+        
+        print(f"Results: {final_count} Pareto solutions")
+        if total_found != final_count:
+            print(f"(Selected from {total_found} total solutions found)")
+        
+        return self.pareto_front
     
     def _search_recursive(self, partial_mapping: np.ndarray, used_positions: np.ndarray,
-                         max_solutions: int, time_limit: float, start_time: float):
-        """Recursive search with Pareto-based pruning."""
+                        max_solutions: int, time_limit: float, start_time: float):
+        """Recursive search with proper unlimited handling."""
         
         self.nodes_processed += 1
         
-        # Check termination conditions
-        if time_limit and (time.time() - start_time) > time_limit:
+        # Progress reporting (more frequent for unlimited search)
+        display_progress = False
+        if display_progress:
+            if time_limit is None:
+                # For unlimited search, report every 50k nodes
+                if self.nodes_processed % 50000 == 0:
+                    elapsed = time.time() - start_time
+                    rate = self.nodes_processed / elapsed if elapsed > 0 else 0
+                    print(f"  Progress: {self.nodes_processed:,} nodes, {len(self.pareto_front)} solutions, {elapsed:.1f}s ({rate:.0f} nodes/s)")
+            else:
+                # For time-limited search, report every 10k nodes
+                if self.nodes_processed % 10000 == 0:
+                    elapsed = time.time() - start_time
+                    print(f"  Progress: {self.nodes_processed:,} nodes, {len(self.pareto_front)} solutions, {elapsed:.1f}s")
+        
+        # Time limit check (only if specified)
+        if time_limit is not None and (time.time() - start_time) > time_limit:
+            print(f"  Time limit reached after {time.time() - start_time:.1f}s")
             return
         
-        if self.pareto_front.size() >= max_solutions:
-            return
+        # Solution count limit check (only if specified AND we're not improving the front)
+        if max_solutions is not None and len(self.pareto_front) >= max_solutions:
+            # For unlimited time but limited solutions, we can be more aggressive about stopping
+            # But we should still explore if we might find better solutions
+            if time_limit is None:
+                # Check if we've found solutions recently
+                if hasattr(self, '_last_solution_count'):
+                    if len(self.pareto_front) == self._last_solution_count:
+                        self._no_improvement_nodes = getattr(self, '_no_improvement_nodes', 0) + 1
+                        # Stop if we haven't found new solutions in 100k nodes
+                        if self._no_improvement_nodes > 100000:
+                            return
+                    else:
+                        self._no_improvement_nodes = 0
+                        self._last_solution_count = len(self.pareto_front)
+                else:
+                    self._last_solution_count = len(self.pareto_front)
+                    self._no_improvement_nodes = 0
         
         # Multi-objective pruning check
         upper_bounds = list(self.upper_bound_calc.calculate_component_upper_bounds(partial_mapping, used_positions))
         
-        # Get current Pareto objectives for pruning check
-        current_pareto_objectives = [obj for _, obj in self.pareto_front.get_solutions()]
-        if not can_improve_pareto_front(upper_bounds, current_pareto_objectives):
+        if not can_improve_pareto_front(upper_bounds, self.pareto_objectives):
             self.nodes_pruned += 1
-            return  # Prune this branch
+            return
         
         # Find next unassigned item
         next_item = self._get_next_item(partial_mapping)
         
-        # If all items assigned, evaluate complete solution
+        # Complete solution evaluation
         if next_item == -1:
             objectives = list(self.scorer.score_layout_components(partial_mapping))
             
-            # Try to add solution to Pareto front
-            if self.pareto_front.add_solution(partial_mapping, objectives):
+            is_non_dominated = True
+            dominated_indices = []
+            
+            for i, existing_obj in enumerate(self.pareto_objectives):
+                if pareto_dominates(existing_obj, objectives):
+                    is_non_dominated = False
+                    break
+                elif pareto_dominates(objectives, existing_obj):
+                    dominated_indices.append(i)
+            
+            if is_non_dominated:
+                # Remove dominated solutions
+                for i in reversed(sorted(dominated_indices)):
+                    del self.pareto_front[i]
+                    del self.pareto_objectives[i]
+                
+                # Add new solution
+                self.pareto_front.append((partial_mapping.copy(), objectives))
+                self.pareto_objectives.append(objectives)
                 self.solutions_found += 1
             
             return
         
-        # Get valid positions for this item
+        # Continue search
         valid_positions = self._get_valid_positions(next_item, used_positions)
         
-        # Try assigning next item to each valid position
         for pos_idx in valid_positions:
-            # Make assignment
             partial_mapping[next_item] = pos_idx
             used_positions[pos_idx] = True
             
-            # Recursive call
             self._search_recursive(partial_mapping, used_positions, max_solutions, time_limit, start_time)
             
-            # Backtrack
             partial_mapping[next_item] = -1
             used_positions[pos_idx] = False
-    
+                            
     def _get_next_item(self, mapping: np.ndarray) -> int:
         """Get next item to assign, prioritizing constrained items."""
         # First try constrained items
@@ -1431,7 +1527,7 @@ class MultiObjectiveOptimizer:
         else:
             # Unconstrained item - any available position
             return [pos for pos in range(len(used_positions)) if not used_positions[pos]]
-
+        
 class ParetoFront:
     """Manages a set of non-dominated solutions."""
     

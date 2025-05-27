@@ -1224,10 +1224,10 @@ def branch_and_bound_optimal_nsolutions(
                     # Clear caches periodically to prevent memory bloat
                     if scorer is not None:
                         clear_caches(scorer)
-                        print(f"Cleared caches at {processed_nodes:,} nodes")
+                        #print(f"Cleared caches at {processed_nodes:,} nodes")
                     else:
                         gc.collect()
-                        print(f"Cleared memory at {processed_nodes:,} nodes")
+                        #print(f"Cleared memory at {processed_nodes:,} nodes")
             
             # Update progress periodically
             if processed_nodes - last_progress_update >= progress_update_interval:
@@ -1339,7 +1339,7 @@ def branch_and_bound_optimal_nsolutions(
                         epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
                         margin = upper_bound - worst_top_n_score
                         if margin < epsilon:
-                            should_prune = False #True
+                            should_prune = True
 
                 # Restore the original state before making a copy
                 mapping[current_item_idx] = -1  # Restore to unassigned
@@ -2504,10 +2504,10 @@ def run_multi_objective_optimization(config: dict,
         items_assigned, positions_assigned
     )
     
-    # Create scorer
+    # Create scorer using the NEW optimization system
     scorer, _ = create_optimization_system(arrays, config)
     
-    # Create multi-objective optimizer
+    # Create multi-objective optimizer with FIXED implementation
     optimizer = MultiObjectiveOptimizer(
         scorer=scorer,
         items_to_assign=items_to_assign,
@@ -2524,39 +2524,49 @@ def run_multi_objective_optimization(config: dict,
     return pareto_front, optimizer
 
 def run_multi_objective_mode(config: dict, verbose: bool = False,
-                           max_solutions: int = 20, time_limit: float = 60.0) -> None:
-    """
-    Run multi-objective optimization and display results with proper objective separation.
-    """
+                           max_solutions: int = None, time_limit: float = None) -> None:
+    """Run multi-objective optimization with optional limits."""
     print(f"\n" + "="*50)
     print("MULTI-OBJECTIVE OPTIMIZATION MODE")
     print("=" * 50)
     
-    start_time = time.time()
-    
-    # Load scores
+    # Load scores and run optimization
     norm_item_scores, norm_item_pair_scores, norm_position_scores, norm_position_pair_scores = load_scores(config)
     
-    # Run multi-objective optimization
     pareto_front, optimizer = run_multi_objective_optimization(
         config, norm_item_scores, norm_item_pair_scores,
         norm_position_scores, norm_position_pair_scores,
-        max_solutions, time_limit
+        max_solutions, time_limit  # Pass through the actual values (including None)
     )
     
-    elapsed_time = time.time() - start_time
-    
     # Display results
-    print(f"Found {len(pareto_front)} Pareto-optimal solutions")
+    elapsed_time = time.time() - start_time
+    print(f"\n" + "="*60)
+    print(f"OPTIMIZATION RESULTS")
+    print("="*60)
+    print(f"Final Pareto front: {len(pareto_front)} solutions")
+    print(f"Total solutions found: {optimizer.solutions_found:,}")
     print(f"Nodes processed: {optimizer.nodes_processed:,}")
     print(f"Nodes pruned: {optimizer.nodes_pruned:,}")
-    print(f"Solutions found: {optimizer.solutions_found:,}")
-    print(f"Runtime: {elapsed_time:.2f} seconds")
+    
+    if optimizer.nodes_processed > 0:
+        prune_rate = optimizer.nodes_pruned / optimizer.nodes_processed * 100
+        print(f"Pruning efficiency: {prune_rate:.1f}%")
+        
+        # Calculate exploration rate
+        n_items = len(config['optimization']['items_to_assign'])
+        n_positions = len(config['optimization']['positions_to_assign'])
+        import math
+        total_space = math.factorial(n_positions) // math.factorial(n_positions - n_items)
+        explored_pct = (optimizer.nodes_processed / total_space) * 100
+        print(f"Search space explored: {explored_pct:.6f}%")
+    
+    print(f"Total runtime: {elapsed_time:.2f} seconds")
     
     if len(pareto_front) == 0:
         print("No solutions found!")
         return
-    
+        
     # Display solutions with proper objective names
     objective_names = ['Item Score', 'Pair Score', 'Cross-Interaction Score']
     
@@ -2568,8 +2578,16 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
     items_assigned = config['optimization'].get('items_assigned', '')
     positions_assigned = config['optimization'].get('positions_assigned', '')
     
-    for i, (layout, objectives) in enumerate(pareto_front[:5]):   # Show top 5
-        print(f"\nSolution #{i+1}:")
+    # Sort solutions by combined score for display (but keep all as Pareto-optimal)
+    pareto_with_combined = []
+    for layout, objectives in pareto_front:
+        combined_score = sum(objectives)  # Simple sum for display sorting
+        pareto_with_combined.append((combined_score, layout, objectives))
+    
+    pareto_with_combined.sort(key=lambda x: x[0], reverse=True)
+    
+    for i, (combined_score, layout, objectives) in enumerate(pareto_with_combined[:5]):   # Show top 5
+        print(f"\nSolution #{i+1} (Combined Score: {combined_score:.6f}):")
         
         # Create mapping dictionary
         item_mapping = {item: positions_to_assign[pos] for item, pos in 
@@ -2580,13 +2598,9 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
         complete_mapping.update(item_mapping)
         
         # Display objectives with proper names
-        print(f"  Objectives:")
+        print(f"  Independent Objectives:")
         for obj_name, obj_value in zip(objective_names, objectives):
             print(f"    {obj_name}: {obj_value:.6f}")
-        
-        # Calculate combined score for reference
-        total_combined = sum(objectives)
-        print(f"    Combined Total: {total_combined:.6f}")
         
         # Display layout
         all_items = ''.join(complete_mapping.keys())
@@ -2601,7 +2615,7 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
                 config=config
             )
     
-    # Save results to CSV
+    # Save results to CSV with FIXED saving
     save_multi_objective_results_to_csv(pareto_front, objective_names, config)
 
 def save_multi_objective_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]], 
@@ -2638,8 +2652,16 @@ def save_multi_objective_results_to_csv(pareto_front: List[Tuple[np.ndarray, Lis
         header = ['Rank', 'Items', 'Positions'] + objective_names + ['Combined Total']
         writer.writerow(header)
         
+        # Sort solutions by combined score for ranking
+        pareto_with_combined = []
+        for layout, objectives in pareto_front:
+            combined_score = sum(objectives)
+            pareto_with_combined.append((combined_score, layout, objectives))
+        
+        pareto_with_combined.sort(key=lambda x: x[0], reverse=True)
+        
         # Write solutions
-        for rank, (layout, objectives) in enumerate(pareto_front, 1):
+        for rank, (combined_score, layout, objectives) in enumerate(pareto_with_combined, 1):
             # Create mapping
             item_mapping = {item: positions_to_assign[pos] for item, pos in 
                            zip(items_to_assign, layout) if pos >= 0}
@@ -2649,16 +2671,86 @@ def save_multi_objective_results_to_csv(pareto_front: List[Tuple[np.ndarray, Lis
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             
-            # Calculate combined total
-            combined_total = sum(objectives)
-            
             row = ([rank, all_items, all_positions] + 
                    [f"{obj:.9f}" for obj in objectives] + 
-                   [f"{combined_total:.9f}"])
+                   [f"{combined_score:.9f}"])
             writer.writerow(row)
     
-    print(f"\nResults saved to: {output_path}")
+    print(f"\nPareto results saved to: {output_path}")
+
+def validate_moo_objectives(config: dict, sample_size: int = 100):
+    """Validate that MOO objectives are properly separated and don't double-count."""
+    print("\n=== MOO OBJECTIVE VALIDATION ===")
     
+    # Load data
+    items_to_assign = config['optimization']['items_to_assign']
+    positions_to_assign = config['optimization']['positions_to_assign']
+    items_assigned = config['optimization'].get('items_assigned', '')
+    positions_assigned = config['optimization'].get('positions_assigned', '')
+    
+    norm_item_scores, norm_item_pair_scores, norm_position_scores, norm_position_pair_scores = load_scores(config)
+    
+    # Prepare arrays
+    arrays = prepare_arrays(
+        items_to_assign, positions_to_assign,
+        norm_item_scores, norm_item_pair_scores, 
+        norm_position_scores, norm_position_pair_scores,
+        1.0, 1.0,  # missing scores
+        items_assigned, positions_assigned
+    )
+    
+    # Create scorer
+    scorer, _ = create_optimization_system(arrays, config)
+    
+    # Test with random mappings
+    n_items = len(items_to_assign)
+    n_positions = len(positions_to_assign)
+    
+    print(f"Testing {sample_size} random mappings...")
+    
+    objective_sums = []
+    total_scores = []
+    
+    for _ in range(sample_size):
+        # Generate random complete mapping
+        mapping = np.random.permutation(n_positions)[:n_items]
+        
+        # Get independent objectives using NEW method
+        item_obj, pair_obj, cross_obj = scorer.score_layout_components(mapping)
+        
+        # Get combined score using OLD method
+        total_score = scorer.score_layout(mapping)
+        
+        # Store for analysis
+        objective_sums.append(item_obj + pair_obj + cross_obj)
+        total_scores.append(total_score)
+        
+        # Print first few for inspection
+        if len(objective_sums) <= 3:
+            print(f"  Sample {len(objective_sums)}:")
+            print(f"    Item objective: {item_obj:.6f}")
+            print(f"    Pair objective: {pair_obj:.6f}")
+            print(f"    Cross objective: {cross_obj:.6f}")
+            print(f"    Sum of objectives: {objective_sums[-1]:.6f}")
+            print(f"    Total score (SOO): {total_scores[-1]:.6f}")
+    
+    # Analysis
+    obj_sum_mean = np.mean(objective_sums)
+    total_score_mean = np.mean(total_scores)
+    
+    print(f"\nValidation Results:")
+    print(f"  Mean sum of objectives: {obj_sum_mean:.6f}")
+    print(f"  Mean total score (SOO): {total_score_mean:.6f}")
+    print(f"  Difference: {abs(obj_sum_mean - total_score_mean):.6f}")
+    
+    # Check if objectives are properly separated
+    if abs(obj_sum_mean - total_score_mean) < 0.001:
+        print("  ✅ Objectives appear to be properly separated (sum ≈ total)")
+    else:
+        print("  ❌ Objectives may have double-counting issues")
+    
+    print("=== MOO VALIDATION COMPLETE ===\n")
+
 def optimize_layout(config: dict, verbose: bool = False, 
                     analyze_bounds: bool = False,     
                     missing_item_pair_norm_score: float = 1.0,
@@ -2799,15 +2891,13 @@ if __name__ == "__main__":
         parser.add_argument('--verbose', action='store_true',
                           help='Print detailed scoring information')
         parser.add_argument('--validate', action='store_true',
-                          help='Run comprehensive validation before optimization')
-        
-        # ADD these new multi-objective arguments:
+                          help='Run comprehensive validation before optimization')        
         parser.add_argument('--multi-objective', '--moo', action='store_true',
-                          help='Use multi-objective optimization (Pareto front)')
-        parser.add_argument('--max-solutions', type=int, default=20,
-                          help='Maximum number of Pareto solutions to find (default: 20)')
-        parser.add_argument('--time-limit', type=float, default=60.0,
-                          help='Time limit in seconds for MOO (default: 60)')
+                        help='Use multi-objective optimization (Pareto front)')
+        parser.add_argument('--max-solutions', type=int, default=None,        # ← Unlimited by default
+                        help='Maximum number of Pareto solutions to find (default: unlimited)')
+        parser.add_argument('--time-limit', type=float, default=None,         # ← Unlimited by default  
+                        help='Time limit in seconds for MOO (default: unlimited)')
         
         args = parser.parse_args()
         
