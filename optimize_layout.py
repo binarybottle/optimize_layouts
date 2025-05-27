@@ -1086,7 +1086,8 @@ def branch_and_bound_optimal_nsolutions(
     # Initialize search structures
     solutions = []  # Will store (score, scores, mapping) tuples
     worst_top_n_score = np.float32(-np.inf)
-    
+    seen_mappings = set()  # Track unique mappings
+
     # Initialize mapping and used positions
     initial_mapping = np.full(n_items_to_assign, -1, dtype=np.int16)
     initial_used = np.zeros(n_positions_to_assign, dtype=np.bool_)
@@ -1261,16 +1262,30 @@ def branch_and_bound_optimal_nsolutions(
                 # Check if solution qualifies
                 worst_minus_epsilon = worst_top_n_score - np.abs(worst_top_n_score) * np.finfo(np.float32).eps
                 margin = total_score - worst_minus_epsilon
-                if len(solutions) < n_solutions or margin > 0:
-                    solution = (
-                        total_score, item_component, item_pair_component, mapping.tolist()
-                    )
-                    solutions.append(solution)
-                    solutions.sort(key=lambda x: x[0])
-                    if len(solutions) > n_solutions:
-                        solutions.pop(0)
-                    worst_top_n_score = solutions[0][0]
-                
+                # Create a unique key for this mapping
+                mapping_items = tuple(sorted((items_to_assign[i], positions_to_assign[mapping[i]]) 
+                                            for i in range(len(mapping))))
+
+                # Only process if this is a new unique solution
+                if mapping_items not in seen_mappings:
+                    seen_mappings.add(mapping_items)
+
+                    # Check if solution qualifies for top-N
+                    if len(solutions) < n_solutions or total_score > worst_top_n_score:
+                        solution = (
+                            total_score, item_component, item_pair_component, mapping.tolist()
+                        )
+                        solutions.append(solution)
+                        solutions.sort(key=lambda x: x[0])  # Sort ascending (worst first)
+                        
+                        # Keep only top N solutions
+                        if len(solutions) > n_solutions:
+                            solutions.pop(0)  # Remove worst
+
+                        # Update threshold
+                        if solutions:
+                            worst_top_n_score = solutions[0][0]
+
                 # Skip to next stack item
                 continue
             
@@ -1318,12 +1333,14 @@ def branch_and_bound_optimal_nsolutions(
                         items_assigned=items_assigned,
                         positions_assigned=positions_assigned
                     )
-                    
-                    margin = upper_bound - worst_top_n_score
-                    epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
-                    if margin < epsilon:
-                        should_prune = True
-                
+
+                    # Only prune if upper bound is definitely worse than our worst known solution
+                    if len(solutions) > 0:
+                        epsilon = 0.0001  # Small value that shouldn't affect optimality in practice
+                        margin = upper_bound - worst_top_n_score
+                        if margin < epsilon:
+                            should_prune = False #True
+
                 # Restore the original state before making a copy
                 mapping[current_item_idx] = -1  # Restore to unassigned
                 used[pos] = False
@@ -1386,36 +1403,8 @@ def branch_and_bound_optimal_nsolutions(
         all_items = list(complete_mapping.keys())
         all_positions = list(complete_mapping.values())
         
-        # Calculate score for the complete layout if there are pre-assigned items
-        if items_assigned:
-            # Prepare arrays for the complete layout
-            complete_mapping_array, complete_item_scores, complete_item_pair_score_matrix, complete_position_score_matrix = (
-                prepare_complete_arrays(
-                    all_items, all_positions, 
-                    norm_item_scores, norm_item_pair_scores,
-                    norm_position_scores, norm_position_pair_scores,
-                    missing_item_pair_norm_score, missing_position_pair_norm_score
-                )
-            )
-            
-            # Calculate score for the complete layout
-            complete_score, complete_item_score, complete_item_pair_score = (
-                call_calculate_score_for_new_items(
-                    complete_mapping_array,
-                    complete_position_score_matrix, 
-                    complete_item_scores,
-                    complete_item_pair_score_matrix,
-                    None,  # cross_item_pair_matrix
-                    None,  # cross_position_pair_matrix
-                    None,  # reverse_cross_item_pair_matrix
-                    None   # reverse_cross_position_pair_matrix
-                )
-            )
-            
-            # Use the complete scores
-            score = complete_score
-            item_score = complete_item_score
-            item_pair_score = complete_item_pair_score
+        # Use the optimization score directly - don't recalculate
+        # (score, item_score, item_pair_score already have correct values from optimization)
         
         return_solutions.append((
             score,
@@ -1439,7 +1428,105 @@ def branch_and_bound_optimal_nsolutions(
     print(f"Branches explored: {explored_count:,}")
     if pruned_count + explored_count > 0:
         print(f"Pruning ratio: {pruned_count/(pruned_count+explored_count)*100:.2f}%")
-    
+
+    diagnose_solutions = False
+    if diagnose_solutions:
+        print(f"\n=== SOLUTION COLLECTION DIAGNOSTICS ===")
+        print(f"Requested solutions: {n_solutions}")
+        print(f"Total solutions found: {len(solutions)}")
+        print(f"Unique mappings seen: {len(seen_mappings)}")
+
+        if len(solutions) > 1:
+            best_score = max(sol[0] for sol in solutions)
+            worst_score = min(sol[0] for sol in solutions)
+            print(f"Best score: {best_score:.9f}")
+            print(f"Worst score: {worst_score:.9f}")
+            print(f"Score range: {best_score - worst_score:.9f}")
+            
+            # Check for score duplicates
+            scores = [sol[0] for sol in solutions]
+            unique_scores = len(set(round(s, 9) for s in scores))
+            print(f"Unique scores: {unique_scores}")
+            
+            if unique_scores == 1:
+                print("🚨 BUG CONFIRMED: All solutions have identical scores!")
+            elif unique_scores < len(solutions) / 2:
+                print("⚠️  WARNING: Many solutions have duplicate scores")
+        else:
+            print("Only one solution found total")
+
+        # Show first few and last few solutions
+        print("\nFirst 3 solutions:")
+        for i, (score, _, _, mapping) in enumerate(solutions[-3:]):  # Last 3 = best 3 after sorting
+            layout = {items_to_assign[j]: positions_to_assign[mapping[j]] for j in range(len(mapping))}
+            layout_str = ''.join(f"{k}:{v}" for k, v in sorted(layout.items()))
+            print(f"  #{i+1}: {score:.9f} - {layout_str}")
+
+        if len(solutions) > 6:
+            print("\nLast 3 solutions:")
+            for i, (score, _, _, mapping) in enumerate(solutions[:3]):  # First 3 = worst 3 after sorting
+                layout = {items_to_assign[j]: positions_to_assign[mapping[j]] for j in range(len(mapping))}
+                layout_str = ''.join(f"{k}:{v}" for k, v in sorted(layout.items()))
+                print(f"  #{len(solutions)-2+i}: {score:.9f} - {layout_str}")
+
+        print(f"\nDEBUG - Scoring layout: {mapping}")
+
+        # Check what scoring methods actually exist
+        print(f"Available LayoutScorer methods: {[m for m in dir(scorer) if not m.startswith('_')]}")
+
+        # Use the correct method name - should be score_layout with return_components
+        try:
+            # Try with return_components to get breakdown
+            total_score, item_component, pair_component = scorer.score_layout(mapping, return_components=True)
+            print(f"  Total score: {total_score}")
+            print(f"  Item component: {item_component}")
+            print(f"  Pair component: {pair_component}")
+            
+            # Check if cross-interactions exist
+            if hasattr(scorer, 'has_cross_interactions') and scorer.has_cross_interactions:
+                cross_score, cross_count = scorer._calculate_cross_interactions(mapping)
+                print(f"  Cross component: {cross_score} (count: {cross_count})")
+            
+        except Exception as e:
+            print(f"  Error with return_components: {e}")
+            # Fall back to basic scoring
+            total_score = scorer.score_layout(mapping)
+            print(f"  Total score (basic): {total_score}")
+
+        # Also check the input arrays to see if they're all zeros or constants
+        print(f"  Item scores array sample: {scorer.item_scores_array[:5] if len(scorer.item_scores_array) > 5 else scorer.item_scores_array}")
+        print(f"  Position matrix shape: {scorer.position_matrix.shape}")
+        print(f"  Position matrix sample: {scorer.position_matrix[:3] if len(scorer.position_matrix) > 3 else scorer.position_matrix}")
+
+        # Check item pair matrix
+        if hasattr(scorer, 'item_pair_matrix'):
+            print(f"  Item pair matrix shape: {scorer.item_pair_matrix.shape}")
+            print(f"  Item pair matrix sum: {scorer.item_pair_matrix.sum()}")
+            print(f"  Item pair matrix max: {scorer.item_pair_matrix.max()}")
+            print(f"  Item pair matrix min: {scorer.item_pair_matrix.min()}")
+
+        # Manual calculation check
+        manual_score = 0.0
+        item_count = 0
+        for i, pos in enumerate(mapping):
+            if pos >= 0:
+                item_val = scorer.item_scores_array[i] if i < len(scorer.item_scores_array) else 0
+                if scorer.position_matrix.ndim == 1:
+                    pos_val = scorer.position_matrix[pos] if pos < len(scorer.position_matrix) else 0
+                else:
+                    pos_val = scorer.position_matrix[pos, pos] if pos < scorer.position_matrix.shape[0] else 0
+                contrib = item_val * pos_val
+                manual_score += contrib
+                item_count += 1
+                if i < 3:  # Only show first 3 for brevity
+                    print(f"    Item {i} at pos {pos}: {item_val} * {pos_val} = {contrib}")
+
+        if item_count > 0:
+            manual_score = manual_score / item_count
+            print(f"  Manual item score calculation: {manual_score}")
+
+        print("---")
+
     return return_solutions, processed_nodes, permutations_completed
 
 #-----------------------------------------------------------------------------
@@ -1979,11 +2066,426 @@ def validate_bounds_statistically(
 #-----------------------------------------------------------------------------
 # Main function and pipeline
 #-----------------------------------------------------------------------------
+
+def score_layout_components(self, mapping: np.ndarray) -> Tuple[float, float, float]:
+    """
+    Return the three independent objective components:
+    - Item score component (normalized)
+    - Internal pair score component (normalized) 
+    - Cross-interaction score component (normalized)
+    """
+    n_items = len(mapping)
+    
+    # 1. Calculate item score component
+    item_score = 0.0
+    placed_count = 0
+    for i in range(n_items):
+        pos = mapping[i]
+        if pos >= 0:
+            if self.position_matrix.ndim == 1:
+                pos_val = self.position_matrix[pos]
+            else:
+                pos_val = self.position_matrix[pos, pos] if pos < self.position_matrix.shape[1] else 1.0
+            
+            item_score += self.item_scores_array[i] * pos_val
+            placed_count += 1
+    
+    # Normalize item score
+    if placed_count > 0:
+        item_score = item_score / placed_count
+    
+    # 2. Calculate internal pair score component
+    pair_score = 0.0
+    pair_count = 0
+    for i in range(n_items):
+        pos_i = mapping[i]
+        if pos_i < 0:
+            continue
+            
+        for j in range(i + 1, n_items):
+            pos_j = mapping[j]
+            if pos_j < 0:
+                continue
+                
+            if self.position_matrix.ndim == 1:
+                pos_i_val = self.position_matrix[pos_i]
+                pos_j_val = self.position_matrix[pos_j]
+            else:
+                pos_i_val = self.position_matrix[pos_i, pos_i] if pos_i < self.position_matrix.shape[1] else 1.0
+                pos_j_val = self.position_matrix[pos_j, pos_j] if pos_j < self.position_matrix.shape[1] else 1.0
+            
+            # Both directions for internal pairs
+            pair_score += self.item_pair_matrix[i, j] * pos_i_val * pos_j_val
+            pair_score += self.item_pair_matrix[j, i] * pos_j_val * pos_i_val
+            pair_count += 2
+    
+    # Normalize pair score
+    if pair_count > 0:
+        pair_score = pair_score / pair_count
+    
+    # 3. Calculate cross-interaction score component
+    cross_score = 0.0
+    if self.has_cross_interactions:
+        cross_score, cross_count = self._calculate_cross_interactions(mapping)
+        # cross_score is already normalized in _calculate_cross_interactions
+    
+    return item_score, pair_score, cross_score
+
+class MultiObjectiveUpperBoundCalculator:
+    """Calculate upper bounds for each objective component independently."""
+    
+    def __init__(self, scorer: LayoutScorer):
+        self.scorer = scorer
+        self._cache = {}
+        
+    def calculate_component_upper_bounds(self, partial_mapping: np.ndarray, 
+                                       used_positions: np.ndarray) -> Tuple[float, float, float]:
+        """
+        Calculate upper bounds for each objective component:
+        Returns (item_upper_bound, pair_upper_bound, cross_upper_bound)
+        """
+        # Cache key for performance
+        cache_key = (tuple(partial_mapping), tuple(used_positions))
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+        
+        # Find unplaced items and available positions
+        unplaced_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
+        available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
+        
+        # Calculate current scores
+        current_item, current_pair, current_cross = self.scorer.score_layout_components(partial_mapping)
+        
+        # Calculate maximum possible additions
+        max_item_addition = self._calculate_max_item_addition(unplaced_items, available_positions)
+        max_pair_addition = self._calculate_max_pair_addition(unplaced_items, available_positions, partial_mapping)
+        max_cross_addition = self._calculate_max_cross_addition(unplaced_items, available_positions)
+        
+        # Calculate upper bounds (current + maximum possible addition)
+        item_upper = current_item + max_item_addition
+        pair_upper = current_pair + max_pair_addition  
+        cross_upper = current_cross + max_cross_addition
+        
+        result = (item_upper, pair_upper, cross_upper)
+        self._cache[cache_key] = result
+        return result
+    
+    def _calculate_max_item_addition(self, unplaced_items, available_positions):
+        """Calculate maximum possible addition to item score."""
+        if not unplaced_items or not available_positions:
+            return 0.0
+            
+        max_addition = 0.0
+        placed_count = len([i for i in range(len(self.scorer.item_scores_array)) if i not in unplaced_items])
+        
+        # For each unplaced item, find its best possible position
+        for item in unplaced_items:
+            best_item_score = 0.0
+            for pos in available_positions:
+                if self.scorer.position_matrix.ndim == 1:
+                    pos_val = self.scorer.position_matrix[pos]
+                else:
+                    pos_val = self.scorer.position_matrix[pos, pos] if pos < self.scorer.position_matrix.shape[1] else 1.0
+                
+                item_score = self.scorer.item_scores_array[item] * pos_val
+                best_item_score = max(best_item_score, item_score)
+            
+            max_addition += best_item_score
+        
+        # Normalize by total number of items that will be placed
+        total_items = placed_count + len(unplaced_items)
+        if total_items > 0:
+            max_addition = max_addition / total_items
+            
+        return max_addition
+    
+    def _calculate_max_pair_addition(self, unplaced_items, available_positions, partial_mapping):
+        """Calculate maximum possible addition to pair score."""
+        if len(unplaced_items) < 2 or len(available_positions) < 2:
+            return 0.0
+        
+        max_addition = 0.0
+        
+        # Calculate pairs between unplaced items
+        for i, item1 in enumerate(unplaced_items):
+            for item2 in unplaced_items[i+1:]:
+                if len(available_positions) >= 2:
+                    best_pair_score = 0.0
+                    
+                    # Try all position pairs
+                    for pos1 in available_positions:
+                        for pos2 in available_positions:
+                            if pos1 != pos2:
+                                if self.scorer.position_matrix.ndim == 1:
+                                    pos1_val = self.scorer.position_matrix[pos1]
+                                    pos2_val = self.scorer.position_matrix[pos2]
+                                else:
+                                    pos1_val = self.scorer.position_matrix[pos1, pos1]
+                                    pos2_val = self.scorer.position_matrix[pos2, pos2]
+                                
+                                # Both directions
+                                pair_score = (self.scorer.item_pair_matrix[item1, item2] * pos1_val * pos2_val +
+                                            self.scorer.item_pair_matrix[item2, item1] * pos2_val * pos1_val)
+                                best_pair_score = max(best_pair_score, pair_score)
+                    
+                    max_addition += best_pair_score
+        
+        # Calculate pairs between unplaced and placed items
+        placed_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] >= 0]
+        for unplaced_item in unplaced_items:
+            for placed_item in placed_items:
+                placed_pos = partial_mapping[placed_item]
+                
+                best_mixed_pair_score = 0.0
+                for pos in available_positions:
+                    if self.scorer.position_matrix.ndim == 1:
+                        pos_val = self.scorer.position_matrix[pos]
+                        placed_pos_val = self.scorer.position_matrix[placed_pos]
+                    else:
+                        pos_val = self.scorer.position_matrix[pos, pos]
+                        placed_pos_val = self.scorer.position_matrix[placed_pos, placed_pos]
+                    
+                    # Both directions
+                    pair_score = (self.scorer.item_pair_matrix[unplaced_item, placed_item] * pos_val * placed_pos_val +
+                                self.scorer.item_pair_matrix[placed_item, unplaced_item] * placed_pos_val * pos_val)
+                    best_mixed_pair_score = max(best_mixed_pair_score, pair_score)
+                
+                max_addition += best_mixed_pair_score
+        
+        # Normalize by total number of pairs
+        total_items = len(partial_mapping)
+        total_pairs = total_items * (total_items - 1) if total_items > 1 else 1
+        max_addition = max_addition / total_pairs
+        
+        return max_addition
+    
+    def _calculate_max_cross_addition(self, unplaced_items, available_positions):
+        """Calculate maximum possible addition to cross-interaction score."""
+        if not self.scorer.has_cross_interactions or not unplaced_items:
+            return 0.0
+        
+        max_addition = 0.0
+        n_assigned = self.scorer.cross_item_pair_matrix.shape[1]
+        
+        for item in unplaced_items:
+            best_item_cross = 0.0
+            
+            for pos in available_positions:
+                item_cross_total = 0.0
+                
+                # Sum cross-interactions with all pre-assigned items
+                for assigned_idx in range(n_assigned):
+                    # Forward direction
+                    fwd_item = self.scorer.cross_item_pair_matrix[item, assigned_idx]
+                    fwd_pos = self.scorer.cross_position_pair_matrix[pos, assigned_idx]
+                    
+                    # Backward direction
+                    bwd_item = self.scorer.reverse_cross_item_pair_matrix[assigned_idx, item]
+                    bwd_pos = self.scorer.reverse_cross_position_pair_matrix[assigned_idx, pos]
+                    
+                    item_cross_total += fwd_item * fwd_pos + bwd_item * bwd_pos
+                
+                best_item_cross = max(best_item_cross, item_cross_total)
+            
+            max_addition += best_item_cross
+        
+        # Normalize by total cross-interactions
+        total_items = len([i for i in range(len(self.scorer.item_scores_array))])
+        total_cross_pairs = total_items * n_assigned * 2 if n_assigned > 0 else 1
+        max_addition = max_addition / total_cross_pairs
+        
+        return max_addition
+
+def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
+    """
+    Check if obj1 Pareto dominates obj2.
+    obj1 dominates obj2 if obj1 >= obj2 in all dimensions and obj1 > obj2 in at least one.
+    """
+    at_least_one_better = False
+    for v1, v2 in zip(obj1, obj2):
+        if v1 < v2:
+            return False  # obj1 is worse in this dimension
+        if v1 > v2:
+            at_least_one_better = True
+    return at_least_one_better
+
+def can_improve_pareto_front(upper_bounds: List[float], pareto_front: List[List[float]]) -> bool:
+    """
+    Check if the upper bounds could potentially improve the Pareto front.
+    Returns True if there's potential for improvement, False if should prune.
+    """
+    if not pareto_front:
+        return True  # Empty front, always can improve
+    
+    # Check if upper bounds are dominated by any existing solution
+    for existing_obj in pareto_front:
+        if pareto_dominates(existing_obj, upper_bounds):
+            return False  # Upper bounds are dominated, can't improve
+    
+    return True  # Upper bounds are not dominated, might improve front
+
+class FixedMultiObjectiveOptimizer:
+    """Fixed multi-objective optimizer with proper Pareto-based branch and bound."""
+    
+    def __init__(self, scorer: LayoutScorer, 
+                 items_to_assign: str, available_positions: str,
+                 items_to_constrain: str = '', positions_to_constrain: str = '',
+                 items_assigned: str = '', positions_assigned: str = ''):
+        self.scorer = scorer
+        self.items_to_assign = list(items_to_assign)
+        self.available_positions = list(available_positions)
+        self.items_to_constrain = items_to_constrain
+        self.positions_to_constrain = positions_to_constrain
+        self.items_assigned = items_assigned
+        self.positions_assigned = positions_assigned
+        
+        # Create multi-objective upper bound calculator
+        self.upper_bound_calc = MultiObjectiveUpperBoundCalculator(scorer)
+        
+        # Pareto front storage: List of (mapping, objectives) tuples
+        self.pareto_front = []
+        self.pareto_objectives = []  # Just the objective values for quick dominance checking
+        
+        # Constraint setup
+        self.constrained_items = set(items_to_constrain.lower()) if items_to_constrain else set()
+        self.constrained_positions = set(i for i, pos in enumerate(available_positions) 
+                                       if pos.upper() in positions_to_constrain.upper()) if positions_to_constrain else set()
+        self.constrained_item_indices = set(i for i, item in enumerate(self.items_to_assign) 
+                                          if item in self.constrained_items) if self.constrained_items else set()
+        
+        # Statistics
+        self.nodes_processed = 0
+        self.nodes_pruned = 0
+        self.solutions_found = 0
+        
+    def optimize(self, max_solutions: int = 50, time_limit: float = 60.0):
+        """Run multi-objective optimization with Pareto-based pruning."""
+        print(f"Running Fixed Multi-Objective Optimization...")
+        print(f"Objectives: Item Score, Pair Score, Cross-Interaction Score")
+        
+        start_time = time.time()
+        
+        # Initialize search
+        n_items = len(self.items_to_assign)
+        n_positions = len(self.available_positions)
+        
+        # Create initial partial mapping
+        initial_mapping = np.full(n_items, -1, dtype=int)
+        initial_used = np.zeros(n_positions, dtype=bool)
+        
+        # Apply pre-assigned constraints if any
+        if self.items_assigned:
+            item_to_idx = {item: idx for idx, item in enumerate(self.items_to_assign)}
+            position_to_pos = {position: pos for pos, position in enumerate(self.available_positions)}
+            
+            for item, position in zip(self.items_assigned, self.positions_assigned):
+                if item in item_to_idx and position in position_to_pos:
+                    idx = item_to_idx[item]
+                    pos = position_to_pos[position]
+                    initial_mapping[idx] = pos
+                    initial_used[pos] = True
+        
+        # Start recursive search
+        self._search_recursive(initial_mapping, initial_used, max_solutions, time_limit, start_time)
+        
+        return self.pareto_front
+    
+    def _search_recursive(self, partial_mapping: np.ndarray, used_positions: np.ndarray,
+                         max_solutions: int, time_limit: float, start_time: float):
+        """Recursive search with Pareto-based pruning."""
+        
+        self.nodes_processed += 1
+        
+        # Check termination conditions
+        if time_limit and (time.time() - start_time) > time_limit:
+            return
+        
+        if len(self.pareto_front) >= max_solutions:
+            return
+        
+        # Multi-objective pruning check
+        upper_bounds = list(self.upper_bound_calc.calculate_component_upper_bounds(partial_mapping, used_positions))
+        
+        if not can_improve_pareto_front(upper_bounds, self.pareto_objectives):
+            self.nodes_pruned += 1
+            return  # Prune this branch
+        
+        # Find next unassigned item
+        next_item = self._get_next_item(partial_mapping)
+        
+        # If all items assigned, evaluate complete solution
+        if next_item == -1:
+            objectives = list(self.scorer.score_layout_components(partial_mapping))
+            
+            # Check if this solution improves the Pareto front
+            is_non_dominated = True
+            dominated_indices = []
+            
+            for i, existing_obj in enumerate(self.pareto_objectives):
+                if pareto_dominates(existing_obj, objectives):
+                    is_non_dominated = False
+                    break
+                elif pareto_dominates(objectives, existing_obj):
+                    dominated_indices.append(i)
+            
+            if is_non_dominated:
+                # Remove dominated solutions
+                for i in reversed(sorted(dominated_indices)):
+                    del self.pareto_front[i]
+                    del self.pareto_objectives[i]
+                
+                # Add new solution
+                self.pareto_front.append((partial_mapping.copy(), objectives))
+                self.pareto_objectives.append(objectives)
+                self.solutions_found += 1
+            
+            return
+        
+        # Get valid positions for this item
+        valid_positions = self._get_valid_positions(next_item, used_positions)
+        
+        # Try assigning next item to each valid position
+        for pos_idx in valid_positions:
+            # Make assignment
+            partial_mapping[next_item] = pos_idx
+            used_positions[pos_idx] = True
+            
+            # Recursive call
+            self._search_recursive(partial_mapping, used_positions, max_solutions, time_limit, start_time)
+            
+            # Backtrack
+            partial_mapping[next_item] = -1
+            used_positions[pos_idx] = False
+    
+    def _get_next_item(self, mapping: np.ndarray) -> int:
+        """Get next item to assign, prioritizing constrained items."""
+        # First try constrained items
+        if self.constrained_item_indices:
+            for item_idx in self.constrained_item_indices:
+                if mapping[item_idx] == -1:
+                    return item_idx
+        
+        # Then any unassigned item
+        for i in range(len(mapping)):
+            if mapping[i] == -1:
+                return i
+        
+        return -1
+    
+    def _get_valid_positions(self, item_idx: int, used_positions: np.ndarray) -> List[int]:
+        """Get valid positions for an item."""
+        if item_idx in self.constrained_item_indices:
+            # Constrained item - only constrained positions
+            return [pos for pos in self.constrained_positions if not used_positions[pos]]
+        else:
+            # Unconstrained item - any available position
+            return [pos for pos in range(len(used_positions)) if not used_positions[pos]]
+
 def run_multi_objective_optimization(config: dict, 
                                    norm_item_scores: dict, norm_item_pair_scores: dict,
                                    norm_position_scores: dict, norm_position_pair_scores: dict,
                                    max_solutions: int = None, time_limit: float = None):
-    """Run multi-objective optimization and return results."""
+    """Run fixed multi-objective optimization and return results."""
     
     # Get parameters from config
     items_to_assign = config['optimization']['items_to_assign']
@@ -2024,11 +2526,11 @@ def run_multi_objective_optimization(config: dict,
 def run_multi_objective_mode(config: dict, verbose: bool = False,
                            max_solutions: int = 20, time_limit: float = 60.0) -> None:
     """
-    Run multi-objective optimization and display results.
+    Run multi-objective optimization and display results with proper objective separation.
     """
-    print("=" * 60)
+    print(f"\n" + "="*50)
     print("MULTI-OBJECTIVE OPTIMIZATION MODE")
-    print("=" * 60)
+    print("=" * 50)
     
     start_time = time.time()
     
@@ -2045,89 +2547,51 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
     elapsed_time = time.time() - start_time
     
     # Display results
-    print(f"\n" + "="*50)
-    print("MULTI-OBJECTIVE OPTIMIZATION RESULTS")
-    print(f"="*50)
-    print(f"Found {pareto_front.size()} Pareto-optimal solutions")
+    print(f"Found {len(pareto_front)} Pareto-optimal solutions")
     print(f"Nodes processed: {optimizer.nodes_processed:,}")
+    print(f"Nodes pruned: {optimizer.nodes_pruned:,}")
     print(f"Solutions found: {optimizer.solutions_found:,}")
     print(f"Runtime: {elapsed_time:.2f} seconds")
     
-    if pareto_front.size() == 0:
+    if len(pareto_front) == 0:
         print("No solutions found!")
         return
     
-    # Get solutions and objective names
-    solutions = pareto_front.get_solutions()
-    objective_names = optimizer.objective_names
+    # Display solutions with proper objective names
+    objective_names = ['Item Score', 'Pair Score', 'Cross-Interaction Score']
     
-    # Display solutions
     print(f"\nPareto-Optimal Solutions:")
-    print("-" * 80)
+    print("-" * 100)
     
     items_to_assign = config['optimization']['items_to_assign']
     positions_to_assign = config['optimization']['positions_to_assign']
     items_assigned = config['optimization'].get('items_assigned', '')
     positions_assigned = config['optimization'].get('positions_assigned', '')
     
-    for i, (layout, objectives) in enumerate(solutions[:3]):   # Show top 3
+    for i, (layout, objectives) in enumerate(pareto_front[:5]):   # Show top 5
         print(f"\nSolution #{i+1}:")
         
         # Create mapping dictionary
         item_mapping = {item: positions_to_assign[pos] for item, pos in 
-                    zip(items_to_assign, layout) if pos >= 0}
+                       zip(items_to_assign, layout) if pos >= 0}
         
         # Build complete mapping including pre-assigned items
         complete_mapping = dict(zip(items_assigned, positions_assigned))
         complete_mapping.update(item_mapping)
         
-        # Display objectives
+        # Display objectives with proper names
+        print(f"  Objectives:")
         for obj_name, obj_value in zip(objective_names, objectives):
-            print(f"  {obj_name}: {obj_value:.6f}")
+            print(f"    {obj_name}: {obj_value:.6f}")
+        
+        # Calculate combined score for reference
+        total_combined = sum(objectives)
+        print(f"    Combined Total: {total_combined:.6f}")
         
         # Display layout
         all_items = ''.join(complete_mapping.keys())
         all_positions = ''.join(complete_mapping.values())
         print(f"  Layout: {all_items} -> {all_positions}")
-        
-        # VERBOSE OUTPUT FOR MOO
-        if verbose:
-            print(f"\n  Detailed Analysis for Solution #{i+1}:")
-            
-            # Show objective trade-offs compared to other solutions
-            if len(solutions) > 1:
-                print("  Objective Rankings (among all Pareto solutions):")
-                for obj_idx, obj_name in enumerate(objective_names):
-                    all_obj_values = [sol[1][obj_idx] for sol in solutions]
-                    sorted_values = sorted(all_obj_values, reverse=True)
-                    rank = sorted_values.index(objectives[obj_idx]) + 1
-                    percentile = (len(sorted_values) - rank + 1) / len(sorted_values) * 100
-                    print(f"    {obj_name}: Rank {rank}/{len(solutions)} ({percentile:.1f}th percentile)")
-            
-            # Calculate component contributions
-            total_score = sum(objectives)
-            if total_score > 0:
-                print("  Objective Contributions:")
-                for obj_name, obj_value in zip(objective_names, objectives):
-                    percentage = (obj_value / total_score) * 100
-                    print(f"    {obj_name}: {percentage:.1f}% of total score")
-            
-            # Show individual item contributions (if scorer available)
-            try:
-                # This would require access to the scorer, which we don't have here
-                # For now, just show the basic breakdown
-                print("  Layout Quality Metrics:")
-                print(f"    Total items placed: {len([pos for pos in layout if pos >= 0])}")
-                print(f"    Items with pre-assigned: {len(complete_mapping)}")
-                
-                # Show position utilization
-                used_positions = set(layout[layout >= 0]) if hasattr(layout, 'dtype') else set(pos for pos in layout if pos >= 0)
-                total_positions = len(positions_to_assign)
-                utilization = len(used_positions) / total_positions * 100
-                print(f"    Position utilization: {len(used_positions)}/{total_positions} ({utilization:.1f}%)")
-                
-            except Exception as e:
-                print(f"    (Detailed metrics unavailable: {e})")
         
         # Display keyboard if requested
         if config['visualization'].get('print_keyboard', True):
@@ -2136,31 +2600,14 @@ def run_multi_objective_mode(config: dict, verbose: bool = False,
                 title=f"Pareto Solution #{i+1}",
                 config=config
             )
-                
-    # Analysis of trade-offs
-    if len(objective_names) >= 2 and len(solutions) > 1:
-        print(f"\n" + "="*50)
-        print("TRADE-OFF ANALYSIS")
-        print(f"="*50)
-        
-        # Find extreme solutions for each objective
-        for obj_idx, obj_name in enumerate(objective_names):
-            obj_values = [sol[1][obj_idx] for sol in solutions]
-            best_idx = obj_values.index(max(obj_values))
-            worst_idx = obj_values.index(min(obj_values))
-            
-            print(f"\n{obj_name.replace('_', ' ').title()}:")
-            print(f"  Best:  {obj_values[best_idx]:.6f} (Solution #{best_idx + 1})")
-            print(f"  Worst: {obj_values[worst_idx]:.6f} (Solution #{worst_idx + 1})")
-            print(f"  Range: {obj_values[best_idx] - obj_values[worst_idx]:.6f}")
     
-    # Save results to CSV (modified format for MOO)
-    save_multi_objective_results_to_csv(solutions, objective_names, config)
+    # Save results to CSV
+    save_multi_objective_results_to_csv(pareto_front, objective_names, config)
 
-def save_multi_objective_results_to_csv(solutions: List[Tuple[np.ndarray, List[float]]], 
-                                      objective_names: List[str],
-                                      config: dict) -> None:
-    """Save multi-objective results to CSV."""
+def save_multi_objective_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]], 
+                                       objective_names: List[str],
+                                       config: dict) -> None:
+    """Save multi-objective results to CSV with proper objective separation."""
     # Generate timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     config_path = os.path.basename(config.get('_config_path', 'config.yaml'))
@@ -2187,12 +2634,12 @@ def save_multi_objective_results_to_csv(solutions: List[Tuple[np.ndarray, List[f
         writer.writerow(['Assigned positions', config['optimization'].get('positions_assigned', '')])
         writer.writerow([])
         
-        # Results header
-        header = ['Rank', 'Items', 'Positions'] + objective_names
+        # Results header - include all three objectives plus combined total
+        header = ['Rank', 'Items', 'Positions'] + objective_names + ['Combined Total']
         writer.writerow(header)
         
         # Write solutions
-        for rank, (layout, objectives) in enumerate(solutions, 1):
+        for rank, (layout, objectives) in enumerate(pareto_front, 1):
             # Create mapping
             item_mapping = {item: positions_to_assign[pos] for item, pos in 
                            zip(items_to_assign, layout) if pos >= 0}
@@ -2202,11 +2649,16 @@ def save_multi_objective_results_to_csv(solutions: List[Tuple[np.ndarray, List[f
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             
-            row = [rank, all_items, all_positions] + [f"{obj:.9f}" for obj in objectives]
+            # Calculate combined total
+            combined_total = sum(objectives)
+            
+            row = ([rank, all_items, all_positions] + 
+                   [f"{obj:.9f}" for obj in objectives] + 
+                   [f"{combined_total:.9f}"])
             writer.writerow(row)
     
     print(f"\nResults saved to: {output_path}")
-
+    
 def optimize_layout(config: dict, verbose: bool = False, 
                     analyze_bounds: bool = False,     
                     missing_item_pair_norm_score: float = 1.0,
@@ -2215,9 +2667,9 @@ def optimize_layout(config: dict, verbose: bool = False,
     """
     Main optimization function. Uses branch-and-bound search.
     """
-    print("=" * 60)
+    print(f"\n" + "="*50)
     print("SINGLE-OBJECTIVE OPTIMIZATION MODE")
-    print("=" * 60)
+    print("=" * 50)
 
     start_time = time.time()
 
@@ -2302,57 +2754,15 @@ def optimize_layout(config: dict, verbose: bool = False,
         scorer=scorer,
         bound_calculator=bound_calculator
     )
-    
-    # Before printing results, recalculate scores for the complete layout
+        
+    # Use optimization scores directly - skip recalculation
     updated_results = []
     for score, mapping, detailed_scores in results:
-        # Skip recalculation if there are no pre-assigned items
-        if not items_assigned:
-            updated_results.append((score, mapping, detailed_scores))
-            continue
-        
-        # Build complete mapping including pre-assigned items
-        complete_mapping_dict = dict(zip(items_assigned, positions_assigned))
-        complete_mapping_dict.update(mapping)
-        all_items = list(complete_mapping_dict.keys())
-        all_positions = list(complete_mapping_dict.values())
-        
-        # Prepare arrays for the complete layout
-        complete_mapping, complete_item_scores, complete_item_pair_score_matrix, complete_position_score_matrix = prepare_complete_arrays(
-            all_items, all_positions, 
-            norm_item_scores, norm_item_pair_scores,
-            norm_position_scores, norm_position_pair_scores,
-            missing_item_pair_norm_score, missing_position_pair_norm_score
-        )
-        
-        # Calculate score for the complete layout
-        complete_score, complete_item_score, complete_item_pair_score = call_calculate_score_for_new_items(
-            complete_mapping,
-            complete_position_score_matrix, 
-            complete_item_scores,
-            complete_item_pair_score_matrix,
-            None,  # cross_item_pair_matrix
-            None,  # cross_position_pair_matrix
-            None,  # reverse_cross_item_pair_matrix
-            None   # reverse_cross_position_pair_matrix
-        )
-        
-        # Update the score and detailed scores
-        updated_detailed_scores = {'total': {
-            'total_score': complete_score,
-            'item_pair_score': complete_item_pair_score,
-            'item_score': complete_item_score
-        }}
-        
-        updated_results.append((complete_score, mapping, updated_detailed_scores))
-    
-    # Sort the updated results
-    updated_results = sorted(
-        updated_results,
-        key=lambda x: x[0],
-        reverse=True
-    )
-    
+        updated_results.append((score, mapping, detailed_scores))
+
+    # Sort by optimization score (highest first)
+    updated_results.sort(key=lambda x: x[0], reverse=True)
+
     # Print the updated results
     print_top_results(
         results=updated_results,

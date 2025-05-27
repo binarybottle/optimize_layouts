@@ -27,7 +27,7 @@ paths:
 # 14 letters:     87,178,291,200 permutations (with 2 fixed letters)
 # 16 letters: 20,922,789,888,000 permutations
 optimization:   
-  nlayouts: 1                           # Number of top layouts to display and save
+  nlayouts: 1                     # Number of top layouts to display and save
 
   items_assigned:       "et"         # Items already assigned to positions
   positions_assigned:   "FD"         # Positions that are already filled 
