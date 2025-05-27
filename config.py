@@ -1,6 +1,6 @@
 # config.py
 """
-Configuration management for keyboard layout optimization.
+Configuration management for layout optimization.
 
 Consolidates all configuration loading, validation, and preprocessing logic.
 """

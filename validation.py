@@ -21,9 +21,8 @@ from scoring import LayoutScorer, prepare_scoring_arrays, ScoreComponents
 from search import UpperBoundCalculator
 
 #-----------------------------------------------------------------------------
-# Validation Result Classes
+# Validation result classes
 #-----------------------------------------------------------------------------
-
 @dataclass
 class ValidationResult:
     """Result of a single validation test."""
@@ -69,9 +68,8 @@ class ValidationSuite:
             print(f"\n⚠️  {self.failed_count} test(s) failed - review results above")
 
 #-----------------------------------------------------------------------------
-# Core Validation Functions
+# Core validation functions
 #-----------------------------------------------------------------------------
-
 def test_scoring_consistency(scorer: LayoutScorer, n_tests: int = 100) -> ValidationResult:
     """
     Test that scorer produces consistent results across multiple calls.
@@ -266,8 +264,8 @@ def test_normalization_correctness(config: Config) -> ValidationResult:
         # Create uniform scores for predictable results
         item_scores = {item: 0.5 for item in items}  # All items have score 0.5
         pair_scores = {(i1, i2): 0.3 for i1 in items for i2 in items if i1 != i2}  # All pairs 0.3
-        pos_scores = {pos.lower(): 0.6 for pos in positions}  # All positions 0.6 (note: lowercase keys)
-        pos_pair_scores = {(p1.lower(), p2.lower()): 0.4 for p1 in positions for p2 in positions if p1 != p2}  # All position pairs 0.4
+        pos_scores = {pos.upper(): 0.6 for pos in positions}  # All positions 0.6
+        pos_pair_scores = {(p1.upper(), p2.upper()): 0.4 for p1 in positions for p2 in positions if p1 != p2}  # All position pairs 0.4
         
         arrays = prepare_scoring_arrays(
             items, positions, item_scores, pair_scores, pos_scores, pos_pair_scores
@@ -346,8 +344,8 @@ def test_performance_regression(config: Config) -> ValidationResult:
         random.seed(42)
         item_scores = {item: random.uniform(0.1, 1.0) for item in items}
         pair_scores = {(i1, i2): random.uniform(0.0, 0.8) for i1 in items for i2 in items if i1 != i2}
-        pos_scores = {pos.lower(): random.uniform(0.2, 1.0) for pos in positions}  # Note: lowercase keys
-        pos_pair_scores = {(p1.lower(), p2.lower()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
+        pos_scores = {pos.upper(): random.uniform(0.2, 1.0) for pos in positions}  # Note: lowercase keys
+        pos_pair_scores = {(p1.upper(), p2.upper()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
         
         arrays = prepare_scoring_arrays(
             items, positions, item_scores, pair_scores, pos_scores, pos_pair_scores
@@ -383,9 +381,8 @@ def test_performance_regression(config: Config) -> ValidationResult:
         return ValidationResult("Performance Regression", False, f"Test failed with error: {e}")
 
 #-----------------------------------------------------------------------------
-# Main Validation Suite
+# Main validation suite
 #-----------------------------------------------------------------------------
-
 def run_validation_suite(config: Config, quick: bool = False) -> bool:
     """
     Run comprehensive validation suite.
@@ -407,8 +404,8 @@ def run_validation_suite(config: Config, quick: bool = False) -> bool:
     random.seed(42)
     item_scores = {item: random.uniform(0.1, 1.0) for item in items}
     pair_scores = {(i1, i2): random.uniform(0.0, 0.8) for i1 in items for i2 in items if i1 != i2}
-    pos_scores = {pos.lower(): random.uniform(0.2, 1.0) for pos in positions}
-    pos_pair_scores = {(p1.lower(), p2.lower()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
+    pos_scores = {pos.upper(): random.uniform(0.2, 1.0) for pos in positions}
+    pos_pair_scores = {(p1.upper(), p2.upper()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
     
     # Handle pre-assigned items if they exist
     items_assigned = list(config.optimization.items_assigned) if config.optimization.items_assigned else None
@@ -462,7 +459,7 @@ def validate_specific_layout(items: str, positions: str, config: Config) -> Vali
         ValidationResult with layout validation outcome
     """
     try:
-        # This would be used by calculate_score.py for validation
+        # This would be used by display_and_score_layout.py for validation
         # Implementation would validate the specific layout
         passed = True
         message = f"Layout {items} -> {positions} validated successfully"

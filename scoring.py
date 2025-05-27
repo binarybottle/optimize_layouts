@@ -1,11 +1,11 @@
 # scoring.py
 """
-Unified, maintainable scoring system for keyboard layout optimization.
+Unified, maintainable scoring system for layout optimization.
 
-This module consolidates ALL scoring logic into a single, well-documented system
-that serves both Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
+This module consolidates ALL scoring logic into a single system that serves 
+both Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
 
-Key Design Principles:
+Key design principles:
 1. Single source of truth for all score calculations
 2. Clear separation between SOO and MOO modes
 3. Consistent normalization across all components
@@ -20,9 +20,8 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 #-----------------------------------------------------------------------------
-# Core Data Structures
+# Core data structures
 #-----------------------------------------------------------------------------
-
 @dataclass
 class ScoreComponents:
     """Container for the three independent scoring components."""
@@ -84,9 +83,8 @@ class ScoringArrays:
         return self.cross_item_matrix is not None
 
 #-----------------------------------------------------------------------------
-# JIT-Compiled Core Calculations
+# JIT-compiled core calculations
 #-----------------------------------------------------------------------------
-
 @jit(nopython=True, fastmath=True)
 def _calculate_item_score_jit(mapping: np.ndarray, item_scores: np.ndarray, 
                              position_matrix: np.ndarray) -> Tuple[float, int]:
@@ -176,9 +174,8 @@ def _calculate_cross_score_jit(mapping: np.ndarray,
     return raw_score, interaction_count
 
 #-----------------------------------------------------------------------------
-# Core Scoring Engine
+# Core scoring engine
 #-----------------------------------------------------------------------------
-
 class ScoreCalculator:
     """
     Central scoring engine - single source of truth for all score calculations.
@@ -246,9 +243,8 @@ class ScoreCalculator:
         self._score_cache.clear()
 
 #-----------------------------------------------------------------------------
-# Score Combination Strategies
+# Score combination strategies
 #-----------------------------------------------------------------------------
-
 class ScoreCombiner(ABC):
     """Abstract base class for different score combination strategies."""
     
@@ -301,14 +297,11 @@ class MOOCombiner(ScoreCombiner):
         return "Multi-Objective"
 
 #-----------------------------------------------------------------------------
-# Unified Layout Scorer
+# Unified layout scorer
 #-----------------------------------------------------------------------------
-
 class LayoutScorer:
     """
     Unified layout scorer that serves both SOO and MOO optimization.
-    
-    This replaces all the scattered scoring logic with a single, well-tested interface.
     """
     
     def __init__(self, arrays: ScoringArrays, mode: str = 'combined'):
@@ -373,9 +366,8 @@ class LayoutScorer:
         return self.combiner.get_mode_name()
 
 #-----------------------------------------------------------------------------
-# Array Preparation - Single Source of Truth
+# Array preparation
 #-----------------------------------------------------------------------------
-
 def prepare_scoring_arrays(
     items_to_assign: List[str],
     positions_to_assign: List[str], 
@@ -390,9 +382,6 @@ def prepare_scoring_arrays(
 ) -> ScoringArrays:
     """
     Single source of truth for preparing all scoring arrays.
-    
-    This function replaces all the scattered array preparation logic
-    with one well-documented, thoroughly tested function.
     
     Args:
         items_to_assign: List of items being optimized
@@ -504,9 +493,8 @@ def prepare_scoring_arrays(
     )
 
 #-----------------------------------------------------------------------------
-# Convenience Functions for Integration
+# Convenience functions for integration
 #-----------------------------------------------------------------------------
-
 def create_scorer(items_to_assign: List[str], positions_to_assign: List[str],
                  norm_item_scores: Dict, norm_item_pair_scores: Dict,
                  norm_position_scores: Dict, norm_position_pair_scores: Dict,
@@ -515,8 +503,6 @@ def create_scorer(items_to_assign: List[str], positions_to_assign: List[str],
                  mode: str = 'combined') -> LayoutScorer:
     """
     Convenience function to create a LayoutScorer from raw score dictionaries.
-    
-    This replaces all the scattered scorer creation logic throughout the codebase.
     """
     arrays = prepare_scoring_arrays(
         items_to_assign, positions_to_assign,
@@ -529,9 +515,7 @@ def create_scorer(items_to_assign: List[str], positions_to_assign: List[str],
 
 def score_layout_simple(mapping: np.ndarray, scorer: LayoutScorer) -> float:
     """
-    Simple scoring function for backward compatibility.
-    
-    This replaces calculate_score_for_new_items and similar functions.
+    Simple scoring function for backward compatibility.    
     """
     return scorer.score_layout(mapping)
 
@@ -545,9 +529,8 @@ def score_layout_detailed(mapping: np.ndarray, scorer: LayoutScorer) -> Tuple[fl
     return scorer.score_layout(mapping, return_components=True)
 
 #-----------------------------------------------------------------------------
-# Testing and Validation
+# Testing and validation
 #-----------------------------------------------------------------------------
-
 def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> bool:
     """
     Validate that the scorer produces consistent results across multiple calls.
@@ -596,7 +579,7 @@ def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> boo
 
 if __name__ == "__main__":
     # Simple test/demo
-    print("Consolidated Scoring System - Test")
+    print("Testing the consolidated scoring system...")
     
     # Create dummy data for testing
     items = ['a', 'b', 'c']

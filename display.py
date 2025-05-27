@@ -1,6 +1,6 @@
 # display.py
 """
-Display, visualization, and output formatting for keyboard layout optimization.
+Display, visualization, and output formatting for layout optimization.
 
 Consolidates all presentation logic including:
 - Keyboard layout visualization
@@ -19,16 +19,15 @@ from config import Config
 from scoring import LayoutScorer, ScoreComponents
 
 #-----------------------------------------------------------------------------
-# Keyboard Visualization
+# Keyboard visualization (optional)
 #-----------------------------------------------------------------------------
-
 def visualize_keyboard_layout(mapping: Optional[Dict[str, str]] = None, 
                             title: str = "Layout", 
                             config: Config = None,
                             items_to_display: Optional[str] = None,
                             positions_to_display: Optional[str] = None) -> None:
     """
-    Print visual representation of keyboard layout.
+    Print ASCII visual representation of keyboard layout.
     
     Args:
         mapping: Dictionary mapping items to positions (item -> position)
@@ -91,9 +90,8 @@ def visualize_keyboard_layout(mapping: Optional[Dict[str, str]] = None,
     print(KEYBOARD_TEMPLATE.format(**layout_chars))
 
 #-----------------------------------------------------------------------------
-# Results Display
+# Results display
 #-----------------------------------------------------------------------------
-
 def print_optimization_header(mode: str, config: Config) -> None:
     """Print header for optimization run."""
     print(f"\n" + "="*60)
@@ -283,9 +281,8 @@ def _print_detailed_breakdown(complete_mapping: Dict[str, str], config: Config, 
         print(f"  Note: This is a known issue with verbose mode display")
 
 #-----------------------------------------------------------------------------
-# CSV Output
+# CSV output
 #-----------------------------------------------------------------------------
-
 def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]], 
                            config: Config) -> str:
     """
@@ -409,9 +406,8 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
     return output_path
 
 #-----------------------------------------------------------------------------
-# Progress Reporting
+# Progress reporting
 #-----------------------------------------------------------------------------
-
 def print_optimization_progress(nodes_processed: int, nodes_pruned: int, 
                               solutions_found: int, elapsed_time: float,
                               search_space_size: Optional[int] = None) -> None:
@@ -423,7 +419,7 @@ def print_optimization_progress(nodes_processed: int, nodes_pruned: int,
     print(f"  Elapsed time: {elapsed_time:.2f}s")
     
     if nodes_processed > 0:
-        prune_rate = nodes_pruned / nodes_processed * 100
+        prune_rate = 100 * nodes_pruned / (nodes_pruned + nodes_processed)
         print(f"  Pruning efficiency: {prune_rate:.1f}%")
     
     if search_space_size:

@@ -1,6 +1,6 @@
 # search.py
 """
-Search algorithms for keyboard layout optimization.
+Search algorithms for layout optimization.
 
 Consolidates all search logic including:
 - Single-objective branch and bound
@@ -21,11 +21,10 @@ from config import Config
 from scoring import LayoutScorer
 
 #-----------------------------------------------------------------------------
-# Upper Bound Calculations
+# Upper bound calculations
 #-----------------------------------------------------------------------------
-
 class UpperBoundCalculator:
-    """Calculate tight upper bounds for branch and bound pruning."""
+    """Calculate tight upper bounds for branch-and-bound pruning."""
     
     def __init__(self, scorer: LayoutScorer):
         self.scorer = scorer
@@ -193,9 +192,8 @@ class UpperBoundCalculator:
         self._cache.clear()
 
 #-----------------------------------------------------------------------------
-# Constraint Handling
+# Constraint handling
 #-----------------------------------------------------------------------------
-
 @jit(nopython=True)
 def get_next_item_jit(mapping: np.ndarray, constrained_items: np.ndarray) -> int:
     """JIT-compiled function to get next item to assign."""
@@ -231,9 +229,8 @@ def validate_constraints_jit(mapping: np.ndarray, constrained_items: np.ndarray,
     return True
 
 #-----------------------------------------------------------------------------
-# Single-Objective Search
+# Single-objective search
 #-----------------------------------------------------------------------------
-
 def single_objective_search(config: Config, scorer: LayoutScorer, 
                           n_solutions: int = 5) -> Tuple[List[Tuple[float, Dict[str, str], Dict]], int, int]:
     """
@@ -395,9 +392,8 @@ def single_objective_search(config: Config, scorer: LayoutScorer,
     return solutions, nodes_processed, nodes_pruned
 
 #-----------------------------------------------------------------------------
-# Multi-Objective Search
+# Multi-objective search
 #-----------------------------------------------------------------------------
-
 def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
     """Check if obj1 Pareto dominates obj2."""
     at_least_one_better = False
@@ -422,7 +418,7 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
     Returns:
         Tuple of (pareto_front, nodes_processed, nodes_pruned)
     """
-    print("Running Multi-Objective Pareto Search...")
+    print("Running Multi-Objective Pareto search...")
     
     opt = config.optimization
     items_list = list(opt.items_to_assign)

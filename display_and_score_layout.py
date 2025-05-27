@@ -1,13 +1,10 @@
-# calculate_score.py
+# display_and_score_layout.py
 """
-Layout Score Calculator using the consolidated scoring system.
-
-This completely rewritten version uses the new unified scoring architecture
-for consistent, maintainable score calculations.
+Layout score calculator.
 
 Example usage:
-    python calculate_score.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
-    python calculate_score.py --items "abc" --positions "FDJ" --config config.yaml --verbose
+    python display_and_score_layout.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
+    python display_and_score_layout.py --items "abc" --positions "FDJ" --config config.yaml --verbose
 """
 
 import argparse
@@ -22,9 +19,8 @@ from display import visualize_keyboard_layout
 from validation import validate_specific_layout
 
 #-----------------------------------------------------------------------------
-# Score Calculation Functions
+# Score calculation functions
 #-----------------------------------------------------------------------------
-
 def load_normalized_scores_simple(config: Config) -> tuple:
     """
     Load normalized scores from CSV files.
@@ -181,9 +177,8 @@ def create_complete_layout_mapping(items_str: str, positions_str: str, config: C
     return mapping
 
 #-----------------------------------------------------------------------------
-# Main Function and CLI
+# Main function and CLI
 #-----------------------------------------------------------------------------
-
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(

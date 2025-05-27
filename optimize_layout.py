@@ -1,10 +1,9 @@
 # optimize_layout.py
 """
-Clean, maintainable keyboard layout optimization.
+Layout optimization software.
 
-This completely overhauled version consolidates all optimization logic
-into a clean, well-structured system supporting both Single-Objective 
-Optimization (SOO) and Multi-Objective Optimization (MOO).
+This script consolidates all optimization logic to support both 
+Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
 
 Usage:
     # Single-objective optimization (default)
@@ -36,9 +35,8 @@ from display import (print_optimization_header, print_search_space_info,
 from validation import run_validation_suite
 
 #-----------------------------------------------------------------------------
-# Data Loading (Simplified)
+# Data loading
 #-----------------------------------------------------------------------------
-
 def load_normalized_scores(config: Config) -> Tuple[Dict, Dict, Dict, Dict]:
     """
     Load normalized scores from CSV files.
@@ -79,9 +77,8 @@ def load_normalized_scores(config: Config) -> Tuple[Dict, Dict, Dict, Dict]:
     return item_scores, item_pair_scores, position_scores, position_pair_scores
 
 #-----------------------------------------------------------------------------
-# Main Optimization Functions  
+# Main optimization functions  
 #-----------------------------------------------------------------------------
-
 def run_single_objective_optimization(config: Config, n_solutions: int = 5, verbose: bool = False) -> None:
     """
     Run single-objective optimization and display results.
@@ -232,9 +229,8 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     print(f"  Total time: {elapsed_time:.2f}s")
 
 #-----------------------------------------------------------------------------
-# Command Line Interface
+# Command-line interface
 #-----------------------------------------------------------------------------
-
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
@@ -298,7 +294,6 @@ def main():
             print("="*60)
             
             validation_passed = run_validation_suite(config)
-            
             #if not validation_passed:
             #    print("⚠️  Some validation tests failed, but continuing with optimization...")
             #    print("Consider reviewing the validation results above.")
@@ -319,7 +314,7 @@ def main():
         print(f"Error: {e}")
         print("Please check that all required files exist and paths are correct.")
     except ValueError as e:
-        print(f"Configuration Error: {e}")
+        print(f"Configuration error: {e}")
         print("Please check your configuration file for errors.")
     except Exception as e:
         print(f"Unexpected error: {e}")
