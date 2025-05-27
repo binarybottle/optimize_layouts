@@ -1,28 +1,49 @@
-# README
-Optimize layouts of items and item-pairs. 
-===================================================================
-https://github.com/binarybottle/optimize_layouts.git
-Author: Arno Klein (arnoklein.info)
-License: MIT License (see LICENSE)
+# Layout Optimization System
+
+Optimize layouts of items and item-pairs with advanced single- and multi-objective algorithms.
+
+---
+
+**Repository**: https://github.com/binarybottle/optimize_layouts.git  
+**Author**: Arno Klein (arnoklein.info)  
+**License**: MIT License (see LICENSE)
 
 ## Usage
--------------------------------------------------------------------
-  ```bash
-  python normalize_input.py # Normalize input data
-  python analyze_input.py   # Analyze and plot raw/normalized data
-  python optimize_layout.py # Optimize layouts based on config file
-  python analyze_results.py # Analyze resulting layouts
-  ```
+
+```bash
+# Prepare input data
+python normalize_input.py     # Normalize raw input data
+python analyze_input.py       # Analyze and plot raw/normalized data
+
+# Single-objective optimization (default)
+python optimize_layout.py --config config.yaml
+
+# Single-objective with custom parameters  
+python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
+
+# Multi-objective optimization (Pareto front)
+python optimize_layout.py --config config.yaml --moo --max-solutions 50
+
+# With comprehensive validation
+python optimize_layout.py --config config.yaml --validate --verbose
+
+# Analyze results
+python analyze_results.py
+
+# Score a specific layout
+python display_score_layout.py --items "etaoi" --positions "FJDSV"
+
 For running parallel processes, 
 see **Running parallel processes** below.
+```
 
-## Context
+## Overview
 -------------------------------------------------------------------
 This code optimizes a layout, an arrangement of items,
 and takes into account scores for individual items, 
 item-pairs (a,b and b,a), positions, and position-pairs.
 To efficiently prune vast combinatorial layouts, 
-it uses a branch-and-bound algorithm.
+it uses a depth-first search with a branch-and-bound algorithm.
 
 The initial intended use-case is keyboard layout optimization 
 for touch typing (see **keyboards/README_keyboards.md**):
@@ -34,9 +55,51 @@ for touch typing (see **keyboards/README_keyboards.md**):
     a measure of comfort when typing single keys or pairs of keys 
     (in any language, as usage frequencies are regressed out).
 
+## Architecture
+-------------------------------------------------------------------
+The system is built with a modular, maintainable architecture:
+  - config.py: Configuration management and validation
+  - scoring.py: Unified scoring system with JIT optimization
+  - search.py: Branch-and-bound and Pareto search algorithms  
+  - display.py: Keyboard visualization and results formatting
+  - validation.py: Comprehensive testing and validation suite
+  - optimize_layout.py: Main CLI interface
+
+## Optimization Modes
+-------------------------------------------------------------------
+### Single-Objective Optimization (SOO)
+
+  - Algorithm: Branch-and-bound with tight upper bounds
+  - Goal: Find top N highest-scoring layouts
+  - Scoring: Combined item × pair score or individual components
+  - Output: Ranked list of best solutions with detailed breakdowns
+
+```bash
+# Find top 5 layouts (default)
+python optimize_layout.py --config config.yaml
+
+# Find top 10 layouts with detailed scoring
+python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
+```
+
+### Multi-Objective Optimization (MOO)
+
+  - Algorithm: Pareto-optimal search
+  - Goal: Find non-dominated solutions across multiple objectives
+  - Objectives: Item scores, internal pair scores, cross-interaction scores
+  - Output: Pareto front with trade-off analysis
+
+```bash
+# Discover Pareto front
+python optimize_layout.py --config config.yaml --moo
+
+# Limit solutions and time
+python optimize_layout.py --config config.yaml --moo --max-solutions 100 --time-limit 300
+```
+
 ## Inputs
 -------------------------------------------------------------------
-The input files are constructed as in the example below.
+The system accepts normalized score files in CSV format.
 The code will accept any set of letters (or special characters) 
 to represent items, item-pairs, positions, and position-pairs, 
 so long as each item-pair is represented by two item characters 
@@ -90,25 +153,32 @@ A configuration file (config.yaml) specifies input filenames
     - positions_to_constrain: subset of positions_to_assign 
       to constrain the possible assignment of items_to_constrain
 
-## Layout scoring
+## Scoring system
 -------------------------------------------------------------------
 Layouts are scored based on normalized item and item-pair scores 
 and corresponding normalized position and position-pair scores, 
 where direction (sequence of a given pair) matters.
-Below, `I` is the number of items, `P` is the number of item_pairs:
 
-    ```
-    item_component = sum[i,I](item_score_i * position_score_i) / I
-    
-    item_pair_component = sum[j,P](
-        item_pair_score_j_seq1 * position_pair_score_j_seq1 +
-        item_pair_score_j_seq2 * position_pair_score_j_seq2) / P
- 
-    score = item_component * item_pair_component
-    ```
+### Score Components
+  - Item Component: sum(item_score × position_score) / num_items
+  - Pair Component: sum(item_pair_score × position_pair_score) / num_pairs
 
-To calculate the score for a specific layout:
-  `python calculate_score.py --items "etaoi" --positions "FJDSV"`
+### Scoring Modes
+
+*** SOO ***
+  - item_only: Only individual item-position matches
+  - pair_only: Only pair interactions (internal + cross)
+  - combined: Multiplicative combination (item × total_pairs)
+
+*** MOO ***
+  - multi_objective: Separate objectives for MOO
+
+### Score Calculation Formula
+item_component = Σ(item_score_i × position_score_i) / N_items
+
+pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
+
+cross_component = Σ(assigned_interactions) / N_cross_pairs
 
 ## Branch-and-bound optimization
 -------------------------------------------------------------------
@@ -123,17 +193,18 @@ To calculate the score for a specific layout:
 
 ## Output
 -------------------------------------------------------------------
-  - Top-scoring layouts:
-    - Item-to-position mappings
-    - Total score and item and item-pair scores
-  - Detailed command-line output and CSV file:
-    - Configuration parameters
-    - Search space statistics
-    - Pruning statistics
-    - Complete scoring breakdown
-  - Optional visual mapping of layouts as a partial keyboard:
-    - ASCII art visualization of the layout
-    - Clear marking of constrained positions
+### Console Output
+  - Configuration summary and search space analysis
+  - Real-time progress with pruning statistics
+  - Top item-to-position solutions
+  - Detailed score breakdowns (with --verbose)
+  - Performance metrics and timing
+  - Optional ASCII art visualization of keyboard layouts
+
+### CSV Results
+Automatically saved timestamped files:
+  - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
+  - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
 
 ## Optional: Running parallel processes on SLURM
 -------------------------------------------------------------------
