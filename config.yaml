@@ -27,13 +27,11 @@ paths:
 # 14 letters:     87,178,291,200 permutations (with 2 fixed letters)
 # 16 letters: 20,922,789,888,000 permutations
 optimization:   
-  nlayouts: 3                     # Number of top layouts to display and save
-
   items_assigned:       "etaoi"         # Items already assigned to positions
   positions_assigned:   "FJRSE"         # Positions that are already filled 
 
-  items_to_assign:      "nsrhldcumfp"       # items to arrange in positions
-  positions_to_assign:  "VAWQCKULIM;"       # available positions
+  items_to_assign:      "nsrhldcu"       # items to arrange in positions
+  positions_to_assign:  "VAWQCKUL"       # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain, and
   # subset of positions_to_assign to constrain arrangement of items_to_constrain
