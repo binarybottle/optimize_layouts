@@ -1,12 +1,6 @@
 # display.py
 """
 Display, visualization, and output formatting for layout optimization.
-
-Consolidates all presentation logic including:
-- Keyboard layout visualization
-- Results formatting and printing  
-- CSV output generation
-- Progress reporting
 """
 
 import csv
@@ -16,10 +10,73 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 from config import Config
-from scoring import LayoutScorer, ScoreComponents
+from scoring import LayoutScorer, ScoreComponents, prepare_scoring_arrays
 
 #-----------------------------------------------------------------------------
-# Keyboard visualization (optional)
+# Complete layout scoring
+#-----------------------------------------------------------------------------
+def create_complete_layout_scorer(complete_mapping: Dict[str, str], config: Config, 
+                                 score_dicts: Tuple) -> LayoutScorer:
+    """
+    Create a scorer for the complete layout including all items.
+    
+    Args:
+        complete_mapping: Complete item->position mapping
+        config: Configuration object
+        score_dicts: Tuple of (item_scores, item_pair_scores, position_scores, position_pair_scores)
+        
+    Returns:
+        LayoutScorer for the complete layout
+    """
+    # Get all items and positions from the complete mapping
+    all_items = list(complete_mapping.keys())
+    all_positions = list(complete_mapping.values())
+    
+    # Create arrays for the complete layout (no pre-assigned items since this IS the complete layout)
+    complete_arrays = prepare_scoring_arrays(
+        items_to_assign=all_items,
+        positions_to_assign=all_positions,
+        norm_item_scores=score_dicts[0],
+        norm_item_pair_scores=score_dicts[1], 
+        norm_position_scores=score_dicts[2],
+        norm_position_pair_scores=score_dicts[3],
+        items_assigned=None,  # No pre-assigned since this is the complete layout
+        positions_assigned=None
+    )
+    
+    return LayoutScorer(complete_arrays, mode='combined')
+
+def calculate_complete_layout_score(complete_mapping: Dict[str, str], config: Config,
+                                   score_dicts: Tuple) -> Tuple[float, float, float, float]:
+    """
+    Calculate the complete layout score including all items and pairs.
+    
+    Args:
+        complete_mapping: Complete item->position mapping  
+        config: Configuration object
+        score_dicts: Tuple of score dictionaries
+        
+    Returns:
+        Tuple of (total_score, item_score, pair_score, cross_score)
+    """
+    complete_scorer = create_complete_layout_scorer(complete_mapping, config, score_dicts)
+    
+    # Build complete mapping arrays
+    all_items = list(complete_mapping.keys())
+    all_positions = list(complete_mapping.values())
+    
+    # Build position lookup
+    pos_to_idx = {pos: idx for idx, pos in enumerate(all_positions)}
+    
+    # Create mapping array where each item maps to its position index
+    mapping_array = np.array([pos_to_idx[complete_mapping[item]] 
+                             for item in all_items], dtype=np.int32)
+    
+    # Score the complete layout
+    return complete_scorer.score_layout(mapping_array, return_components=True)
+
+#-----------------------------------------------------------------------------
+# Keyboard visualization
 #-----------------------------------------------------------------------------
 def visualize_keyboard_layout(mapping: Optional[Dict[str, str]] = None, 
                             title: str = "Layout", 
@@ -28,13 +85,6 @@ def visualize_keyboard_layout(mapping: Optional[Dict[str, str]] = None,
                             positions_to_display: Optional[str] = None) -> None:
     """
     Print ASCII visual representation of keyboard layout.
-    
-    Args:
-        mapping: Dictionary mapping items to positions (item -> position)
-        title: Title for the layout display
-        config: Configuration object
-        items_to_display: Items to show in unfilled layout
-        positions_to_display: Positions to show in unfilled layout
     """
     if config is None:
         raise ValueError("Configuration must be provided")
@@ -134,15 +184,17 @@ def print_search_space_info(config: Config) -> None:
 def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]], 
                      config: Config, 
                      scorer: LayoutScorer,
+                     score_dicts: Tuple,
                      n_display: int = 5,
                      verbose: bool = False) -> None:
     """
-    Print single-objective optimization results.
+    Print single-objective optimization results with complete layout scores.
     
     Args:
-        results: List of (score, mapping, metadata) tuples
+        results: List of (score, mapping, metadata) tuples (optimization scores)
         config: Configuration object
-        scorer: Scorer used for optimization
+        scorer: Scorer used for optimization  
+        score_dicts: Tuple of score dictionaries for complete scoring
         n_display: Number of solutions to display
         verbose: Whether to show detailed breakdown
     """
@@ -154,14 +206,24 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
     else:
         print("\nOptimal Solution:")
     
-    for i, (score, mapping, _) in enumerate(results[:n_display], 1):
-        print(f"\n#{i}: Score = {score:.9f}")
-        
+    for i, (opt_score, mapping, _) in enumerate(results[:n_display], 1):
         # Build complete item->position mapping
         complete_mapping = {}
         if opt.items_assigned:
             complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
         complete_mapping.update({k: v.upper() for k, v in mapping.items()})
+        
+        # Calculate complete layout score
+        try:
+            complete_total, complete_item, complete_pair, complete_cross = calculate_complete_layout_score(
+                complete_mapping, config, score_dicts)
+        except Exception as e:
+            print(f"Warning: Could not calculate complete score: {e}")
+            complete_total = opt_score
+            complete_item = complete_pair = complete_cross = 0.0
+        
+        print(f"\n#{i}: Optimization Score = {opt_score:.9f}")
+        print(f"    Complete Layout Score = {complete_total:.9f}")
         
         # Display layout strings
         all_items = ''.join(complete_mapping.keys())
@@ -177,7 +239,11 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         
         # Detailed breakdown if requested
         if verbose:
-            _print_detailed_breakdown(complete_mapping, config, scorer)
+            print(f"  Complete Score Breakdown:")
+            print(f"    Item component:  {complete_item:.6f}")
+            print(f"    Pair component:  {complete_pair:.6f}")
+            print(f"    Cross component: {complete_cross:.6f}")
+            print(f"    Total:           {complete_total:.6f}")
         
         # Keyboard visualization
         if config.visualization.print_keyboard:
@@ -185,14 +251,16 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
 
 def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]], 
                      config: Config,
+                     score_dicts: Tuple,
                      objective_names: List[str] = None,
                      max_display: int = 5) -> None:
     """
-    Print multi-objective optimization results.
+    Print multi-objective optimization results with complete layout scores.
     
     Args:
         pareto_front: List of (mapping_array, objectives) tuples
-        config: Configuration object  
+        config: Configuration object
+        score_dicts: Tuple of score dictionaries for complete scoring
         objective_names: Names for the objectives
         max_display: Maximum number of solutions to display
     """
@@ -216,9 +284,7 @@ def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]],
     n_display = min(len(pareto_with_combined), max_display)
     print(f"Showing top {n_display} by combined score:")
     
-    for i, (combined_score, mapping_array, objectives) in enumerate(pareto_with_combined[:n_display], 1):
-        print(f"\n#{i}: Combined Score = {combined_score:.6f}")
-        
+    for i, (opt_combined_score, mapping_array, objectives) in enumerate(pareto_with_combined[:n_display], 1):
         # Build mapping dictionary
         item_mapping = {item: positions_list[pos] for item, pos in 
                        zip(items_list, mapping_array) if pos >= 0}
@@ -229,10 +295,27 @@ def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]],
             complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
         complete_mapping.update({k: v.upper() for k, v in item_mapping.items()})
         
+        # Calculate complete layout score
+        try:
+            complete_total, complete_item, complete_pair, complete_cross = calculate_complete_layout_score(
+                complete_mapping, config, score_dicts)
+        except Exception as e:
+            print(f"Warning: Could not calculate complete score: {e}")
+            complete_total = opt_combined_score
+            complete_item = complete_pair = complete_cross = 0.0
+        
+        print(f"\n#{i}: Optimization Combined = {opt_combined_score:.6f}")
+        print(f"    Complete Layout Score = {complete_total:.6f}")
+        
         # Display objectives
-        print("  Objectives:")
+        print("  Optimization Objectives:")
         for obj_name, obj_value in zip(objective_names, objectives):
             print(f"    {obj_name}: {obj_value:.6f}")
+        
+        print("  Complete Layout Breakdown:")
+        print(f"    Item component:  {complete_item:.6f}")
+        print(f"    Pair component:  {complete_pair:.6f}")
+        print(f"    Cross component: {complete_cross:.6f}")
         
         # Display layout
         all_items = ''.join(complete_mapping.keys())  
@@ -243,54 +326,18 @@ def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]],
         if config.visualization.print_keyboard:
             visualize_keyboard_layout(complete_mapping, f"Pareto Solution #{i}", config)
 
-def _print_detailed_breakdown(complete_mapping: Dict[str, str], config: Config, scorer: LayoutScorer) -> None:
-    """
-    Print detailed score breakdown for verbose mode.
-    """
-    try:
-        # Create position lookup dictionary
-        opt = config.optimization
-        all_positions = list(opt.positions_to_assign) + list(opt.positions_assigned)
-        position_to_index = {pos.upper(): idx for idx, pos in enumerate(all_positions)}
-        
-        # Convert complete_mapping to index-based mapping
-        all_items = list(complete_mapping.keys())
-        mapping_indices = []
-        
-        for item in all_items:
-            pos_str = complete_mapping[item].upper()
-            if pos_str in position_to_index:
-                mapping_indices.append(position_to_index[pos_str])
-            else:
-                print(f"  Warning: Position '{pos_str}' not found in position lookup")
-                mapping_indices.append(-1)  # Unassigned
-        
-        mapping_array = np.array(mapping_indices, dtype=np.int32)
-        
-        # Now we can safely call get_components
-        components = scorer.get_components(mapping_array)
-        
-        print(f"  Detailed Breakdown:")
-        print(f"    Item component: {components.item_score:.6f}")
-        print(f"    Pair component: {components.pair_score:.6f}")
-        print(f"    Cross component: {components.cross_score:.6f}")
-        print(f"    Scoring mode: {scorer.mode_name}")
-        
-    except Exception as e:
-        print(f"  Detailed breakdown unavailable: {e}")
-        print(f"  Note: This is a known issue with verbose mode display")
-
 #-----------------------------------------------------------------------------
 # CSV output
 #-----------------------------------------------------------------------------
 def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]], 
-                           config: Config) -> str:
+                           config: Config, score_dicts: Tuple) -> str:
     """
-    Save single-objective results to CSV file.
+    Save single-objective results to CSV file with complete layout scores.
     
     Args:
         results: Optimization results
         config: Configuration object
+        score_dicts: Tuple of score dictionaries for complete scoring
         
     Returns:
         Path to saved CSV file
@@ -317,11 +364,13 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
         # Results header
         writer.writerow([
             'Rank', 'Complete Items', 'Complete Positions', 
-            'Optimized Items', 'Optimized Positions', 'Score'
+            'Optimized Items', 'Optimized Positions', 
+            'Optimization Score', 'Complete Layout Score',
+            'Complete Item Score', 'Complete Pair Score', 'Complete Cross Score'
         ])
         
         # Results data
-        for rank, (score, mapping, _) in enumerate(results, 1):
+        for rank, (opt_score, mapping, _) in enumerate(results, 1):
             # Build complete mappings
             complete_mapping = {}
             if opt.items_assigned:
@@ -333,22 +382,32 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
             opt_items = ''.join(mapping.keys())
             opt_positions = ''.join(v.upper() for v in mapping.values())
             
+            # Calculate complete score
+            try:
+                complete_total, complete_item, complete_pair, complete_cross = calculate_complete_layout_score(
+                    complete_mapping, config, score_dicts)
+            except Exception:
+                complete_total = complete_item = complete_pair = complete_cross = 0.0
+            
             writer.writerow([
                 rank, complete_items, complete_positions,
-                opt_items, opt_positions, f"{score:.9f}"
+                opt_items, opt_positions, f"{opt_score:.9f}",
+                f"{complete_total:.9f}", f"{complete_item:.6f}", 
+                f"{complete_pair:.6f}", f"{complete_cross:.6f}"
             ])
     
     return output_path
 
 def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]], 
-                           config: Config,
+                           config: Config, score_dicts: Tuple,
                            objective_names: List[str] = None) -> str:
     """
-    Save multi-objective results to CSV file.
+    Save multi-objective results to CSV file with complete layout scores.
     
     Args:
         pareto_front: Pareto front solutions
         config: Configuration object
+        score_dicts: Tuple of score dictionaries for complete scoring
         objective_names: Names for objectives
         
     Returns:
@@ -377,7 +436,10 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
         writer.writerow([])
         
         # Results header
-        header = ['Rank', 'Items', 'Positions'] + objective_names + ['Combined Total']
+        header = (['Rank', 'Items', 'Positions'] + 
+                 [f'Opt {name}' for name in objective_names] + 
+                 ['Opt Combined', 'Complete Layout Score',
+                  'Complete Item', 'Complete Pair', 'Complete Cross'])
         writer.writerow(header)
         
         # Sort by combined score for ranking
@@ -386,7 +448,7 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
         pareto_with_combined.sort(key=lambda x: x[0], reverse=True)
         
         # Write results
-        for rank, (combined_score, mapping_array, objectives) in enumerate(pareto_with_combined, 1):
+        for rank, (opt_combined_score, mapping_array, objectives) in enumerate(pareto_with_combined, 1):
             # Build complete mapping
             item_mapping = {item: positions_list[pos] for item, pos in 
                            zip(items_list, mapping_array) if pos >= 0}
@@ -398,9 +460,17 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             
+            # Calculate complete score
+            try:
+                complete_total, complete_item, complete_pair, complete_cross = calculate_complete_layout_score(
+                    complete_mapping, config, score_dicts)
+            except Exception:
+                complete_total = complete_item = complete_pair = complete_cross = 0.0
+            
             row = ([rank, all_items, all_positions] + 
                    [f"{obj:.9f}" for obj in objectives] +
-                   [f"{combined_score:.9f}"])
+                   [f"{opt_combined_score:.9f}", f"{complete_total:.9f}",
+                    f"{complete_item:.6f}", f"{complete_pair:.6f}", f"{complete_cross:.6f}"])
             writer.writerow(row)
     
     return output_path

@@ -4,19 +4,6 @@ Layout optimization software.
 
 This script consolidates all optimization logic to support both 
 Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
-
-Usage:
-    # Single-objective optimization (default)
-    python optimize_layout.py --config config.yaml
-    
-    # Multi-objective optimization  
-    python optimize_layout.py --config config.yaml --moo
-    
-    # With validation and verbose output
-    python optimize_layout.py --config config.yaml --validate --verbose
-    
-    # Multi-objective with limits
-    python optimize_layout.py --config config.yaml --moo --max-solutions 50 --time-limit 300
 """
 
 import argparse
@@ -77,11 +64,11 @@ def load_normalized_scores(config: Config) -> Tuple[Dict, Dict, Dict, Dict]:
     return item_scores, item_pair_scores, position_scores, position_pair_scores
 
 #-----------------------------------------------------------------------------
-# Main optimization functions  
+# Optimization functions
 #-----------------------------------------------------------------------------
 def run_single_objective_optimization(config: Config, n_solutions: int = 5, verbose: bool = False) -> None:
     """
-    Run single-objective optimization and display results.
+    Run single-objective optimization and display results with complete layout scores.
     
     Args:
         config: Configuration object
@@ -135,12 +122,12 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     
     elapsed_time = time.time() - start_time
     
-    # Display results
+    # Display results with complete scores
     if results:
-        print_soo_results(results, config, scorer, n_solutions, verbose)
+        print_soo_results(results, config, scorer, score_dicts, n_solutions, verbose)
         
-        # Save results
-        csv_path = save_soo_results_to_csv(results, config)
+        # Save results with complete scores
+        csv_path = save_soo_results_to_csv(results, config, score_dicts)
         print(f"\nResults saved to: {csv_path}")
     else:
         print("\nNo solutions found!")
@@ -155,7 +142,7 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
 def run_multi_objective_optimization(config: Config, max_solutions: int = None, 
                                    time_limit: float = None) -> None:
     """
-    Run multi-objective optimization and display results.
+    Run multi-objective optimization and display results with complete layout scores.
     
     Args:
         config: Configuration object
@@ -211,13 +198,13 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     elapsed_time = time.time() - start_time
     
-    # Display results
+    # Display results with complete scores
     if pareto_front:
         objective_names = ['Item Score', 'Pair Score', 'Cross Score']
-        print_moo_results(pareto_front, config, objective_names)
+        print_moo_results(pareto_front, config, score_dicts, objective_names)
         
-        # Save results
-        csv_path = save_moo_results_to_csv(pareto_front, config, objective_names)
+        # Save results with complete scores
+        csv_path = save_moo_results_to_csv(pareto_front, config, score_dicts, objective_names)
         print(f"\nResults saved to: {csv_path}")
     else:
         print("\nNo Pareto solutions found!")
@@ -294,11 +281,6 @@ def main():
             print("="*60)
             
             validation_passed = run_validation_suite(config)
-            #if not validation_passed:
-            #    print("⚠️  Some validation tests failed, but continuing with optimization...")
-            #    print("Consider reviewing the validation results above.")
-            #else:
-            #    print("✅ All validation tests passed!")
             
             print("\nProceeding to optimization...\n")
         
