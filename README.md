@@ -31,7 +31,7 @@ python optimize_layout.py --config config.yaml --validate --verbose
 python analyze_results.py
 
 # Score a specific layout
-python display_and_score_layout.py --items "etaoi" --positions "FJDSV"
+python score_layout.py --items "etaoi" --positions "FJDSV"
 
 For running parallel processes, 
 see **Running parallel processes** below.

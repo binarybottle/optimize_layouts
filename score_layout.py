@@ -1,10 +1,10 @@
-# display_and_score_layout.py
+# score_layout.py
 """
 Layout score calculator that shows complete layout scores.
 
 Example usage:
-    python display_and_score_layout.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
-    python display_and_score_layout.py --items "abc" --positions "FDJ" --config config.yaml --verbose
+    python score_layout.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
+    python score_layout.py --items "abc" --positions "FDJ" --config config.yaml --verbose
 """
 
 import argparse
@@ -75,13 +75,13 @@ def main():
         epilog="""
 Examples:
   # Basic complete scoring
-  python display_and_score_layout.py --items "abc" --positions "FDJ"
+  python score_layout.py --items "abc" --positions "FDJ"
   
   # With detailed breakdown
-  python display_and_score_layout.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
+  python score_layout.py --items "etaoinsrhld" --positions "FJDSVERAWCQ" --details
   
   # With validation and keyboard display
-  python display_and_score_layout.py --items "abc" --positions "FDJ" --validate --keyboard
+  python score_layout.py --items "abc" --positions "FDJ" --validate --keyboard
         """
     )
     
