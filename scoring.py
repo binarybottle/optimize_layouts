@@ -1,17 +1,18 @@
-# scoring.py
+# scoring.py  
 """
 Unified, maintainable scoring system for layout optimization.
 
-COMBINATION STRATEGY:
-The system uses a centralized combination strategy defined by DEFAULT_COMBINATION_STRATEGY
-and implemented in apply_default_combination(). This ensures consistency across:
+The system uses a centralized combination strategy defined by 
+DEFAULT_COMBINATION_STRATEGY and implemented in apply_default_combination(). 
+
+This ensures consistency across:
 - ScoreComponents.total() method
 - CombinedCombiner class  
 - MOO mode combined totals (for display purposes)
 - Any other places that need to combine item and item-pair scores
 
-To change the combination strategy, modify only the DEFAULT_COMBINATION_STRATEGY constant
-and the apply_default_combination() function.
+To change the combination strategy, modify only the DEFAULT_COMBINATION_STRATEGY 
+constant and the apply_default_combination() function.
 """
 
 import numpy as np
@@ -584,6 +585,14 @@ def calculate_complete_layout_score(complete_mapping: Dict[str, str],
     
     This is a high-level convenience function that creates a complete scorer
     and calculates the total scores.
+    
+    Args:
+        complete_mapping: Dictionary mapping items to positions
+        normalized_scores: Tuple of (norm_item_scores, norm_item_pair_scores, 
+                          norm_position_scores, norm_position_pair_scores)
+    
+    Returns:
+        Tuple of (total_score, item_score, item_pair_score)
     """
     # Create complete scorer
     scorer = create_complete_layout_scorer(complete_mapping, normalized_scores, mode='combined')
@@ -597,13 +606,6 @@ def calculate_complete_layout_score(complete_mapping: Dict[str, str],
     )
     
     return total_score, item_score, item_pair_score
-
-def calculate_complete_layout_score_direct(complete_mapping: Dict[str, str],
-                                         normalized_scores: Tuple) -> Tuple[float, float, float]:
-    """Calculate complete layout score without Config dependency."""
-    scorer = create_complete_layout_scorer(complete_mapping, normalized_scores, mode='combined')
-    mapping_array = np.arange(len(complete_mapping), dtype=np.int32)
-    return scorer.score_layout(mapping_array, return_components=True)
 
 def score_layout_from_strings(items_str: str, 
                              positions_str: str,
@@ -630,7 +632,7 @@ def score_layout_from_strings(items_str: str,
     complete_mapping = dict(zip(items, positions))
     
     # Calculate score using existing function
-    return calculate_complete_layout_score_direct(complete_mapping, normalized_scores)
+    return calculate_complete_layout_score(complete_mapping, normalized_scores)
 
 #-----------------------------------------------------------------------------
 # Testing and validation
@@ -681,10 +683,9 @@ def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> boo
     return True
 
 #-----------------------------------------------------------------------------
-# Module Testing
+# Module testing
 #-----------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Updated test - should still work but maybe improve it
     print("Testing the consolidated scoring system...")
     
     # Create dummy data for testing
