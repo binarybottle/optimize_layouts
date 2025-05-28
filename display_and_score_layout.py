@@ -95,7 +95,7 @@ Examples:
                        help="Show detailed scoring breakdown")
     parser.add_argument("--validate", action="store_true", 
                        help="Run validation on this specific layout")
-    parser.add_argument("--keyboard", default="True", action="store_true",
+    parser.add_argument("--keyboard", action="store_true",
                        help="Show keyboard visualization")
     
     args = parser.parse_args()
@@ -145,8 +145,7 @@ Examples:
         if args.details:
             print_detailed_breakdown(complete_mapping, normalized_scores)
         
-        # Show keyboard layout if requested
-        if args.keyboard:
+        if args.keyboard or config.visualization.print_keyboard:
             print("\nKeyboard Layout:")
             visualize_keyboard_layout(
                 mapping=complete_mapping,

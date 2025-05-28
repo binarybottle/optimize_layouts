@@ -65,7 +65,7 @@ class PathConfig:
 @dataclass
 class VisualizationConfig:
     """Visualization and display settings."""
-    print_keyboard: bool = True
+    print_keyboard: bool = False
 
 @dataclass
 class Config:
