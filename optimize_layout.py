@@ -200,7 +200,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     # Display results with complete scores
     if pareto_front:
-        objective_names = ['Item Score', 'Pair Score', 'Cross Score']
+        objective_names = ['Item Score', 'Item-Pair Score']
         print_moo_results(pareto_front, config, score_dicts, objective_names)
         
         # Save results with complete scores

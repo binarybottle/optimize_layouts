@@ -83,7 +83,7 @@ def calculate_complete_layout_score(complete_mapping: dict, config: Config,
         score_dicts: Tuple of score dictionaries
         
     Returns:
-        Tuple of (total_score, item_score, pair_score, cross_score)
+        Tuple of (total_score, item_score, pair_score)
     """
     # Get all items and positions from the complete mapping
     all_items = list(complete_mapping.keys())
@@ -129,7 +129,7 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
         mode: Scoring mode ('combined', 'item_only', 'pair_only', 'multi_objective')
     
     Returns:
-        Tuple of (total_score, item_score, pair_score, cross_score)
+        Tuple of (total_score, item_score, pair_score)
     """
     # Validate input lengths
     items = list(items_str.lower())
@@ -159,7 +159,7 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
         print(f"  Complete layout: {all_items} → {all_positions}")
     
     # Calculate complete layout score
-    total_score, item_score, pair_score, cross_score = calculate_complete_layout_score(
+    total_score, item_score, pair_score = calculate_complete_layout_score(
         complete_mapping, config, score_dicts)
     
     if detailed:
@@ -167,7 +167,6 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
         print(f"  Total score:      {total_score:.12f}")
         print(f"  Item component:   {item_score:.12f}")
         print(f"  Pair component:   {pair_score:.12f}")
-        print(f"  Cross component:  {cross_score:.12f}")
     
     # Create a dummy scorer for backward compatibility
     # (This is a temporary solution for functions that expect a scorer)
@@ -184,7 +183,9 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
     except Exception:
         scorer = None
     
-    return total_score, item_score, pair_score, cross_score, scorer
+    total_score, item_score, item_pair_score = calculate_complete_layout_score(complete_mapping, config, score_dicts)
+
+    return total_score, item_score, item_pair_score, scorer
 
 def print_detailed_breakdown(items_str: str, positions_str: str, config: Config, scorer: LayoutScorer):
     """Print detailed item-by-item scoring breakdown."""
@@ -276,7 +277,7 @@ Examples:
             print()
         
         # Calculate scores
-        total_score, item_score, pair_score, cross_score, scorer = calculate_layout_score(
+        total_score, item_score, pair_score, scorer = calculate_layout_score(
             args.items, args.positions, config, args.details, args.mode
         )
         
@@ -298,13 +299,12 @@ Examples:
         print(f"\nFinal Complete Layout Scores ({args.mode} mode):")
         print(f"  Total score:       {total_score:.12f}")
         print(f"  Item component:    {item_score:.12f}")
-        print(f"  Pair component:    {pair_score:.12f}")
-        print(f"  Cross component:   {cross_score:.12f}")
+        print(f"  Item-pair component:    {pair_score:.12f}")
         
         # CSV format output (for compatibility with existing tools)
         print(f"\nCSV Format:")
-        print(f"total_score,item_score,pair_score,cross_score")
-        print(f"{total_score:.6f},{item_score:.6f},{pair_score:.6f},{cross_score:.6f}")
+        print(f"total_score,item_score,pair_score")
+        print(f"{total_score:.6f},{item_score:.6f},{pair_score:.6f}")
         
     except FileNotFoundError as e:
         print(f"Error: {e}")

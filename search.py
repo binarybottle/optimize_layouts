@@ -19,6 +19,7 @@ from tqdm import tqdm
 
 from config import Config
 from scoring import LayoutScorer
+from scoring import LayoutScorer, apply_default_combination
 
 #-----------------------------------------------------------------------------
 # Upper bound calculations
@@ -61,17 +62,14 @@ class UpperBoundCalculator:
             # Estimate maximum improvements for each component
             max_item_gain = self._estimate_max_item_gain(unassigned_items, available_positions)
             max_pair_gain = self._estimate_max_pair_gain(unassigned_items, available_positions, partial_mapping)
-            max_cross_gain = self._estimate_max_cross_gain(unassigned_items, available_positions)
             
             # Combine using same logic as scorer
             if self.scorer.mode == 'combined':
                 improved_item = current_components.item_score + max_item_gain
-                improved_pair_total = (current_components.pair_score + max_pair_gain + 
-                                     current_components.cross_score + max_cross_gain)
-                bound = improved_item * improved_pair_total
+                improved_item_pair = current_components.item_pair_score + max_pair_gain
+                bound = apply_default_combination(improved_item, improved_item_pair)
             elif self.scorer.mode == 'pair_only':
-                bound = (current_components.pair_score + max_pair_gain + 
-                        current_components.cross_score + max_cross_gain)
+                bound = (current_components.item_pair_score + max_pair_gain)
             else:  # item_only
                 bound = current_components.item_score + max_item_gain
         
@@ -152,41 +150,7 @@ class UpperBoundCalculator:
         total_items = len(partial_mapping)
         total_pairs = total_items * (total_items - 1) if total_items > 1 else 1
         return total_gain / total_pairs
-    
-    def _estimate_max_cross_gain(self, unassigned_items: List[int],
-                                available_positions: List[int]) -> float:
-        """Estimate maximum possible cross-interaction gain."""
-        if not self.scorer.arrays.has_cross_interactions or not unassigned_items:
-            return 0.0
         
-        total_gain = 0.0
-        n_assigned = self.scorer.arrays.n_assigned
-        
-        for item_idx in unassigned_items:
-            best_item_cross = 0.0
-            
-            for pos_idx in available_positions:
-                item_cross_total = 0.0
-                
-                for assigned_idx in range(n_assigned):
-                    # Forward and backward cross-interactions
-                    fwd_item = self.scorer.arrays.cross_item_matrix[item_idx, assigned_idx]
-                    fwd_pos = self.scorer.arrays.cross_position_matrix[pos_idx, assigned_idx]
-                    
-                    bwd_item = self.scorer.arrays.reverse_cross_item_matrix[assigned_idx, item_idx]
-                    bwd_pos = self.scorer.arrays.reverse_cross_position_matrix[assigned_idx, pos_idx]
-                    
-                    item_cross_total += fwd_item * fwd_pos + bwd_item * bwd_pos
-                
-                best_item_cross = max(best_item_cross, item_cross_total)
-            
-            total_gain += best_item_cross
-        
-        # Normalize by total cross-interaction count
-        total_items = len(self.scorer.arrays.item_scores)
-        total_cross_pairs = total_items * n_assigned * 2 if n_assigned > 0 else 1
-        return total_gain / total_cross_pairs
-    
     def clear_cache(self):
         """Clear upper bound cache."""
         self._cache.clear()

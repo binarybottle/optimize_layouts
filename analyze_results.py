@@ -18,6 +18,7 @@ import csv
 import re
 import argparse
 import numpy as np
+from scoring import apply_default_combination
 
 try:
     from optimize_layout import visualize_keyboard_layout
@@ -221,7 +222,7 @@ def parse_result_csv(filepath):
         import traceback
         traceback.print_exc()
         return None
-    
+       
 def load_results(results_dir, max_files=None):
     """Load layout result files and return a dataframe."""
     all_results = []
@@ -260,18 +261,24 @@ def load_results(results_dir, max_files=None):
     print(f"DataFrame columns: {', '.join(df.columns.tolist())}")
     
     if not df.empty:
-        # Verify that total_score = item_score * item_pair_score
-        df['calculated_total'] = df['item_score'] * df['item_pair_score']
+        # Verify that total_score matches centralized combination strategy
+        df['calculated_total'] = apply_default_combination_vectorized(
+            df['item_score'].values, 
+            df['item_pair_score'].values
+        )
         
         # Check if there's a significant difference between calculated and reported total
         tol = 1e-8  # Tolerance for floating point comparison
         mismatch_count = ((df['total_score'] - df['calculated_total']).abs() > tol).sum()
         if mismatch_count > 0:
-            print(f"Warning: {mismatch_count} rows have total scores that don't match the product of item and item-pair scores")
+            print(f"Warning: {mismatch_count} rows have total scores that don't match the current combination strategy ({DEFAULT_COMBINATION_STRATEGY})")
+            print(f"  This may indicate the CSV files were generated with a different combination strategy.")
             # Calculate difference statistics for mismatches
             mismatch_df = df[((df['total_score'] - df['calculated_total']).abs() > tol)]
             print(f"  Average difference: {(mismatch_df['total_score'] - mismatch_df['calculated_total']).abs().mean()}")
             print(f"  Max difference: {(mismatch_df['total_score'] - mismatch_df['calculated_total']).abs().max()}")
+        else:
+            print(f"✓ All total scores match the current combination strategy ({DEFAULT_COMBINATION_STRATEGY})")
     
     return df
 

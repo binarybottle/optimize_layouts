@@ -108,8 +108,7 @@ def test_scoring_consistency(scorer: LayoutScorer, n_tests: int = 100) -> Valida
             components2 = scorer.get_components(mapping)
             
             if not (np.isclose(components1.item_score, components2.item_score, rtol=1e-10) and
-                    np.isclose(components1.pair_score, components2.pair_score, rtol=1e-10) and
-                    np.isclose(components1.cross_score, components2.cross_score, rtol=1e-10)):
+                    np.isclose(components1.item_pair_score, components2.item_pair_score, rtol=1e-10)):
                 inconsistencies += 1
         
         passed = inconsistencies == 0
@@ -233,8 +232,7 @@ def test_soo_moo_consistency(config: Config) -> ValidationResult:
             
             # Components should be identical
             if not (np.isclose(soo_components.item_score, moo_components.item_score, rtol=1e-10) and
-                    np.isclose(soo_components.pair_score, moo_components.pair_score, rtol=1e-10) and
-                    np.isclose(soo_components.cross_score, moo_components.cross_score, rtol=1e-10)):
+                    np.isclose(soo_components.item_pair_score, moo_components.item_pair_score, rtol=1e-10)):
                 inconsistencies += 1
         
         passed = inconsistencies == 0
@@ -246,6 +244,32 @@ def test_soo_moo_consistency(config: Config) -> ValidationResult:
     except Exception as e:
         return ValidationResult("SOO/MOO Consistency", False, f"Test failed with error: {e}")
 
+def test_combination_consistency(config: Config) -> ValidationResult:
+    """
+    Test that all combination methods use the same centralized logic.
+    """
+    try:
+        # Create test components
+        from scoring import ScoreComponents, apply_default_combination, CombinedCombiner
+        
+        test_components = ScoreComponents(item_score=0.6, item_pair_score=0.8)
+        
+        # Test that all methods give same result
+        total_method = test_components.total()
+        combiner_method = CombinedCombiner().combine(test_components)
+        direct_method = apply_default_combination(0.6, 0.8)
+        
+        if not (np.isclose(total_method, combiner_method, rtol=1e-10) and
+                np.isclose(total_method, direct_method, rtol=1e-10)):
+            return ValidationResult("Combination Consistency", False, 
+                                  f"Inconsistent combination: total={total_method}, combiner={combiner_method}, direct={direct_method}")
+        
+        return ValidationResult("Combination Consistency", True, 
+                              "All combination methods use consistent logic")
+        
+    except Exception as e:
+        return ValidationResult("Combination Consistency", False, f"Test failed: {e}")
+    
 def test_normalization_correctness(config: Config) -> ValidationResult:
     """
     Test that score normalization is working correctly.
@@ -288,12 +312,9 @@ def test_normalization_correctness(config: Config) -> ValidationResult:
         if not (0.0 <= components.item_score <= 1.0):
             issues.append(f"Item score out of range: {components.item_score}")
         
-        if not (0.0 <= components.pair_score <= 1.0):
-            issues.append(f"Pair score out of range: {components.pair_score}")
-        
-        if not (0.0 <= components.cross_score <= 1.0):
-            issues.append(f"Cross score out of range: {components.cross_score}")
-        
+        if not (0.0 <= components.item_pair_score <= 1.0):
+            issues.append(f"Item-pair score out of range: {components.item_pair_score}")
+
         # For uniform scores, item score should be close to expected
         if components.item_score > 0:  # Only check if we actually have a score
             if not np.isclose(components.item_score, expected_item, atol=tolerance):
@@ -304,7 +325,7 @@ def test_normalization_correctness(config: Config) -> ValidationResult:
             pass
         
         # Check that we have reasonable values overall
-        total_score = components.item_score + components.pair_score + components.cross_score
+        total_score = components.item_score + components.item_pair_score
         if total_score <= 0:
             issues.append(f"Total score is too low: {total_score}")
         
@@ -314,8 +335,7 @@ def test_normalization_correctness(config: Config) -> ValidationResult:
         details = {
             "issues": issues,
             "item_score": components.item_score,
-            "pair_score": components.pair_score,
-            "cross_score": components.cross_score,
+            "pair_score": components.item_pair_score,
             "expected_item": expected_item,
             "expected_pair": expected_pair
         }
@@ -433,7 +453,10 @@ def run_validation_suite(config: Config, quick: bool = False) -> bool:
     
     print("  Testing SOO/MOO consistency...")
     results.append(test_soo_moo_consistency(config))
-    
+
+    print("  Testing combination consistency...")
+    results.append(test_combination_consistency(config))
+
     print("  Testing normalization correctness...")
     results.append(test_normalization_correctness(config))
     

@@ -2,15 +2,16 @@
 """
 Unified, maintainable scoring system for layout optimization.
 
-This module consolidates ALL scoring logic into a single system that serves 
-both Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
+COMBINATION STRATEGY:
+The system uses a centralized combination strategy defined by DEFAULT_COMBINATION_STRATEGY
+and implemented in apply_default_combination(). This ensures consistency across:
+- ScoreComponents.total() method
+- CombinedCombiner class  
+- MOO mode combined totals (for display purposes)
+- Any other places that need to combine item and item-pair scores
 
-Key design principles:
-1. Single source of truth for all score calculations
-2. Clear separation between SOO and MOO modes
-3. Consistent normalization across all components
-4. JIT optimization for computational cores
-5. Comprehensive documentation and testing
+To change the combination strategy, modify only the DEFAULT_COMBINATION_STRATEGY constant
+and the apply_default_combination() function.
 """
 
 import numpy as np
@@ -20,23 +21,76 @@ from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 #-----------------------------------------------------------------------------
+# Default combination strategy - SINGLE SOURCE OF TRUTH
+#-----------------------------------------------------------------------------
+DEFAULT_COMBINATION_STRATEGY = "multiplicative"  # item_score * item_pair_score
+
+def apply_default_combination(item_score: float, item_pair_score: float) -> float:
+    """
+    Apply the default combination strategy.
+    
+    This is the SINGLE SOURCE OF TRUTH for how item and item-pair scores are combined.
+    All other combination logic should delegate to this function.
+    
+    Args:
+        item_score: Individual item score component
+        item_pair_score: Item-pair interaction score component
+        
+    Returns:
+        Combined score using default strategy
+    """
+    if DEFAULT_COMBINATION_STRATEGY == "multiplicative":
+        return item_score * item_pair_score
+    elif DEFAULT_COMBINATION_STRATEGY == "additive":
+        return item_score + item_pair_score
+    elif DEFAULT_COMBINATION_STRATEGY == "weighted_additive":
+        # Could add weights here if needed
+        return 0.6 * item_score + 0.4 * item_pair_score
+    else:
+        raise ValueError(f"Unknown combination strategy: {DEFAULT_COMBINATION_STRATEGY}")
+
+def apply_default_combination_vectorized(item_scores: np.ndarray, item_pair_scores: np.ndarray) -> np.ndarray:
+    """
+    Vectorized version of apply_default_combination for numpy arrays/pandas Series.
+    
+    Args:
+        item_scores: Array of item scores
+        item_pair_scores: Array of item-pair scores
+        
+    Returns:
+        Array of combined scores using default strategy
+    """
+    if DEFAULT_COMBINATION_STRATEGY == "multiplicative":
+        return item_scores * item_pair_scores
+    elif DEFAULT_COMBINATION_STRATEGY == "additive":
+        return item_scores + item_pair_scores
+    elif DEFAULT_COMBINATION_STRATEGY == "weighted_additive":
+        return 0.6 * item_scores + 0.4 * item_pair_scores
+    else:
+        raise ValueError(f"Unknown combination strategy: {DEFAULT_COMBINATION_STRATEGY}")
+     
+#-----------------------------------------------------------------------------
 # Core data structures
 #-----------------------------------------------------------------------------
 @dataclass
 class ScoreComponents:
-    """Container for the three independent scoring components."""
+    """Container for the two independent scoring components."""
     item_score: float
-    pair_score: float
-    cross_score: float
+    item_pair_score: float
     
     def as_list(self) -> List[float]:
         """Return components as list for MOO."""
-        return [self.item_score, self.pair_score, self.cross_score]
+        return [self.item_score, self.item_pair_score]
     
     def total(self) -> float:
-        """Return sum of all components."""
-        return self.item_score + self.pair_score + self.cross_score
-
+        """
+        Return combined score using default combination strategy.
+        
+        This delegates to the centralized combination logic to ensure consistency
+        throughout the system.
+        """
+        return apply_default_combination(self.item_score, self.item_pair_score)
+    
 @dataclass
 class ScoringArrays:
     """Container for all scoring arrays with clear documentation."""
@@ -108,19 +162,26 @@ def _calculate_item_score_jit(mapping: np.ndarray, item_scores: np.ndarray,
     return raw_score, placed_count
 
 @jit(nopython=True, fastmath=True)
-def _calculate_pair_score_jit(mapping: np.ndarray, item_pair_matrix: np.ndarray,
-                             position_matrix: np.ndarray) -> Tuple[float, int]:
+def _calculate_item_pair_score_jit(mapping: np.ndarray, 
+                                  item_pair_matrix: np.ndarray,
+                                  position_matrix: np.ndarray,
+                                  cross_item_matrix: Optional[np.ndarray],
+                                  cross_position_matrix: Optional[np.ndarray],
+                                  reverse_cross_item_matrix: Optional[np.ndarray],
+                                  reverse_cross_position_matrix: Optional[np.ndarray]) -> Tuple[float, int]:
     """
-    JIT-compiled pair score calculation for internal pairs only.
+    JIT-compiled combined item-pair score calculation.
+    Includes both internal pairs and cross-interactions.
     
     Returns:
-        (raw_score, pair_count)
+        (raw_score, interaction_count)
     """
     raw_score = 0.0
-    pair_count = 0
+    interaction_count = 0
     
+    # 1. Internal pairs between items being optimized
     for i in range(len(mapping)):
-        pos_i = mapping[i]
+        pos_i = mapping[i] 
         if pos_i < 0 or pos_i >= position_matrix.shape[0]:
             continue
             
@@ -134,42 +195,28 @@ def _calculate_pair_score_jit(mapping: np.ndarray, item_pair_matrix: np.ndarray,
             bwd_score = item_pair_matrix[j, i] * position_matrix[pos_j, pos_i]
             
             raw_score += fwd_score + bwd_score
-            pair_count += 2  # Count both directions
+            interaction_count += 2  # Count both directions
     
-    return raw_score, pair_count
-
-@jit(nopython=True, fastmath=True)
-def _calculate_cross_score_jit(mapping: np.ndarray, 
-                              cross_item_matrix: np.ndarray,
-                              cross_position_matrix: np.ndarray,
-                              reverse_cross_item_matrix: np.ndarray,
-                              reverse_cross_position_matrix: np.ndarray) -> Tuple[float, int]:
-    """
-    JIT-compiled cross-interaction score calculation.
-    
-    Returns:
-        (raw_score, interaction_count)
-    """
-    raw_score = 0.0
-    interaction_count = 0
-    n_assigned = cross_item_matrix.shape[1]
-    
-    for i in range(len(mapping)):
-        pos_i = mapping[i]
-        if pos_i < 0 or pos_i >= cross_position_matrix.shape[0]:
-            continue
-            
-        for j in range(n_assigned):
-            # Forward direction: new_item -> assigned_item
-            fwd_item = cross_item_matrix[i, j]
-            fwd_pos = cross_position_matrix[pos_i, j]
-            
-            # Backward direction: assigned_item -> new_item  
-            bwd_item = reverse_cross_item_matrix[j, i]
-            bwd_pos = reverse_cross_position_matrix[j, pos_i]
-            
-            raw_score += fwd_item * fwd_pos + bwd_item * bwd_pos
-            interaction_count += 2
+    # 2. Cross-interactions with pre-assigned items (if they exist)
+    if cross_item_matrix is not None:
+        n_assigned = cross_item_matrix.shape[1]
+        
+        for i in range(len(mapping)):
+            pos_i = mapping[i]
+            if pos_i < 0 or pos_i >= cross_position_matrix.shape[0]:
+                continue
+                
+            for j in range(n_assigned):
+                # Forward direction: new_item -> assigned_item
+                fwd_item = cross_item_matrix[i, j]
+                fwd_pos = cross_position_matrix[pos_i, j]
+                
+                # Backward direction: assigned_item -> new_item  
+                bwd_item = reverse_cross_item_matrix[j, i]
+                bwd_pos = reverse_cross_position_matrix[j, pos_i]
+                
+                raw_score += fwd_item * fwd_pos + bwd_item * bwd_pos
+                interaction_count += 2
     
     return raw_score, interaction_count
 
@@ -190,10 +237,7 @@ class ScoreCalculator:
         
     def calculate_components(self, mapping: np.ndarray) -> ScoreComponents:
         """
-        Calculate all three independent scoring components.
-        
-        This is the ONLY method that performs raw score calculations.
-        All other scoring methods should use this as their foundation.
+        Calculate the two independent scoring components.
         
         Args:
             mapping: Array mapping items to positions (-1 for unassigned)
@@ -214,25 +258,28 @@ class ScoreCalculator:
         )
         item_score = item_raw / max(1, item_count)  # Normalize by placed items
         
-        # 2. Calculate internal pair score component
-        pair_raw, pair_count = _calculate_pair_score_jit(
-            int_mapping, self.arrays.item_pair_matrix, self.arrays.position_matrix
-        )
-        pair_score = pair_raw / max(1, pair_count)  # Normalize by pair count
-        
-        # 3. Calculate cross-interaction score component
-        cross_score = 0.0
+        # 2. Calculate combined item-pair score component
+        cross_arrays = None
         if self.arrays.has_cross_interactions:
-            cross_raw, cross_count = _calculate_cross_score_jit(
-                int_mapping,
+            cross_arrays = (
                 self.arrays.cross_item_matrix,
-                self.arrays.cross_position_matrix, 
+                self.arrays.cross_position_matrix,
                 self.arrays.reverse_cross_item_matrix,
                 self.arrays.reverse_cross_position_matrix
             )
-            cross_score = cross_raw / max(1, cross_count)  # Normalize by interaction count
         
-        components = ScoreComponents(item_score, pair_score, cross_score)
+        item_pair_raw, pair_count = _calculate_item_pair_score_jit(
+            int_mapping, 
+            self.arrays.item_pair_matrix, 
+            self.arrays.position_matrix,
+            cross_arrays[0] if cross_arrays else None,
+            cross_arrays[1] if cross_arrays else None,
+            cross_arrays[2] if cross_arrays else None,
+            cross_arrays[3] if cross_arrays else None
+        )
+        item_pair_score = item_pair_raw / max(1, pair_count)  # Normalize by interaction count
+        
+        components = ScoreComponents(item_score, item_pair_score)
         
         # Cache result
         self._score_cache[mapping_key] = components
@@ -267,24 +314,33 @@ class ItemOnlyCombiner(ScoreCombiner):
     def get_mode_name(self) -> str:
         return "Item Only"
 
-class PairOnlyCombiner(ScoreCombiner):
-    """Combine using only pair scores (internal + cross-interactions)."""
+class ItemOnlyCombiner(ScoreCombiner):
+    """Combine using only item scores."""
     
     def combine(self, components: ScoreComponents) -> float:
-        return components.pair_score + components.cross_score
+        return components.item_score
     
     def get_mode_name(self) -> str:
-        return "Pair Only"
+        return "Item Only"
+
+class PairOnlyCombiner(ScoreCombiner):
+    """Combine using only item-pair scores."""
+    
+    def combine(self, components: ScoreComponents) -> float:
+        return components.item_pair_score
+    
+    def get_mode_name(self) -> str:
+        return "Item-Pair Only"
 
 class CombinedCombiner(ScoreCombiner):
-    """Combine using multiplicative combination of item and total pair scores."""
+    """Combine using the default combination strategy."""
     
     def combine(self, components: ScoreComponents) -> float:
-        total_pair_score = components.pair_score + components.cross_score
-        return components.item_score * total_pair_score
+        """Use centralized combination logic."""
+        return apply_default_combination(components.item_score, components.item_pair_score)
     
     def get_mode_name(self) -> str:
-        return "Combined (Item × Pair)"
+        return f"Combined ({DEFAULT_COMBINATION_STRATEGY})"
 
 class MOOCombiner(ScoreCombiner):
     """Multi-objective combiner - returns components separately."""
@@ -295,7 +351,7 @@ class MOOCombiner(ScoreCombiner):
     
     def get_mode_name(self) -> str:
         return "Multi-Objective"
-
+        
 #-----------------------------------------------------------------------------
 # Unified layout scorer
 #-----------------------------------------------------------------------------
@@ -335,8 +391,8 @@ class LayoutScorer:
         
         Args:
             mapping: Array mapping items to positions
-            return_components: If True, return (total, item, pair, cross) tuple
-                             If False, return single score or list (for MOO)
+            return_components: If True, return (total, item, item_pair) tuple
+                            If False, return single score or list (for MOO)
         
         Returns:
             Single score, list of scores (MOO), or tuple with breakdown
@@ -345,13 +401,15 @@ class LayoutScorer:
         
         if return_components:
             if self.mode == 'multi_objective':
-                return components.as_list() + [components.total()]  # [item, pair, cross, total]
+                # For MOO, include the default combined score as well
+                combined_total = apply_default_combination(components.item_score, components.item_pair_score)
+                return components.as_list() + [combined_total]  # [item, item_pair, combined_total]
             else:
                 combined_score = self.combiner.combine(components)
-                return combined_score, components.item_score, components.pair_score, components.cross_score
+                return combined_score, components.item_score, components.item_pair_score
         else:
             return self.combiner.combine(components)
-    
+        
     def get_components(self, mapping: np.ndarray) -> ScoreComponents:
         """Get raw score components for analysis."""
         return self.calculator.calculate_components(mapping)
@@ -524,7 +582,7 @@ def score_layout_detailed(mapping: np.ndarray, scorer: LayoutScorer) -> Tuple[fl
     Detailed scoring function returning all components.
     
     Returns:
-        (total_score, item_score, pair_score, cross_score)
+        (total_score, item_score, pair_score)
     """
     return scorer.score_layout(mapping, return_components=True)
 
@@ -570,8 +628,7 @@ def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> boo
         components2 = scorer.get_components(mapping)
         
         if not (np.isclose(components1.item_score, components2.item_score) and
-                np.isclose(components1.pair_score, components2.pair_score) and
-                np.isclose(components1.cross_score, components2.cross_score)):
+                np.isclose(components1.item_pair_score, components2.item_pair_score)):
             print(f"Inconsistent components: {components1} vs {components2}")
             return False
     
