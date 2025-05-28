@@ -10,43 +10,7 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 from config import Config
-from scoring import LayoutScorer, prepare_scoring_arrays
-from scoring import apply_default_combination
-from scoring import calculate_complete_layout_score
-
-#-----------------------------------------------------------------------------
-# Complete layout scoring
-#-----------------------------------------------------------------------------
-def create_complete_layout_scorer(complete_mapping: Dict[str, str], config: Config, 
-                                 normalized_scores: Tuple) -> LayoutScorer:
-    """
-    Create a scorer for the complete layout including all items.
-    
-    Args:
-        complete_mapping: Complete item->position mapping
-        config: Configuration object
-        normalized_scores: Tuple of (item_scores, item_pair_scores, position_scores, position_pair_scores)
-        
-    Returns:
-        LayoutScorer for the complete layout
-    """
-    # Get all items and positions from the complete mapping
-    all_items = list(complete_mapping.keys())
-    all_positions = list(complete_mapping.values())
-    
-    # Create arrays for the complete layout (no pre-assigned items since this IS the complete layout)
-    complete_arrays = prepare_scoring_arrays(
-        items_to_assign=all_items,
-        positions_to_assign=all_positions,
-        norm_item_scores=normalized_scores[0],
-        norm_item_pair_scores=normalized_scores[1], 
-        norm_position_scores=normalized_scores[2],
-        norm_position_pair_scores=normalized_scores[3],
-        items_assigned=None,  # No pre-assigned since this is the complete layout
-        positions_assigned=None
-    )
-    
-    return LayoutScorer(complete_arrays, mode='combined')
+from scoring import LayoutScorer, calculate_complete_layout_score, apply_default_combination
 
 #-----------------------------------------------------------------------------
 # Keyboard visualization
@@ -157,7 +121,7 @@ def print_search_space_info(config: Config) -> None:
 def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]], 
                      config: Config, 
                      scorer: LayoutScorer,
-                     normalized_scores: Tuple,
+                     score_dicts: Tuple,
                      n_display: int = 5,
                      verbose: bool = False) -> None:
     """
@@ -167,17 +131,12 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         results: List of (score, mapping, metadata) tuples (optimization scores)
         config: Configuration object
         scorer: Scorer used for optimization  
-        normalized_scores: Tuple of score dictionaries for complete scoring
+        score_dicts: Tuple of score dictionaries for complete scoring
         n_display: Number of solutions to display
         verbose: Whether to show detailed breakdown
     """
     opt = config.optimization
     n_display = min(len(results), n_display)
-    
-    if len(results) > 1:
-        print(f"\nTop {n_display} Solutions:")
-    else:
-        print("\nOptimal Solution:")
     
     for i, (opt_score, mapping, _) in enumerate(results[:n_display], 1):
         # Build complete item->position mapping
@@ -186,18 +145,18 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
             complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
         complete_mapping.update({k: v.upper() for k, v in mapping.items()})
         
-        # Calculate complete layout score
+        # Calculate TRUE complete layout score using centralized function
         try:
-            complete_total, complete_item, complete_pair = calculate_complete_layout_score(
-                complete_mapping, config, normalized_scores)
+            complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                complete_mapping, score_dicts)
         except Exception as e:
             print(f"Warning: Could not calculate complete score: {e}")
             complete_total = opt_score
-            complete_item = complete_pair = 0.0
+            complete_item = complete_item_pair = 0.0
         
         print(f"\n#{i}: Optimization Score = {opt_score:.9f}")
-        print(f"    Complete Layout Score = {complete_total:.9f}")
-        
+        print(f"     Complete Layout Score = {complete_total:.9f}")
+                
         # Display layout strings
         all_items = ''.join(complete_mapping.keys())
         all_positions = ''.join(complete_mapping.values())
@@ -214,7 +173,7 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         if verbose:
             print(f"  Complete Score Breakdown:")
             print(f"    Item component:  {complete_item:.6f}")
-            print(f"    Pair component:  {complete_pair:.6f}")
+            print(f"    Pair component:  {complete_item_pair:.6f}")
             print(f"    Total:           {complete_total:.6f}")
         
         # Keyboard visualization
@@ -267,14 +226,14 @@ def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]],
             complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
         complete_mapping.update({k: v.upper() for k, v in item_mapping.items()})
         
-        # Calculate complete layout score
+        # Calculate complete layout score using centralized function
         try:
-            complete_total, complete_item, complete_pair = calculate_complete_layout_score(
-                complete_mapping, config, normalized_scores)
+            complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                complete_mapping, normalized_scores)
         except Exception as e:
             print(f"Warning: Could not calculate complete score: {e}")
             complete_total = opt_combined_score
-            complete_item = complete_pair = 0.0
+            complete_item = complete_item_pair = 0.0
         
         print(f"\n#{i}: Optimization Combined = {opt_combined_score:.6f}")
         print(f"    Complete Layout Score = {complete_total:.6f}")
@@ -286,7 +245,7 @@ def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]],
         
         print("  Complete Layout Breakdown:")
         print(f"    Item component:  {complete_item:.6f}")
-        print(f"    Pair component:  {complete_pair:.6f}")
+        print(f"    Pair component:  {complete_item_pair:.6f}")
         
         # Display layout
         all_items = ''.join(complete_mapping.keys())  
@@ -353,17 +312,17 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
             opt_items = ''.join(mapping.keys())
             opt_positions = ''.join(v.upper() for v in mapping.values())
             
-            # Calculate complete score
+            # Calculate complete score using centralized function
             try:
-                complete_total, complete_item, complete_pair = calculate_complete_layout_score(
-                    complete_mapping, config, normalized_scores)
+                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                    complete_mapping, normalized_scores)
             except Exception:
-                complete_total = complete_item = complete_pair = 0.0
+                complete_total = complete_item = complete_item_pair = 0.0
             
             writer.writerow([
                 rank, complete_items, complete_positions,
                 opt_items, opt_positions, f"{opt_score:.9f}",
-                f"{complete_total:.9f}", f"{complete_item:.6f}"
+                f"{complete_total:.9f}", f"{complete_item:.6f}", f"{complete_item_pair:.6f}"
             ])
     
     return output_path
@@ -433,17 +392,17 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             
-            # Calculate complete score
+            # Calculate complete score using centralized function
             try:
-                complete_total, complete_item, complete_pair = calculate_complete_layout_score(
-                    complete_mapping, config, normalized_scores)
+                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                    complete_mapping, normalized_scores)
             except Exception:
-                complete_total = complete_item = complete_pair = 0.0
+                complete_total = complete_item = complete_item_pair = 0.0
             
             row = ([rank, all_items, all_positions] + 
                    [f"{obj:.9f}" for obj in objectives] +
                    [f"{opt_combined_score:.9f}", f"{complete_total:.9f}",
-                    f"{complete_item:.6f}", f"{complete_pair:.6f}"])
+                    f"{complete_item:.6f}", f"{complete_item_pair:.6f}"])
             writer.writerow(row)
     
     return output_path
