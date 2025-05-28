@@ -129,7 +129,7 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
         mode: Scoring mode ('combined', 'item_only', 'pair_only', 'multi_objective')
     
     Returns:
-        Tuple of (total_score, item_score, pair_score)
+        Tuple of (total_score, item_score, item_pair_score)
     """
     # Validate input lengths
     items = list(items_str.lower())
@@ -159,33 +159,16 @@ def calculate_layout_score(items_str: str, positions_str: str, config: Config,
         print(f"  Complete layout: {all_items} → {all_positions}")
     
     # Calculate complete layout score
-    total_score, item_score, pair_score = calculate_complete_layout_score(
+    total_score, item_score, item_pair_score = calculate_complete_layout_score(
         complete_mapping, config, score_dicts)
     
     if detailed:
         print(f"\nComplete Layout Results:")
-        print(f"  Total score:      {total_score:.12f}")
-        print(f"  Item component:   {item_score:.12f}")
-        print(f"  Pair component:   {pair_score:.12f}")
+        print(f"  Total score:         {total_score:.12f}")
+        print(f"  Item component:      {item_score:.12f}")
+        print(f"  Item-Pair component: {item_pair_score:.12f}")
     
-    # Create a dummy scorer for backward compatibility
-    # (This is a temporary solution for functions that expect a scorer)
-    try:
-        arrays = prepare_scoring_arrays(
-            items_to_assign=list(complete_mapping.keys()),
-            positions_to_assign=list(complete_mapping.values()),
-            norm_item_scores=score_dicts[0],
-            norm_item_pair_scores=score_dicts[1],
-            norm_position_scores=score_dicts[2],
-            norm_position_pair_scores=score_dicts[3]
-        )
-        scorer = LayoutScorer(arrays, mode=mode)
-    except Exception:
-        scorer = None
-    
-    total_score, item_score, item_pair_score = calculate_complete_layout_score(complete_mapping, config, score_dicts)
-
-    return total_score, item_score, item_pair_score, scorer
+    return total_score, item_score, item_pair_score
 
 def print_detailed_breakdown(items_str: str, positions_str: str, config: Config, scorer: LayoutScorer):
     """Print detailed item-by-item scoring breakdown."""

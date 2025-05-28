@@ -95,16 +95,16 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     
     # Load data and create scorer
     print("\nLoading scoring data...")
-    score_dicts = load_normalized_scores(config)
+    normalized_scores = load_normalized_scores(config)
     
     print("Preparing optimization arrays...")
     arrays = prepare_scoring_arrays(
         items_to_assign=list(config.optimization.items_to_assign),
         positions_to_assign=list(config.optimization.positions_to_assign),
-        norm_item_scores=score_dicts[0],
-        norm_item_pair_scores=score_dicts[1],
-        norm_position_scores=score_dicts[2],
-        norm_position_pair_scores=score_dicts[3],
+        norm_item_scores=normalized_scores[0],
+        norm_item_pair_scores=normalized_scores[1],
+        norm_position_scores=normalized_scores[2],
+        norm_position_pair_scores=normalized_scores[3],
         items_assigned=list(config.optimization.items_assigned) if config.optimization.items_assigned else None,
         positions_assigned=list(config.optimization.positions_assigned) if config.optimization.positions_assigned else None
     )
@@ -124,10 +124,10 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     
     # Display results with complete scores
     if results:
-        print_soo_results(results, config, scorer, score_dicts, n_solutions, verbose)
+        print_soo_results(results, config, scorer, normalized_scores, n_solutions, verbose)
         
         # Save results with complete scores
-        csv_path = save_soo_results_to_csv(results, config, score_dicts)
+        csv_path = save_soo_results_to_csv(results, config, normalized_scores)
         print(f"\nResults saved to: {csv_path}")
     else:
         print("\nNo solutions found!")
@@ -166,16 +166,16 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
 
     # Load data and create MOO scorer
     print("\nLoading scoring data...")
-    score_dicts = load_normalized_scores(config)
+    normalized_scores = load_normalized_scores(config)
     
     print("Preparing multi-objective arrays...")
     arrays = prepare_scoring_arrays(
         items_to_assign=list(config.optimization.items_to_assign),
         positions_to_assign=list(config.optimization.positions_to_assign),
-        norm_item_scores=score_dicts[0],
-        norm_item_pair_scores=score_dicts[1],
-        norm_position_scores=score_dicts[2],
-        norm_position_pair_scores=score_dicts[3],
+        norm_item_scores=normalized_scores[0],
+        norm_item_pair_scores=normalized_scores[1],
+        norm_position_scores=normalized_scores[2],
+        norm_position_pair_scores=normalized_scores[3],
         items_assigned=list(config.optimization.items_assigned) if config.optimization.items_assigned else None,
         positions_assigned=list(config.optimization.positions_assigned) if config.optimization.positions_assigned else None
     )
@@ -201,10 +201,10 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     # Display results with complete scores
     if pareto_front:
         objective_names = ['Item Score', 'Item-Pair Score']
-        print_moo_results(pareto_front, config, score_dicts, objective_names)
+        print_moo_results(pareto_front, config, normalized_scores, objective_names)
         
         # Save results with complete scores
-        csv_path = save_moo_results_to_csv(pareto_front, config, score_dicts, objective_names)
+        csv_path = save_moo_results_to_csv(pareto_front, config, normalized_scores, objective_names)
         print(f"\nResults saved to: {csv_path}")
     else:
         print("\nNo Pareto solutions found!")

@@ -16,12 +16,12 @@ and the apply_default_combination() function.
 
 import numpy as np
 from numba import jit
-from typing import Dict, List, Tuple, Optional, NamedTuple
+from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
 #-----------------------------------------------------------------------------
-# Default combination strategy - SINGLE SOURCE OF TRUTH
+# Default combination strategy
 #-----------------------------------------------------------------------------
 DEFAULT_COMBINATION_STRATEGY = "multiplicative"  # item_score * item_pair_score
 
@@ -68,73 +68,6 @@ def apply_default_combination_vectorized(item_scores: np.ndarray, item_pair_scor
         return 0.6 * item_scores + 0.4 * item_pair_scores
     else:
         raise ValueError(f"Unknown combination strategy: {DEFAULT_COMBINATION_STRATEGY}")
-     
-#-----------------------------------------------------------------------------
-# Core data structures
-#-----------------------------------------------------------------------------
-@dataclass
-class ScoreComponents:
-    """Container for the two independent scoring components."""
-    item_score: float
-    item_pair_score: float
-    
-    def as_list(self) -> List[float]:
-        """Return components as list for MOO."""
-        return [self.item_score, self.item_pair_score]
-    
-    def total(self) -> float:
-        """
-        Return combined score using default combination strategy.
-        
-        This delegates to the centralized combination logic to ensure consistency
-        throughout the system.
-        """
-        return apply_default_combination(self.item_score, self.item_pair_score)
-    
-@dataclass
-class ScoringArrays:
-    """Container for all scoring arrays with clear documentation."""
-    # Core arrays for items being optimized
-    item_scores: np.ndarray              # Shape: (n_items,)
-    item_pair_matrix: np.ndarray         # Shape: (n_items, n_items)
-    position_matrix: np.ndarray          # Shape: (n_positions, n_positions)
-    
-    # Cross-interaction arrays (optional - for pre-assigned items)
-    cross_item_matrix: Optional[np.ndarray] = None      # Shape: (n_items, n_assigned)
-    cross_position_matrix: Optional[np.ndarray] = None  # Shape: (n_positions, n_assigned)
-    reverse_cross_item_matrix: Optional[np.ndarray] = None
-    reverse_cross_position_matrix: Optional[np.ndarray] = None
-    
-    # Metadata
-    n_items: int = 0
-    n_positions: int = 0
-    n_assigned: int = 0
-    
-    def __post_init__(self):
-        """Validate array shapes and set metadata."""
-        self.n_items = len(self.item_scores)
-        self.n_positions = self.position_matrix.shape[0]
-        
-        if self.cross_item_matrix is not None:
-            self.n_assigned = self.cross_item_matrix.shape[1]
-        
-        self._validate_shapes()
-    
-    def _validate_shapes(self):
-        """Ensure all arrays have consistent shapes."""
-        assert self.item_pair_matrix.shape == (self.n_items, self.n_items)
-        assert self.position_matrix.shape == (self.n_positions, self.n_positions)
-        
-        if self.cross_item_matrix is not None:
-            assert self.cross_item_matrix.shape == (self.n_items, self.n_assigned)
-            assert self.cross_position_matrix.shape == (self.n_positions, self.n_assigned)
-            assert self.reverse_cross_item_matrix.shape == (self.n_assigned, self.n_items)
-            assert self.reverse_cross_position_matrix.shape == (self.n_assigned, self.n_positions)
-    
-    @property
-    def has_cross_interactions(self) -> bool:
-        """Check if cross-interaction data is available."""
-        return self.cross_item_matrix is not None
 
 #-----------------------------------------------------------------------------
 # JIT-compiled core calculations
@@ -219,9 +152,130 @@ def _calculate_item_pair_score_jit(mapping: np.ndarray,
                 interaction_count += 2
     
     return raw_score, interaction_count
+    
+#-----------------------------------------------------------------------------
+# Core data structures
+#-----------------------------------------------------------------------------
+@dataclass
+class ScoreComponents:
+    """Container for the two independent scoring components."""
+    item_score: float
+    item_pair_score: float
+    
+    def as_list(self) -> List[float]:
+        """Return components as list for MOO."""
+        return [self.item_score, self.item_pair_score]
+    
+    def total(self) -> float:
+        """
+        Return combined score using default combination strategy.
+        
+        This delegates to the centralized combination logic to ensure consistency
+        throughout the system.
+        """
+        return apply_default_combination(self.item_score, self.item_pair_score)
+
+@dataclass
+class ScoringArrays:
+    """Container for all scoring arrays with clear documentation."""
+    # Core arrays for items being optimized
+    item_scores: np.ndarray              # Shape: (n_items,)
+    item_pair_matrix: np.ndarray         # Shape: (n_items, n_items)
+    position_matrix: np.ndarray          # Shape: (n_positions, n_positions)
+    
+    # Cross-interaction arrays (optional - for pre-assigned items)
+    cross_item_matrix: Optional[np.ndarray] = None      # Shape: (n_items, n_assigned)
+    cross_position_matrix: Optional[np.ndarray] = None  # Shape: (n_positions, n_assigned)
+    reverse_cross_item_matrix: Optional[np.ndarray] = None
+    reverse_cross_position_matrix: Optional[np.ndarray] = None
+    
+    # Metadata
+    n_items: int = 0
+    n_positions: int = 0
+    n_assigned: int = 0
+    
+    def __post_init__(self):
+        """Validate array shapes and set metadata."""
+        self.n_items = len(self.item_scores)
+        self.n_positions = self.position_matrix.shape[0]
+        
+        if self.cross_item_matrix is not None:
+            self.n_assigned = self.cross_item_matrix.shape[1]
+        
+        self._validate_shapes()
+    
+    def _validate_shapes(self):
+        """Ensure all arrays have consistent shapes."""
+        assert self.item_pair_matrix.shape == (self.n_items, self.n_items)
+        assert self.position_matrix.shape == (self.n_positions, self.n_positions)
+        
+        if self.cross_item_matrix is not None:
+            assert self.cross_item_matrix.shape == (self.n_items, self.n_assigned)
+            assert self.cross_position_matrix.shape == (self.n_positions, self.n_assigned)
+            assert self.reverse_cross_item_matrix.shape == (self.n_assigned, self.n_items)
+            assert self.reverse_cross_position_matrix.shape == (self.n_assigned, self.n_positions)
+    
+    @property
+    def has_cross_interactions(self) -> bool:
+        """Check if cross-interaction data is available."""
+        return self.cross_item_matrix is not None
 
 #-----------------------------------------------------------------------------
-# Core scoring engine
+# Score combiners
+#-----------------------------------------------------------------------------
+class ScoreCombiner(ABC):
+    """Abstract base class for different score combination strategies."""
+    
+    @abstractmethod
+    def combine(self, components: ScoreComponents) -> float:
+        """Combine score components into a single value."""
+        pass
+    
+    @abstractmethod
+    def get_mode_name(self) -> str:
+        """Return human-readable name for this combination mode."""
+        pass
+
+class ItemOnlyCombiner(ScoreCombiner):
+    """Combine using only item scores."""
+    
+    def combine(self, components: ScoreComponents) -> float:
+        return components.item_score
+    
+    def get_mode_name(self) -> str:
+        return "Item Only"
+
+class PairOnlyCombiner(ScoreCombiner):
+    """Combine using only item-pair scores."""
+    
+    def combine(self, components: ScoreComponents) -> float:
+        return components.item_pair_score
+    
+    def get_mode_name(self) -> str:
+        return "Item-Pair Only"
+
+class CombinedCombiner(ScoreCombiner):
+    """Combine using the default combination strategy."""
+    
+    def combine(self, components: ScoreComponents) -> float:
+        """Use centralized combination logic."""
+        return apply_default_combination(components.item_score, components.item_pair_score)
+    
+    def get_mode_name(self) -> str:
+        return f"Combined ({DEFAULT_COMBINATION_STRATEGY})"
+
+class MOOCombiner(ScoreCombiner):
+    """Multi-objective combiner - returns components separately."""
+    
+    def combine(self, components: ScoreComponents) -> List[float]:
+        """Return components as separate objectives."""
+        return components.as_list()
+    
+    def get_mode_name(self) -> str:
+        return "Multi-Objective"
+        
+#-----------------------------------------------------------------------------
+# Core scoring classes
 #-----------------------------------------------------------------------------
 class ScoreCalculator:
     """
@@ -289,72 +343,6 @@ class ScoreCalculator:
         """Clear score cache to free memory."""
         self._score_cache.clear()
 
-#-----------------------------------------------------------------------------
-# Score combination strategies
-#-----------------------------------------------------------------------------
-class ScoreCombiner(ABC):
-    """Abstract base class for different score combination strategies."""
-    
-    @abstractmethod
-    def combine(self, components: ScoreComponents) -> float:
-        """Combine score components into a single value."""
-        pass
-    
-    @abstractmethod
-    def get_mode_name(self) -> str:
-        """Return human-readable name for this combination mode."""
-        pass
-
-class ItemOnlyCombiner(ScoreCombiner):
-    """Combine using only item scores (ignore pairs and cross-interactions)."""
-    
-    def combine(self, components: ScoreComponents) -> float:
-        return components.item_score
-    
-    def get_mode_name(self) -> str:
-        return "Item Only"
-
-class ItemOnlyCombiner(ScoreCombiner):
-    """Combine using only item scores."""
-    
-    def combine(self, components: ScoreComponents) -> float:
-        return components.item_score
-    
-    def get_mode_name(self) -> str:
-        return "Item Only"
-
-class PairOnlyCombiner(ScoreCombiner):
-    """Combine using only item-pair scores."""
-    
-    def combine(self, components: ScoreComponents) -> float:
-        return components.item_pair_score
-    
-    def get_mode_name(self) -> str:
-        return "Item-Pair Only"
-
-class CombinedCombiner(ScoreCombiner):
-    """Combine using the default combination strategy."""
-    
-    def combine(self, components: ScoreComponents) -> float:
-        """Use centralized combination logic."""
-        return apply_default_combination(components.item_score, components.item_pair_score)
-    
-    def get_mode_name(self) -> str:
-        return f"Combined ({DEFAULT_COMBINATION_STRATEGY})"
-
-class MOOCombiner(ScoreCombiner):
-    """Multi-objective combiner - returns components separately."""
-    
-    def combine(self, components: ScoreComponents) -> List[float]:
-        """Return components as separate objectives."""
-        return components.as_list()
-    
-    def get_mode_name(self) -> str:
-        return "Multi-Objective"
-        
-#-----------------------------------------------------------------------------
-# Unified layout scorer
-#-----------------------------------------------------------------------------
 class LayoutScorer:
     """
     Unified layout scorer that serves both SOO and MOO optimization.
@@ -424,7 +412,7 @@ class LayoutScorer:
         return self.combiner.get_mode_name()
 
 #-----------------------------------------------------------------------------
-# Array preparation
+# Scoring factory functions
 #-----------------------------------------------------------------------------
 def prepare_scoring_arrays(
     items_to_assign: List[str],
@@ -550,9 +538,6 @@ def prepare_scoring_arrays(
         **cross_arrays
     )
 
-#-----------------------------------------------------------------------------
-# Convenience functions for integration
-#-----------------------------------------------------------------------------
 def create_scorer(items_to_assign: List[str], positions_to_assign: List[str],
                  norm_item_scores: Dict, norm_item_pair_scores: Dict,
                  norm_position_scores: Dict, norm_position_pair_scores: Dict,
@@ -571,20 +556,81 @@ def create_scorer(items_to_assign: List[str], positions_to_assign: List[str],
     
     return LayoutScorer(arrays, mode)
 
-def score_layout_simple(mapping: np.ndarray, scorer: LayoutScorer) -> float:
-    """
-    Simple scoring function for backward compatibility.    
-    """
-    return scorer.score_layout(mapping)
+def create_layout_scorer(items_to_assign: List[str], 
+                        positions_to_assign: List[str],
+                        normalized_scores: Tuple,
+                        mode: str = 'combined') -> LayoutScorer:
+    """Create a LayoutScorer for the given items and positions."""
+    arrays = prepare_scoring_arrays(
+        items_to_assign, positions_to_assign, *normalized_scores
+    )
+    return LayoutScorer(arrays, mode=mode)
 
-def score_layout_detailed(mapping: np.ndarray, scorer: LayoutScorer) -> Tuple[float, float, float, float]:
+def create_complete_layout_scorer(complete_mapping: Dict[str, str],
+                                 normalized_scores: Tuple, 
+                                 mode: str = 'combined') -> LayoutScorer:
+    """Create a LayoutScorer for a complete layout."""
+    all_items = list(complete_mapping.keys())
+    all_positions = list(complete_mapping.values())
+    return create_layout_scorer(all_items, all_positions, normalized_scores, mode)
+
+#-----------------------------------------------------------------------------
+# High-level scoring functions
+#-----------------------------------------------------------------------------
+def calculate_complete_layout_score(complete_mapping: Dict[str, str],
+                                   normalized_scores: Tuple) -> Tuple[float, float, float]:
     """
-    Detailed scoring function returning all components.
+    Calculate complete layout score including all items and pairs.
     
-    Returns:
-        (total_score, item_score, pair_score)
+    This is a high-level convenience function that creates a complete scorer
+    and calculates the total scores.
     """
-    return scorer.score_layout(mapping, return_components=True)
+    # Create complete scorer
+    scorer = create_complete_layout_scorer(complete_mapping, normalized_scores, mode='combined')
+    
+    # Create mapping array (all items assigned to their positions)  
+    mapping_array = np.arange(len(complete_mapping), dtype=np.int32)
+    
+    # Calculate scores
+    total_score, item_score, item_pair_score = scorer.score_layout(
+        mapping_array, return_components=True
+    )
+    
+    return total_score, item_score, item_pair_score
+
+def calculate_complete_layout_score_direct(complete_mapping: Dict[str, str],
+                                         normalized_scores: Tuple) -> Tuple[float, float, float]:
+    """Calculate complete layout score without Config dependency."""
+    scorer = create_complete_layout_scorer(complete_mapping, normalized_scores, mode='combined')
+    mapping_array = np.arange(len(complete_mapping), dtype=np.int32)
+    return scorer.score_layout(mapping_array, return_components=True)
+
+def score_layout_from_strings(items_str: str, 
+                             positions_str: str,
+                             normalized_scores: Tuple) -> Tuple[float, float, float]:
+    """
+    Score a layout from item and position strings.
+    
+    Args:
+        items_str: Comma-separated items (e.g., "a,b,c")
+        positions_str: Comma-separated positions (e.g., "F,D,J") 
+        normalized_scores: Pre-loaded normalized score dictionaries
+        
+    Returns:
+        Tuple of (total_score, item_score, item_pair_score)
+    """
+    # Parse strings
+    items = [item.strip().lower() for item in items_str.split(',')]
+    positions = [pos.strip().upper() for pos in positions_str.split(',')]
+    
+    if len(items) != len(positions):
+        raise ValueError(f"Mismatch: {len(items)} items vs {len(positions)} positions")
+    
+    # Create mapping
+    complete_mapping = dict(zip(items, positions))
+    
+    # Calculate score using existing function
+    return calculate_complete_layout_score_direct(complete_mapping, normalized_scores)
 
 #-----------------------------------------------------------------------------
 # Testing and validation
@@ -634,8 +680,11 @@ def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> boo
     
     return True
 
+#-----------------------------------------------------------------------------
+# Module Testing
+#-----------------------------------------------------------------------------
 if __name__ == "__main__":
-    # Simple test/demo
+    # Updated test - should still work but maybe improve it
     print("Testing the consolidated scoring system...")
     
     # Create dummy data for testing
@@ -649,10 +698,11 @@ if __name__ == "__main__":
     pos_pair_scores = {('f','d'): 0.6, ('d','f'): 0.6, ('f','j'): 0.4, ('j','f'): 0.4,
                       ('d','j'): 0.5, ('j','d'): 0.5}
     
-    # Test different modes
+    # Test different modes using the main factory function
     for mode in ['item_only', 'pair_only', 'combined', 'multi_objective']:
         print(f"\nTesting {mode} mode:")
         
+        # Use create_scorer (the main factory function)
         scorer = create_scorer(items, positions, item_scores, pair_scores, 
                              pos_scores, pos_pair_scores, mode=mode)
         
@@ -664,3 +714,37 @@ if __name__ == "__main__":
         # Test consistency
         is_consistent = validate_scorer_consistency(scorer, 10)
         print(f"  Consistency test: {'PASS' if is_consistent else 'FAIL'}")
+    
+    print("\nTesting string-based layout scoring...")
+    
+    # Create dummy normalized_scores for testing
+    norm_item_scores = {'a': 0.8, 'b': 0.6, 'c': 0.4}
+    norm_item_pair_scores = {
+        ('a','b'): 0.7, ('b','a'): 0.7, 
+        ('a','c'): 0.5, ('c','a'): 0.5, 
+        ('b','c'): 0.3, ('c','b'): 0.3
+    }
+    norm_position_scores = {'f': 0.9, 'd': 0.7, 'j': 0.8}
+    norm_position_pair_scores = {
+        ('f','d'): 0.6, ('d','f'): 0.6, 
+        ('f','j'): 0.4, ('j','f'): 0.4,
+        ('d','j'): 0.5, ('j','d'): 0.5
+    }
+    
+    # Create the normalized_scores tuple
+    normalized_scores = (
+        norm_item_scores, 
+        norm_item_pair_scores, 
+        norm_position_scores, 
+        norm_position_pair_scores
+    )
+    
+    # Test string-based scoring
+    items_str = "a,b,c"
+    positions_str = "F,D,J"
+    
+    total_score, item_score, pair_score = score_layout_from_strings(
+        items_str, positions_str, normalized_scores)
+    print(f"  Total score: {total_score:.6f}")
+    print(f"  Item component: {item_score:.6f}")  
+    print(f"  Pair component: {pair_score:.6f}")
