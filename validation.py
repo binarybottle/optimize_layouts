@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from config import Config
 from scoring import LayoutScorer, prepare_scoring_arrays, ScoreComponents
 from search import UpperBoundCalculator
+from moo_pruning import MOOPruner, create_moo_pruner
 
 #-----------------------------------------------------------------------------
 # Validation result classes
@@ -187,6 +188,309 @@ def test_upper_bound_validity(scorer: LayoutScorer, n_tests: int = 500) -> Valid
         
     except Exception as e:
         return ValidationResult("Upper Bound Validity", False, f"Test failed with error: {e}")
+
+def test_moo_upper_bounds(config: Config, n_tests: int = 200) -> ValidationResult:
+    """
+    Test that MOO upper bounds are never violated by achievable solutions.
+    
+    Args:
+        config: Configuration for testing
+        n_tests: Number of random partial mappings to test
+        
+    Returns:
+        ValidationResult with test outcome
+    """
+    try:
+        # Create small test setup for performance
+        items = list(config.optimization.items_to_assign[:5])
+        positions = list(config.optimization.positions_to_assign[:5])
+        
+        # Generate realistic test scores
+        random.seed(42)
+        item_scores = {item: random.uniform(0.1, 1.0) for item in items}
+        pair_scores = {(i1, i2): random.uniform(0.0, 0.8) for i1 in items for i2 in items if i1 != i2}
+        pos_scores = {pos.upper(): random.uniform(0.2, 1.0) for pos in positions}
+        pos_pair_scores = {(p1.upper(), p2.upper()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
+        
+        normalized_scores = (item_scores, pair_scores, pos_scores, pos_pair_scores)
+        
+        # Create MOO pruner
+        pruner = create_moo_pruner(normalized_scores, items, positions)
+        
+        np.random.seed(42)
+        violations = 0
+        violation_details = []
+        
+        for test_idx in range(n_tests):
+            # Generate random partial mapping
+            depth = random.randint(0, min(len(items)-1, 3))  # Leave some items unassigned
+            
+            mapping = np.full(len(items), -1, dtype=np.int32)
+            used_positions = np.zeros(len(positions), dtype=bool)
+            
+            # Randomly assign some items
+            available_positions = list(range(len(positions)))
+            random.shuffle(available_positions)
+            
+            assigned_items = random.sample(range(len(items)), depth)
+            for i, item_idx in enumerate(assigned_items):
+                if i < len(available_positions):
+                    pos_idx = available_positions[i]
+                    mapping[item_idx] = pos_idx
+                    used_positions[pos_idx] = True
+            
+            # Calculate MOO upper bounds
+            upper_bounds = pruner.calculate_upper_bounds(mapping, used_positions)
+            
+            # Generate multiple completion strategies and test each
+            unassigned_items = [i for i in range(len(items)) if mapping[i] == -1]
+            available_pos = [i for i in range(len(positions)) if not used_positions[i]]
+            
+            if len(unassigned_items) > 0 and len(available_pos) >= len(unassigned_items):
+                # Try several different completions
+                for completion_attempt in range(min(10, len(available_pos))):
+                    completed_mapping = mapping.copy()
+                    random.shuffle(available_pos)  # Random completion
+                    
+                    for i, item_idx in enumerate(unassigned_items):
+                        if i < len(available_pos):
+                            completed_mapping[item_idx] = available_pos[i]
+                    
+                    # Calculate actual objectives using MOO scorer
+                    arrays = prepare_scoring_arrays(items, positions, *normalized_scores)
+                    moo_scorer = LayoutScorer(arrays, mode='multi_objective')
+                    actual_objectives = moo_scorer.score_layout(completed_mapping)
+                    
+                    # Check for violations in each objective
+                    for obj_idx, (actual, upper) in enumerate(zip(actual_objectives, upper_bounds)):
+                        if actual > upper + 1e-6:  # Small tolerance for numerical precision
+                            violations += 1
+                            violation_details.append({
+                                'test_idx': test_idx,
+                                'completion': completion_attempt,
+                                'objective': obj_idx,
+                                'actual': actual,
+                                'upper_bound': upper,
+                                'violation': actual - upper
+                            })
+                            break  # One violation per completion is enough
+        
+        passed = violations == 0
+        message = f"Tested {n_tests} partial mappings with multiple completions, {violations} MOO bound violations found"
+        
+        details = {
+            "violations": violations,
+            "total_tests": n_tests,
+            "violation_details": violation_details[:5]  # Show first 5 violations
+        }
+        
+        return ValidationResult("MOO Upper Bounds", passed, message, details)
+        
+    except Exception as e:
+        return ValidationResult("MOO Upper Bounds", False, f"Test failed with error: {e}")
+
+def test_moo_pruning_correctness(config: Config, n_tests: int = 100) -> ValidationResult:
+    """
+    Test that MOO pruning doesn't eliminate valid Pareto solutions.
+    
+    This test verifies that when pruning says a branch can be pruned,
+    no solutions in that branch would be non-dominated.
+    
+    Args:
+        config: Configuration for testing
+        n_tests: Number of pruning decisions to test
+        
+    Returns:
+        ValidationResult with test outcome
+    """
+    try:
+        # Create small test setup
+        items = list(config.optimization.items_to_assign[:4])  # Small for exhaustive testing
+        positions = list(config.optimization.positions_to_assign[:4])
+        
+        # Generate test scores
+        random.seed(42)
+        item_scores = {item: random.uniform(0.1, 1.0) for item in items}
+        pair_scores = {(i1, i2): random.uniform(0.0, 0.8) for i1 in items for i2 in items if i1 != i2}
+        pos_scores = {pos.upper(): random.uniform(0.2, 1.0) for pos in positions}
+        pos_pair_scores = {(p1.upper(), p2.upper()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
+        
+        normalized_scores = (item_scores, pair_scores, pos_scores, pos_pair_scores)
+        
+        # Create MOO pruner and scorer
+        pruner = create_moo_pruner(normalized_scores, items, positions)
+        arrays = prepare_scoring_arrays(items, positions, *normalized_scores)
+        moo_scorer = LayoutScorer(arrays, mode='multi_objective')
+        
+        false_prunes = 0
+        false_prune_details = []
+        
+        np.random.seed(42)
+        
+        for test_idx in range(n_tests):
+            # Generate a partial mapping and existing Pareto front
+            depth = random.randint(1, len(items) - 1)
+            
+            mapping = np.full(len(items), -1, dtype=np.int32)
+            used_positions = np.zeros(len(positions), dtype=bool)
+            
+            # Assign some items randomly
+            available_positions = list(range(len(positions)))
+            random.shuffle(available_positions)
+            assigned_items = random.sample(range(len(items)), depth)
+            
+            for i, item_idx in enumerate(assigned_items):
+                if i < len(available_positions):
+                    pos_idx = available_positions[i]
+                    mapping[item_idx] = pos_idx
+                    used_positions[pos_idx] = True
+            
+            # Create a mock Pareto front with 2-5 random solutions
+            pareto_objectives = []
+            for _ in range(random.randint(2, 5)):
+                # Generate realistic objective values
+                obj1 = random.uniform(0.3, 0.9)
+                obj2 = random.uniform(0.2, 0.8)
+                pareto_objectives.append([obj1, obj2])
+            
+            # Test pruning decision
+            can_prune = pruner.can_prune_branch(mapping, used_positions, pareto_objectives)
+            
+            if can_prune:
+                # If pruning says we can prune, verify by exhaustive search
+                # that no solution in this branch would be non-dominated
+                unassigned = [i for i in range(len(items)) if mapping[i] == -1]
+                available = [i for i in range(len(positions)) if not used_positions[i]]
+                
+                if len(unassigned) <= 3:  # Only do exhaustive search for small branches
+                    found_non_dominated = False
+                    
+                    # Generate all possible completions
+                    import itertools
+                    for completion in itertools.permutations(available, len(unassigned)):
+                        completed_mapping = mapping.copy()
+                        for i, item_idx in enumerate(unassigned):
+                            completed_mapping[item_idx] = completion[i]
+                        
+                        # Get objectives for this completion
+                        objectives = moo_scorer.score_layout(completed_mapping)
+                        
+                        # Check if this solution would be non-dominated
+                        is_dominated = False
+                        for existing_obj in pareto_objectives:
+                            if _dominates(existing_obj, objectives):
+                                is_dominated = True
+                                break
+                        
+                        if not is_dominated:
+                            found_non_dominated = True
+                            false_prunes += 1
+                            false_prune_details.append({
+                                'test_idx': test_idx,
+                                'objectives': objectives,
+                                'pareto_front_size': len(pareto_objectives),
+                                'branch_depth': depth
+                            })
+                            break
+        
+        passed = false_prunes == 0
+        message = f"Tested {n_tests} pruning decisions, {false_prunes} incorrect prunes found"
+        
+        details = {
+            "false_prunes": false_prunes,
+            "total_tests": n_tests,
+            "false_prune_details": false_prune_details
+        }
+        
+        return ValidationResult("MOO Pruning Correctness", passed, message, details)
+        
+    except Exception as e:
+        return ValidationResult("MOO Pruning Correctness", False, f"Test failed with error: {e}")
+
+def test_moo_pruning_effectiveness(config: Config) -> ValidationResult:
+    """
+    Test that MOO pruning actually reduces search space effectively.
+    
+    Args:
+        config: Configuration for testing
+        
+    Returns:
+        ValidationResult with test outcome
+    """
+    try:
+        # Create test setup
+        items = list(config.optimization.items_to_assign[:5])
+        positions = list(config.optimization.positions_to_assign[:5])
+        
+        # Generate test scores
+        random.seed(42)
+        item_scores = {item: random.uniform(0.1, 1.0) for item in items}
+        pair_scores = {(i1, i2): random.uniform(0.0, 0.8) for i1 in items for i2 in items if i1 != i2}
+        pos_scores = {pos.upper(): random.uniform(0.2, 1.0) for pos in positions}
+        pos_pair_scores = {(p1.upper(), p2.upper()): random.uniform(0.0, 0.6) for p1 in positions for p2 in positions if p1 != p2}
+        
+        normalized_scores = (item_scores, pair_scores, pos_scores, pos_pair_scores)
+        
+        # Create pruner
+        pruner = create_moo_pruner(normalized_scores, items, positions)
+        
+        # Simulate pruning decisions with growing Pareto front
+        total_decisions = 0
+        pruned_decisions = 0
+        
+        np.random.seed(42)
+        
+        # Test with Pareto fronts of different sizes
+        for front_size in [1, 3, 5, 10]:
+            for _ in range(20):  # 20 tests per front size
+                # Generate mock Pareto front
+                pareto_objectives = []
+                for _ in range(front_size):
+                    obj1 = random.uniform(0.3, 0.9)
+                    obj2 = random.uniform(0.2, 0.8)
+                    pareto_objectives.append([obj1, obj2])
+                
+                # Generate partial mapping
+                depth = random.randint(1, len(items) - 1)
+                mapping = np.full(len(items), -1, dtype=np.int32)
+                used_positions = np.zeros(len(positions), dtype=bool)
+                
+                # Assign some items
+                available_positions = list(range(len(positions)))
+                random.shuffle(available_positions)
+                assigned_items = random.sample(range(len(items)), depth)
+                
+                for i, item_idx in enumerate(assigned_items):
+                    if i < len(available_positions):
+                        pos_idx = available_positions[i]
+                        mapping[item_idx] = pos_idx
+                        used_positions[pos_idx] = True
+                
+                # Test pruning
+                total_decisions += 1
+                if pruner.can_prune_branch(mapping, used_positions, pareto_objectives):
+                    pruned_decisions += 1
+        
+        # Calculate effectiveness metrics
+        pruning_rate = pruned_decisions / total_decisions if total_decisions > 0 else 0
+        
+        # We expect at least some pruning effectiveness (>10% pruning rate)
+        min_expected_rate = 0.10
+        passed = pruning_rate >= min_expected_rate
+        
+        message = f"Pruning rate: {pruning_rate:.2%} ({pruned_decisions}/{total_decisions} decisions)"
+        
+        details = {
+            "pruning_rate": pruning_rate,
+            "pruned_decisions": pruned_decisions,
+            "total_decisions": total_decisions,
+            "min_expected_rate": min_expected_rate
+        }
+        
+        return ValidationResult("MOO Pruning Effectiveness", passed, message, details)
+        
+    except Exception as e:
+        return ValidationResult("MOO Pruning Effectiveness", False, f"Test failed with error: {e}")
 
 def test_soo_moo_consistency(config: Config) -> ValidationResult:
     """
@@ -401,9 +705,24 @@ def test_performance_regression(config: Config) -> ValidationResult:
         return ValidationResult("Performance Regression", False, f"Test failed with error: {e}")
 
 #-----------------------------------------------------------------------------
+# Helper functions
+#-----------------------------------------------------------------------------
+def _dominates(obj1: List[float], obj2: List[float]) -> bool:
+    """Check if obj1 dominates obj2 (assumes higher is better)."""
+    if len(obj1) != len(obj2):
+        return False
+    
+    # obj1 dominates obj2 if obj1 is >= obj2 in all objectives 
+    # and > obj2 in at least one objective
+    all_geq = all(obj1[i] >= obj2[i] for i in range(len(obj1)))
+    any_greater = any(obj1[i] > obj2[i] for i in range(len(obj1)))
+    
+    return all_geq and any_greater
+
+#-----------------------------------------------------------------------------
 # Main validation suite
 #-----------------------------------------------------------------------------
-def run_validation_suite(config: Config, quick: bool = False) -> bool:
+def run_validation_suite(config: Config, quick: bool = False, mode: str = "soo") -> bool:
     """
     Run comprehensive validation suite.
     
@@ -414,7 +733,7 @@ def run_validation_suite(config: Config, quick: bool = False) -> bool:
     Returns:
         True if all tests passed, False otherwise
     """
-    print("Running validation suite...")
+    #print("Running validation suite...")
     
     # Create test data for validation
     items = list(config.optimization.items_to_assign)
@@ -438,31 +757,47 @@ def run_validation_suite(config: Config, quick: bool = False) -> bool:
     
     scorer = LayoutScorer(arrays, mode='combined')
     
-    # Run validation tests
+    # Run validation tests based on mode
     results = []
     
     # Adjust test sizes for quick mode
     n_consistency_tests = 50 if quick else 100
     n_bound_tests = 100 if quick else 500
+    n_moo_bound_tests = 50 if quick else 200
+    n_moo_correctness_tests = 30 if quick else 100
     
-    print("  Testing scoring consistency...")
+    # Always run these core tests
+    #print("  Testing scoring consistency...")
     results.append(test_scoring_consistency(scorer, n_consistency_tests))
     
-    print("  Testing upper bound validity...")  
-    results.append(test_upper_bound_validity(scorer, n_bound_tests))
-    
-    print("  Testing SOO/MOO consistency...")
-    results.append(test_soo_moo_consistency(config))
-
-    print("  Testing combination consistency...")
-    results.append(test_combination_consistency(config))
-
-    print("  Testing normalization correctness...")
+    #print("  Testing normalization correctness...")
     results.append(test_normalization_correctness(config))
     
-    print("  Testing performance regression...")
+    #print("  Testing performance regression...")
     results.append(test_performance_regression(config))
     
+    # SOO-specific tests
+    if mode == "soo":
+        #print("  Testing upper bound validity...")  
+        results.append(test_upper_bound_validity(scorer, n_bound_tests))
+        
+        #print("  Testing combination consistency...")
+        results.append(test_combination_consistency(config))
+    
+    # MOO-specific tests
+    elif mode == "moo":
+        #print("  Testing SOO/MOO consistency...")
+        results.append(test_soo_moo_consistency(config))
+        
+        #print("  Testing MOO upper bounds...")
+        results.append(test_moo_upper_bounds(config, n_moo_bound_tests))
+        
+        #print("  Testing MOO pruning correctness...")
+        results.append(test_moo_pruning_correctness(config, n_moo_correctness_tests))
+        
+        #print("  Testing MOO pruning effectiveness...")
+        results.append(test_moo_pruning_effectiveness(config))
+
     # Create validation suite and print results
     suite = ValidationSuite(results)
     suite.print_summary()

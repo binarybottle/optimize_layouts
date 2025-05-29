@@ -368,10 +368,11 @@ def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
             at_least_one_better = True
     return at_least_one_better
 
-def multi_objective_search(config: Config, scorer: LayoutScorer,
-                         max_solutions: int = None, time_limit: float = None) -> Tuple[List[Tuple[np.ndarray, List[float]]], int, int]:
+def multi_objective_search(config: Config, scorer: LayoutScorer, 
+                          max_solutions: int = None, time_limit: float = None,
+                          pruner = None, enable_pruning: bool = False):
     """
-    Multi-objective search finding Pareto-optimal solutions.
+    Multi-objective search finding Pareto-optimal solutions with optional pruning.
     
     Args:
         config: Configuration object
@@ -430,12 +431,17 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
             if pareto_dominates(existing_obj, upper_bounds):
                 return False
         return True
-    
+
     def dfs_moo_search(mapping: np.ndarray, used: np.ndarray, depth: int):
         """Recursive multi-objective search."""
         nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
         
         nodes_processed += 1
+        
+        # Pruning check
+        if enable_pruning and depth > 0 and pruner and pruner.can_prune_branch(mapping, used, pareto_objectives):
+            nodes_pruned += 1
+            return  # Skip this entire branch
         
         # Check termination conditions
         if time_limit and (time.time() - start_time) > time_limit:
@@ -492,9 +498,8 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
             mapping[next_item] = pos
             used[pos] = True
             
-            # Multi-objective pruning would go here (simplified for now)
-            # For MOO, we'd need component-wise upper bounds
-            
+            # 🌟 Pruning implemented above
+
             dfs_moo_search(mapping, used, depth + 1)
             
             mapping[next_item] = -1

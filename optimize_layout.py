@@ -20,6 +20,7 @@ from display import (print_optimization_header, print_search_space_info,
                     print_soo_results, print_moo_results, visualize_keyboard_layout,
                     save_soo_results_to_csv, save_moo_results_to_csv)
 from validation import run_validation_suite
+from moo_pruning import MOOPruner, create_moo_pruner
 
 #-----------------------------------------------------------------------------
 # Data loading
@@ -140,7 +141,7 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     print(f"  Total time: {elapsed_time:.2f}s")
 
 def run_multi_objective_optimization(config: Config, max_solutions: int = None, 
-                                   time_limit: float = None) -> None:
+                                   time_limit: float = None, enable_pruning: bool = True) -> None:
     """
     Run multi-objective optimization and display results with complete layout scores.
     
@@ -148,6 +149,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
         config: Configuration object
         max_solutions: Maximum number of Pareto solutions to find
         time_limit: Time limit in seconds
+        enable_pruning: Whether to use pruning optimization
     """
     print_optimization_header("MOO", config)
     print_config_summary(config)
@@ -183,8 +185,18 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     scorer = LayoutScorer(arrays, mode='multi_objective')
     print(f"Multi-objective scorer initialized")
     
+    # Create pruner if enabled
+    pruner = None
+    if enable_pruning:
+        items_list = list(config.optimization.items_to_assign)
+        positions_list = list(config.optimization.positions_to_assign)
+        pruner = create_moo_pruner(normalized_scores, items_list, positions_list)
+        print(f"🚀 MOO Pruning enabled!")
+        print(f"   Max item score: {max(pruner.max_item_scores.values()):.6f}")
+        print(f"   Max pair score: {pruner.max_item_pair_score:.6f}")
+    
     # Run MOO search
-    print(f"\nSearching for Pareto-optimal solutions...")
+    print(f"\nSearching for {'pruned ' if enable_pruning else ''}Pareto-optimal solutions...")
     if max_solutions:
         print(f"  Maximum solutions: {max_solutions}")
     if time_limit:
@@ -192,8 +204,9 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     start_time = time.time()
     
+    # Pass pruner to multi_objective_search
     pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, scorer, max_solutions, time_limit
+        config, scorer, max_solutions, time_limit, pruner, enable_pruning
     )
     
     elapsed_time = time.time() - start_time
@@ -213,7 +226,15 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     print(f"\nMulti-Objective Summary:")
     print(f"  Pareto solutions: {len(pareto_front)}")
     print(f"  Nodes processed: {nodes_processed:,}")
+    if enable_pruning and nodes_pruned > 0:
+        print(f"  Nodes pruned: {nodes_pruned:,}")
+        prune_rate = 100 * nodes_pruned / (nodes_processed + nodes_pruned)
+        print(f"  Pruning efficiency: {prune_rate:.1f}%")
+        speedup_estimate = (nodes_processed + nodes_pruned) / nodes_processed
+        print(f"  Estimated speedup: {speedup_estimate:.1f}x")
     print(f"  Total time: {elapsed_time:.2f}s")
+    if nodes_processed > 0:
+        print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
 
 #-----------------------------------------------------------------------------
 # Command-line interface
@@ -266,43 +287,40 @@ Examples:
     return parser.parse_args()
 
 def main():
-    """Main entry point."""
-    args = parse_arguments()
+    parser = argparse.ArgumentParser(description='Optimize keyboard layout')
+    parser.add_argument('--config', default='config.yaml', help='Configuration file path')
+    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
+    parser.add_argument('--moo', action='store_true', help='Run multi-objective optimization')
+    parser.add_argument('--n-solutions', type=int, default=3, help='Number of solutions to find')
+    parser.add_argument('--max-solutions', type=int, help='Maximum solutions for MOO')
+    parser.add_argument('--time-limit', type=float, help='Time limit in seconds')
+    parser.add_argument('--validate', action='store_true', help='Validate configuration')
+    parser.add_argument('--enable-pruning', action='store_true', help='Enable pruning')
     
-    try:
-        # Load and validate configuration
-        print("Loading configuration...")
-        config = load_config(args.config)
-        
-        # Run validation if requested
-        if args.validate:
-            print("\n" + "="*60)
-            print("RUNNING VALIDATION SUITE")
-            print("="*60)
-            
-            validation_passed = run_validation_suite(config)
-            
-            print("\nProceeding to optimization...\n")
-        
-        # Run appropriate optimization mode
-        if args.moo:
-            run_multi_objective_optimization(config, args.max_solutions, args.time_limit)
-        else:
-            run_single_objective_optimization(config, args.n_solutions, args.verbose)
-            
-    except KeyboardInterrupt:
-        print("\n\nOptimization interrupted by user.")
-    except FileNotFoundError as e:
-        print(f"Error: {e}")
-        print("Please check that all required files exist and paths are correct.")
-    except ValueError as e:
-        print(f"Configuration error: {e}")
-        print("Please check your configuration file for errors.")
-    except Exception as e:
-        print(f"Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
-        print("\nPlease report this error with the traceback above.")
+    args = parser.parse_args()
+    
+    # Process arguments
+    config = load_config(args.config)
+    
+    if args.validate:
+        validation_mode = "moo" if args.moo else "soo"
+        print(f"🧪 Running {validation_mode.upper()} validation suite...")
+        validation_passed = run_validation_suite(config, quick=False, mode=validation_mode)
+        if not validation_passed:
+            print("❌ Validation failed. Please fix issues before running optimization.")
+            return
+        print("✅ Validation passed! Proceeding with optimization...\n")
+
+    if args.moo:
+        run_multi_objective_optimization(
+            config=config,
+            max_solutions=args.max_solutions,
+            time_limit=args.time_limit,
+            enable_pruning=args.enable_pruning
+        )
+    else:
+        # Regular single-objective optimization
+        run_single_objective_optimization(config, args.n_solutions, args.verbose)
 
 if __name__ == "__main__":
     main()
