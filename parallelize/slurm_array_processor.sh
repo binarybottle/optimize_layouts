@@ -65,7 +65,7 @@ fi
 
 # Run the optimization
 echo "Running optimization for config ${CONFIG_ID}..."
-python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post}
+python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post} --moo
 
 if [ $? -eq 0 ]; then
     echo "Optimization completed successfully for config ${CONFIG_ID}"
