@@ -26,10 +26,9 @@ import itertools
 # Configuration: output directory and number of layouts per configuration
 OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
-nlayouts = 1000
 
 # Items in configurations (16 letters to be assigned to keys)
-# etaoinsrhldcumfpgwybvkxjqz
+# etaoinsrhldcumfpgwybvkxj (qz)
 items_assigned  = "etaoi"       # 5 most frequent letters (etaoin in English)
 items_to_assign = "nsrhldcumfp" # next 11 most frequent letters (srhldcumfp in English)
 n_assign_first_round = 1
@@ -37,15 +36,12 @@ n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
 # Position constraints for items_assigned
-# FDRSEVAWCQXZ JKULIM;O,P./ 
-positions_for_item_1 = ["F","D"] # 2 most comfortable qwerty keys
-constrain_n_keys = 16
-if constrain_n_keys == 16:
-    positions_for_items_2thruN = ["F","D","E","S","V","R","W","A",
-                                  "J","K","I","L","M","U","O",";"] # 16 most comfortable qwerty keys
-elif constrain_n_keys == 18:
-    positions_for_items_2thruN = ["F","D","E","S","V","R","W","A","C",
-                                  "J","K","I","L","M","U","O",";",","] # 18 most comfortable qwerty keys
+# 2 most comfortable qwerty keys
+positions_for_item_1 = ["F","D"] 
+# 16 most comfortable qwerty keys: FDESVRWACQZX JKILMUO;,P/. 
+positions_for_items_2thruN = ["F","D","E","S","V","R","W","A",
+                              "J","K","I","L","M","U","O",";"] 
+
 # Keys to assign by the optimization process
 all_N_keys = "".join(positions_for_items_2thruN)
 
@@ -98,7 +94,7 @@ def generate_constraint_sets():
 
     return configs
 
-def create_config_files(configs, nlayouts=10):
+def create_config_files(configs):
     """Create individual config file for each configuration."""
     # Create output directory
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -114,9 +110,6 @@ def create_config_files(configs, nlayouts=10):
         for param, value in config_params.items():
             config['optimization'][param] = value
         
-        # Set nlayouts
-        config['optimization']['nlayouts'] = nlayouts
-        
         # Write the configuration to a YAML file
         config_filename = f"{OUTPUT_DIR}/config_{i}.yaml"
         with open(config_filename, 'w') as f:
@@ -130,7 +123,7 @@ if __name__ == "__main__":
     print("Generating keyboard layout configurations...")
     configs = generate_constraint_sets()
     print(f"Found {len(configs)} valid configurations based on the constraints.")
-    create_config_files(configs, nlayouts)
+    create_config_files(configs)
     print(f"All configuration files have been generated in the '{OUTPUT_DIR}' directory.")
     
     # Print details about the first few configs

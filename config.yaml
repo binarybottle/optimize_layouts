@@ -20,18 +20,19 @@ paths:
 #-----------------------------------------------------------------------
 # Optimization Settings
 #-----------------------------------------------------------------------
-# 24 letters/keys: etaoinsrhldcumfpgwybvkxj FDRSEVAWCQXZ JKULIM;O,P./
+# 24 letters/keys: etaoinsrhldcumfpgwybvkxj FDESVRWACQZX JKILMUO;,P/.
 # Optimize arrangements of 16 by running in parallel with fixed letters:  
+# 11 letters:         79,833,600 permutations (with 5 fixed letters)
 # 12 letters:        479,001,600 permutations (with 4 fixed letters)
 # 13 letters:      6,227,020,800 permutations (with 3 fixed letters)
 # 14 letters:     87,178,291,200 permutations (with 2 fixed letters)
 # 16 letters: 20,922,789,888,000 permutations
 optimization:   
   items_assigned:       "etaoi"         # Items already assigned to positions
-  positions_assigned:   "FJRSE"         # Positions that are already filled 
+  positions_assigned:   "FJDES"         # Positions that are already filled 
 
-  items_to_assign:      "nsrhldcufpgw"       # items to arrange in positions
-  positions_to_assign:  "DVAWCKULIM;O"       # available positions
+  items_to_assign:      "srhldcumfpg"       # items to arrange in positions
+  positions_to_assign:  "VRWAKILMUO;"       # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain, and
   # subset of positions_to_assign to constrain arrangement of items_to_constrain
