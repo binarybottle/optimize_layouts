@@ -1,5 +1,5 @@
 #!/bin/bash
-# slurm_test_environment.sh
+# slurm_setup_test_environment.sh
 # Comprehensive test of HPC environment for keyboard optimization
 
 echo "🧪 Testing HPC Environment for Keyboard Optimization"
@@ -131,6 +131,6 @@ else
 fi
 
 echo -e "\n📋 Next Steps:"
-echo "   1. Test simple job: sbatch slurm_test_simple_job.sh"
-echo "   2. Generate test config: python3 slurm_test_generate_config.py"
+echo "   1. Test simple job: sbatch slurm_setup_test_simple_job.sh"
+echo "   2. Generate test config: python3 slurm_setup_test_generate_config.py"
 echo "   3. Run single optimization: sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh"

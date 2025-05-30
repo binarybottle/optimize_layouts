@@ -4,16 +4,16 @@
 # called by slurm_quota_smart_array_submit.sh.
 # It calls slurm_optimize_layout.py for each configuration.
 
-# SLURM configuration
+# SLURM configuration (RM-shared vs. EM)
 #===================================================================
-#SBATCH --time=2:00:00              # Time limit per configuration
+#SBATCH --time=4:00:00              # Time limit per configuration (1:00:00 vs. 4:00:00)
 #SBATCH --ntasks-per-node=1         # Number of tasks per node
-#SBATCH --cpus-per-task=8           # Number of CPUs per task
-#SBATCH --mem=15GB                  # Memory allocation (8 CPUs × 1900MB = 15.2GB max)
+#SBATCH --cpus-per-task=24          # Number of CPUs per task (16 vs. 24)
+#SBATCH --mem=500GB                 # Memory allocation (8 CPUs × 1900MB = 15.2GB max) (40GB vs. 500GB)
 #SBATCH --job-name=layout           # Job name
-#SBATCH --output=output/outputs/layout_%A_%a.out   # Output file with array job and task IDs
-#SBATCH --error=output/errors/layout_%A_%a.err    # Error file with array job and task IDs
-#SBATCH -p RM-shared                # Regular Memory-shared
+#SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
+#SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
+#SBATCH -p EM                       # Regular Memory-shared (RM-shared) vs. Extreme Memory (EM) 
 #SBATCH -A med250002p               # Your allocation ID
 #===================================================================
 
@@ -74,7 +74,7 @@ echo "Running optimization for config ${CONFIG_ID}..."
 python3 slurm_optimize_layout.py \
     --config ${config_pre}${CONFIG_ID}${config_post} \
     --moo \
-    --processes $SLURM_CPUS_PER_TASK
+    --processes 8 #$SLURM_CPUS_PER_TASK # use fewer processes to avoid oversubscription
 
 if [ $? -eq 0 ]; then
     echo "Optimization completed successfully for config ${CONFIG_ID}"

@@ -7,11 +7,11 @@
 # Otherwise:
 #     bash slurm_quota_smart_array_submit.sh
 
-# Configuration (UPDATED FOR BRIDGES2 LIMITS)
+# Configuration (RM-shared vs. EM)
 TOTAL_CONFIGS=65520                # Total configurations (adjust as needed)
 BATCH_SIZE=500                     # Configs per batch file 
 ARRAY_SIZE=500                     # Maximum array tasks per job
-MAX_CONCURRENT=8                   # Maximum concurrent tasks (8 CPUs each = 64 total CPUs)
+MAX_CONCURRENT=8                   # Maximum concurrent tasks (4 vs. 8)
 CHUNK_SIZE=2                       # Number of array jobs to submit at once
 config_pre=output/configs1/config_ # Config file path prefix
 config_post=.yaml                  # Config file suffix

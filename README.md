@@ -231,6 +231,9 @@ by NSF and Pittsburgh Supercomputing Center computing resources
   module load anaconda3
   python3 --version
   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
+
+  # Run all setup tests to make sure everything is working
+  python3 slurm_setup_run_all_tests.sh
   ```
 
 ### Generate config files and prepare to submit jobs

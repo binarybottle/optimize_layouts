@@ -290,14 +290,14 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
     
     return output_path
 
-def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]], 
+def save_moo_results_to_csv(pareto_front: List[Dict], 
                            config: Config, normalized_scores: Tuple,
                            objective_names: List[str] = None) -> str:
     """
     Save multi-objective results to CSV file with complete layout scores.
     
     Args:
-        pareto_front: Pareto front solutions
+        pareto_front: Pareto front solutions (list of dictionaries)
         config: Configuration object
         normalized_scores: Tuple of score dictionaries for complete scoring
         objective_names: Names for objectives
@@ -336,21 +336,24 @@ def save_moo_results_to_csv(pareto_front: List[Tuple[np.ndarray, List[float]]],
         
         # Sort by combined score
         pareto_with_combined = []
-        for mapping_array, objectives in pareto_front:
+        for solution in pareto_front:
+            # Extract data from dictionary format
+            mapping = solution['mapping']  # This is already a dict
+            objectives = solution['objectives']  # This is a list
+            
+            # Calculate combined score
             combined_score = apply_default_combination(objectives[0], objectives[1])
-            pareto_with_combined.append((combined_score, mapping_array, objectives))
+            pareto_with_combined.append((combined_score, mapping, objectives))
 
         pareto_with_combined.sort(key=lambda x: x[0], reverse=True)
         
         # Write results
-        for rank, (opt_combined_score, mapping_array, objectives) in enumerate(pareto_with_combined, 1):
+        for rank, (opt_combined_score, mapping, objectives) in enumerate(pareto_with_combined, 1):
             # Build complete mapping
-            item_mapping = {item: positions_list[pos] for item, pos in 
-                           zip(items_list, mapping_array) if pos >= 0}
             complete_mapping = {}
             if opt.items_assigned:
                 complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
-            complete_mapping.update({k: v.upper() for k, v in item_mapping.items()})
+            complete_mapping.update({k: v.upper() for k, v in mapping.items()})
             
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
