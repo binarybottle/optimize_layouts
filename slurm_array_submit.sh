@@ -2,216 +2,326 @@
 # Quota-aware array job submission for HPC optimization.
 # Calls slurm_array_processor.sh to process configurations as array tasks.
 #
-# If you want to start fresh with a new scan:
-#     bash slurm_array_submit.sh --rescan
-# Otherwise:
-#     bash slurm_array_submit.sh
+# Use preset configurations for common scenarios:
+#   bash slurm_array_submit.sh --account "med250002p" --preset extreme-memory --moo
+#   bash slurm_array_submit.sh --account "med250002p" --preset standard --soo \
+#       --config-prefix "validation_configs/config_" --config-suffix ".yaml" 
+#
+# Custom resource allocation  
+#   bash slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo
+#
+# Override specific parameters
+#   bash slurm_array_submit.sh --preset extreme-memory --processes 48 --time-limit 3600
 
-# Configuration (RM-shared vs. EM)
+# Default configuration (extreme-memory preset)
 #===================================================================
-TOTAL_CONFIGS=65520                # Total configurations (adjust as needed)
-BATCH_SIZE=500                     # Configs per batch file 
-ARRAY_SIZE=500                     # Maximum array tasks per job
-MAX_CONCURRENT=8                   # Maximum concurrent tasks (4 vs. 8)
-CHUNK_SIZE=2                       # Number of array jobs to submit at once
-config_pre=output/configs1/config_ # Config file path prefix
-config_post=.yaml                  # Config file suffix
+SLURM_CPUS=24
+SLURM_MEM="500GB"
+SLURM_TIME="4:00:00"
+SLURM_PARTITION="EM"
+SLURM_ACCOUNT="med250002p"               # Default allocation ID
+TOTAL_CONFIGS=65520                
+BATCH_SIZE=500                     
+ARRAY_SIZE=500                     
+MAX_CONCURRENT=8                   
+CHUNK_SIZE=2                       
+CONFIG_PREFIX="output/configs1/config_"  # Config file path prefix
+CONFIG_SUFFIX=".yaml"                    # Config file suffix
+
+# Optimization settings
+OPT_MODE="--moo"                         # Default to MOO
+OPT_MAX_SOLUTIONS=""
+OPT_N_SOLUTIONS=""
+OPT_TIME_LIMIT=""
+OPT_PROCESSES=""
+
+# Resource presets
+declare -A PRESETS
+PRESETS[standard]="8,40GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
+PRESETS[extreme-memory]="24,500GB,4:00:00,EM,8"        # Maximum performance
+PRESETS[debug]="4,20GB,0:30:00,RM-shared,2"            # Quick testing
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --preset)
+            IFS=',' read -ra PRESET_VALUES <<< "${PRESETS[$2]}"
+            SLURM_CPUS="${PRESET_VALUES[0]}"
+            SLURM_MEM="${PRESET_VALUES[1]}"
+            SLURM_TIME="${PRESET_VALUES[2]}"
+            SLURM_PARTITION="${PRESET_VALUES[3]}"
+            MAX_CONCURRENT="${PRESET_VALUES[4]}"
+            shift 2
+            ;;
+        --cpus)
+            SLURM_CPUS="$2"
+            shift 2
+            ;;
+        --mem)
+            SLURM_MEM="$2"
+            shift 2
+            ;;
+        --time)
+            SLURM_TIME="$2"
+            shift 2
+            ;;
+        --partition)
+            SLURM_PARTITION="$2"
+            shift 2
+            ;;
+        --account)
+            SLURM_ACCOUNT="$2"
+            shift 2
+            ;;
+        --concurrent)
+            MAX_CONCURRENT="$2"
+            shift 2
+            ;;
+        --total-configs)
+            TOTAL_CONFIGS="$2"
+            shift 2
+            ;;
+        --config-prefix)
+            CONFIG_PREFIX="$2"
+            shift 2
+            ;;
+        --config-suffix)
+            CONFIG_SUFFIX="$2"
+            shift 2
+            ;;
+        --moo)
+            OPT_MODE="--moo"
+            shift
+            ;;
+        --soo)
+            OPT_MODE="--soo"
+            shift
+            ;;
+        --max-solutions)
+            OPT_MAX_SOLUTIONS="$2"
+            shift 2
+            ;;
+        --n-solutions)
+            OPT_N_SOLUTIONS="$2"
+            shift 2
+            ;;
+        --time-limit)
+            OPT_TIME_LIMIT="$2"
+            shift 2
+            ;;
+        --processes)
+            OPT_PROCESSES="$2"
+            shift 2
+            ;;
+        --rescan)
+            # Keep existing rescan logic
+            shift
+            ;;
+        --help)
+            echo "Usage: bash slurm_array_submit.sh [OPTIONS]"
+            echo ""
+            echo "Resource Presets:"
+            echo "  --preset standard        8 CPUs, 40GB, 2h, RM-shared"
+            echo "  --preset high-memory     16 CPUs, 200GB, 4h, EM"  
+            echo "  --preset extreme-memory  24 CPUs, 500GB, 6h, EM (default)"
+            echo "  --preset debug          4 CPUs, 20GB, 30m, RM-shared"
+            echo ""
+            echo "Custom Resources:"
+            echo "  --cpus N                CPUs per task"
+            echo "  --mem SIZE              Memory per task (e.g., 40GB, 500GB)"
+            echo "  --time TIME             Time limit (e.g., 2:00:00, 6:00:00)"
+            echo "  --partition PART        SLURM partition (RM-shared, EM)"
+            echo "  --account ID            SLURM account/allocation ID"
+            echo "  --concurrent N          Max concurrent array tasks"
+            echo ""
+            echo "Configuration:"
+            echo "  --total-configs N       Total number of configurations (default: 65520)"
+            echo "  --config-prefix PATH    Config file prefix (default: output/configs1/config_)"
+            echo "  --config-suffix EXT     Config file suffix (default: .yaml)"
+            echo ""
+            echo "Optimization:"
+            echo "  --moo (default), --soo, --max-solutions N, --n-solutions N, --time-limit SEC"
+            echo ""
+            exit 0
+            ;;
+        *)
+            echo "Unknown option: $1 (use --help for options)"
+            exit 1
+            ;;
+    esac
+done
+
+# Set default processes if not specified
+OPT_PROCESSES=${OPT_PROCESSES:-$SLURM_CPUS}
+
 #===================================================================
 
-# Create needed directories
-mkdir -p output/outputs output/errors submission_logs batch_files output/layouts
+# Check for --rescan flag in the arguments to determine if we need to rescan
+RESCAN=false
+for arg in "$@"; do
+    if [[ $arg == "--rescan" ]]; then
+        RESCAN=true
+        break
+    fi
+done
 
-# Decide whether to scan for new configurations or use existing batches
-if [ "$1" == "--rescan" ] || [ ! -f "pending_configs.txt" ]; then
-    echo "=== Scanning for pending configurations ==="
-    echo "This may take several minutes for $TOTAL_CONFIGS configurations..."
-    
-    # Clear existing files
-    > pending_configs.txt
-    rm -f batch_files/*
-    
-    # Track counts
-    TOTAL_PENDING=0
-    TOTAL_COMPLETED=0
-    TOTAL_MISSING=0
+# Set up directories
+mkdir -p output/batches output/outputs output/errors output/logs
+
+# Set up log file 
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+LOG_FILE="output/logs/submit_${TIMESTAMP}.log"
+
+# If rescan flag is set, remove existing batch files and rescan
+if [ "$RESCAN" = true ]; then
+    echo "Rescanning configurations and recreating batch files..."
+    rm -f output/batches/batch_*.txt
+fi
+
+# Scan for pending configurations and create batch files
+echo "Scanning for pending configurations..." | tee -a "$LOG_FILE"
+
+BATCH_NUM=1
+CURRENT_BATCH_SIZE=0
+CURRENT_BATCH_FILE="output/batches/batch_${BATCH_NUM}.txt"
+TOTAL_PENDING=0
+TOTAL_MISSING=0
+
+# Only scan if batch files don't exist or rescan was requested
+if [ ! -f "$CURRENT_BATCH_FILE" ] || [ "$RESCAN" = true ]; then
+    echo "Creating new batch files..." | tee -a "$LOG_FILE"
+    > "$CURRENT_BATCH_FILE"  # Create/clear first batch file
     
     # Scan all configurations
     for ((CONFIG_ID=1; CONFIG_ID<=TOTAL_CONFIGS; CONFIG_ID++)); do
         # Check if the config file exists
-        if [ ! -f "${config_pre}${CONFIG_ID}${config_post}" ]; then
+        if [ ! -f "${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX}" ]; then
             TOTAL_MISSING=$((TOTAL_MISSING+1))
             continue
         fi
         
-        # Check if output already exists and contains actual data
+        # Check if output already exists
         FIND_PATTERN="layout_results_${CONFIG_ID}_[0-9]*"
-        HAS_VALID_OUTPUT=false
-
-        # Find all matching CSV files for this config
-        while IFS= read -r -d '' file; do
-            if [ -s "$file" ]; then  # Check if file is not empty
-                # Count lines in the file (excluding header)
-                LINE_COUNT=$(tail -n +2 "$file" | wc -l)
-                if [ "$LINE_COUNT" -gt 0 ]; then
-                    HAS_VALID_OUTPUT=true
-                    break  # Found at least one valid file, no need to check others
-                fi
-            fi
-        done < <(find output/layouts -name "$FIND_PATTERN*.csv" -print0 2>/dev/null)
-
-        if [ "$HAS_VALID_OUTPUT" = true ]; then
-            TOTAL_COMPLETED=$((TOTAL_COMPLETED+1))
-        else
-            # Add to pending list
-            echo $CONFIG_ID >> pending_configs.txt
-            TOTAL_PENDING=$((TOTAL_PENDING+1))
+        if find output/layouts -name "$FIND_PATTERN*.csv" 2>/dev/null | grep -q .; then
+            continue  # Skip if output exists
         fi
-
-        # Show progress periodically
-        if [ $((CONFIG_ID % 5000)) -eq 0 ]; then
-            echo "Scanned $CONFIG_ID / $TOTAL_CONFIGS configs..."
-            echo "  Completed so far: $TOTAL_COMPLETED"
-            echo "  Pending so far: $TOTAL_PENDING"
+        
+        # Add to current batch
+        echo "$CONFIG_ID" >> "$CURRENT_BATCH_FILE"
+        CURRENT_BATCH_SIZE=$((CURRENT_BATCH_SIZE+1))
+        TOTAL_PENDING=$((TOTAL_PENDING+1))
+        
+        # Start new batch file if current one is full
+        if [ $CURRENT_BATCH_SIZE -ge $BATCH_SIZE ]; then
+            BATCH_NUM=$((BATCH_NUM+1))
+            CURRENT_BATCH_FILE="output/batches/batch_${BATCH_NUM}.txt"
+            > "$CURRENT_BATCH_FILE"
+            CURRENT_BATCH_SIZE=0
         fi
     done
     
-    echo "Scan complete!"
-    echo "Configurations completed: $TOTAL_COMPLETED"
-    echo "Configurations pending: $TOTAL_PENDING"
-    echo "Configuration files missing: $TOTAL_MISSING"
-    
-    # Create batch files if there are pending configurations
-    if [ $TOTAL_PENDING -gt 0 ]; then
-        echo "Creating batch files for $TOTAL_PENDING configurations..."
-        
-        # Create batches
-        CURRENT_BATCH=1
-        CURRENT_COUNT=0
-        BATCH_FILE="batch_files/batch_${CURRENT_BATCH}.txt"
-        > $BATCH_FILE
-        
-        # Add each pending config to a batch file
-        while read -r CONFIG_ID; do
-            echo $CONFIG_ID >> $BATCH_FILE
-            CURRENT_COUNT=$((CURRENT_COUNT+1))
-            
-            # Start a new batch if this one is full
-            if [ $CURRENT_COUNT -eq $BATCH_SIZE ]; then
-                CURRENT_BATCH=$((CURRENT_BATCH+1))
-                CURRENT_COUNT=0
-                BATCH_FILE="batch_files/batch_${CURRENT_BATCH}.txt"
-                > $BATCH_FILE
-            fi
-        done < pending_configs.txt
-        
-        # Count total batches
-        TOTAL_BATCHES=$(ls -1 batch_files/batch_*.txt 2>/dev/null | wc -l)
-        echo "Created $TOTAL_BATCHES batch files"
-        
-        # Reset progress file for new batch list
-        echo "0" > batch_submission_progress.txt
-    else
-        echo "No pending configurations found. All work is complete!"
-        exit 0
+    # Remove empty final batch file if it exists
+    if [ $CURRENT_BATCH_SIZE -eq 0 ] && [ -f "$CURRENT_BATCH_FILE" ]; then
+        rm "$CURRENT_BATCH_FILE"
+        BATCH_NUM=$((BATCH_NUM-1))
     fi
 else
-    # Use existing batch files
-    TOTAL_BATCHES=$(ls -1 batch_files/batch_*.txt 2>/dev/null | wc -l)
-    TOTAL_PENDING=$(wc -l < pending_configs.txt)
-    echo "Using existing $TOTAL_BATCHES batch files with $TOTAL_PENDING pending configurations"
+    echo "Using existing batch files..." | tee -a "$LOG_FILE"
+    # Count pending configurations from existing batch files
+    for BATCH_FILE in output/batches/batch_*.txt; do
+        if [ -f "$BATCH_FILE" ]; then
+            BATCH_COUNT=$(wc -l < "$BATCH_FILE" 2>/dev/null || echo 0)
+            TOTAL_PENDING=$((TOTAL_PENDING + BATCH_COUNT))
+        fi
+    done
+    BATCH_NUM=$(ls output/batches/batch_*.txt 2>/dev/null | wc -l)
 fi
 
-# Read the current progress or start fresh
-PROGRESS_FILE="batch_submission_progress.txt"
-if [ -f "$PROGRESS_FILE" ]; then
-    CURRENT_BATCH=$(cat "$PROGRESS_FILE")
-else
-    CURRENT_BATCH=0
-    echo "0" > "$PROGRESS_FILE"
+TOTAL_BATCHES=$BATCH_NUM
+
+if [ $TOTAL_PENDING -eq 0 ]; then
+    echo "No pending configurations found. All work may be complete!" | tee -a "$LOG_FILE"
+    if [ $TOTAL_MISSING -gt 0 ]; then
+        echo "Note: $TOTAL_MISSING configuration files were missing." | tee -a "$LOG_FILE"
+    fi
+    exit 0
 fi
 
-# Calculate end batch for this chunk
+# Determine which batches to submit
+CURRENT_BATCH=1
 END_BATCH=$((CURRENT_BATCH + CHUNK_SIZE - 1))
-if [ $END_BATCH -ge $TOTAL_BATCHES ]; then
-    END_BATCH=$((TOTAL_BATCHES - 1))
+if [ $END_BATCH -gt $TOTAL_BATCHES ]; then
+    END_BATCH=$TOTAL_BATCHES
 fi
 
-# Log file
-LOG_FILE="submission_logs/array_submission_$(date +%Y%m%d_%H%M%S)_chunk${CURRENT_BATCH}.log"
-
-echo "=== SLURM HPC Array Job Submission ===" | tee -a "$LOG_FILE"
+echo "Configuration: $SLURM_CPUS CPUs, $SLURM_MEM memory, $SLURM_TIME time" | tee -a "$LOG_FILE"
+echo "Cluster: $SLURM_PARTITION partition, account $SLURM_ACCOUNT" | tee -a "$LOG_FILE"
+echo "Configs: $TOTAL_CONFIGS total, prefix=$CONFIG_PREFIX, suffix=$CONFIG_SUFFIX" | tee -a "$LOG_FILE"
+echo "Optimization: $OPT_MODE, processes=$OPT_PROCESSES" | tee -a "$LOG_FILE"
+if [ -n "$OPT_MAX_SOLUTIONS" ]; then echo "MOO max solutions: $OPT_MAX_SOLUTIONS" | tee -a "$LOG_FILE"; fi
+if [ -n "$OPT_N_SOLUTIONS" ]; then echo "SOO solutions: $OPT_N_SOLUTIONS" | tee -a "$LOG_FILE"; fi
+if [ -n "$OPT_TIME_LIMIT" ]; then echo "Time limit: ${OPT_TIME_LIMIT}s" | tee -a "$LOG_FILE"; fi
 echo "Total pending configurations: $TOTAL_PENDING" | tee -a "$LOG_FILE"
 echo "Total batch files: $TOTAL_BATCHES" | tee -a "$LOG_FILE"
 echo "Submitting batches $CURRENT_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
 echo "Array size: $ARRAY_SIZE" | tee -a "$LOG_FILE"
-echo "Max concurrent tasks: $MAX_CONCURRENT (8 CPUs each = $((MAX_CONCURRENT * 8)) total CPUs)" | tee -a "$LOG_FILE"
+echo "Max concurrent tasks: $MAX_CONCURRENT" | tee -a "$LOG_FILE"
 echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 
-# Array to store job IDs from this chunk
-declare -a CHUNK_JOB_IDS
-
-# Submit array jobs for this chunk
-for ((i=CURRENT_BATCH; i<=END_BATCH; i++)); do
-    BATCH_FILE="batch_files/batch_$((i+1)).txt"  # +1 because batch files are 1-indexed
+# Submit array jobs for each batch
+for ((i=CURRENT_BATCH-1; i<END_BATCH; i++)); do
+    BATCH_FILE="output/batches/batch_$((i+1)).txt"
     
     if [ ! -f "$BATCH_FILE" ]; then
-        echo "Warning: Batch file $BATCH_FILE not found" | tee -a "$LOG_FILE"
+        echo "Batch file $BATCH_FILE not found, skipping..." | tee -a "$LOG_FILE"
         continue
     fi
     
-    # Count configs in this batch
-    CONFIG_COUNT=$(wc -l < $BATCH_FILE)
-    
-    # Calculate array indices
-    if [ $CONFIG_COUNT -lt $ARRAY_SIZE ]; then
-        ARRAY_RANGE="0-$((CONFIG_COUNT-1))"
-    else
-        ARRAY_RANGE="0-$((ARRAY_SIZE-1))"
+    CONFIG_COUNT=$(wc -l < "$BATCH_FILE")
+    if [ $CONFIG_COUNT -eq 0 ]; then
+        echo "Batch file $BATCH_FILE is empty, skipping..." | tee -a "$LOG_FILE"
+        continue
     fi
+    
+    # Determine array range (0-indexed)
+    ARRAY_END=$((CONFIG_COUNT-1))
+    if [ $ARRAY_END -ge $ARRAY_SIZE ]; then
+        ARRAY_END=$((ARRAY_SIZE-1))
+    fi
+    ARRAY_RANGE="0-$ARRAY_END"
     
     echo "Submitting HPC batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
-    echo "  Resource usage: $CONFIG_COUNT × 8 CPUs × 15GB = moderate workload" | tee -a "$LOG_FILE"
+    echo "  Resources: $SLURM_CPUS CPUs × $SLURM_MEM memory on $SLURM_PARTITION" | tee -a "$LOG_FILE"
     
-    # Submit array job
-    JOB_OUTPUT=$(sbatch --export=CONFIG_FILE=$BATCH_FILE --array=$ARRAY_RANGE%$MAX_CONCURRENT slurm_array_processor.sh 2>&1)
-    JOB_STATUS=$?
+    # Build export variables for optimization parameters
+    EXPORT_VARS="CONFIG_FILE=$BATCH_FILE,MODE=$OPT_MODE,PROCESSES=$OPT_PROCESSES"
+    EXPORT_VARS="$EXPORT_VARS,CONFIG_PREFIX=$CONFIG_PREFIX,CONFIG_SUFFIX=$CONFIG_SUFFIX"
+    if [ -n "$OPT_MAX_SOLUTIONS" ]; then EXPORT_VARS="$EXPORT_VARS,MAX_SOLUTIONS=$OPT_MAX_SOLUTIONS"; fi
+    if [ -n "$OPT_N_SOLUTIONS" ]; then EXPORT_VARS="$EXPORT_VARS,N_SOLUTIONS=$OPT_N_SOLUTIONS"; fi
+    if [ -n "$OPT_TIME_LIMIT" ]; then EXPORT_VARS="$EXPORT_VARS,TIME_LIMIT=$OPT_TIME_LIMIT"; fi
     
-    if [ $JOB_STATUS -eq 0 ]; then
-        JOB_ID=$(echo "$JOB_OUTPUT" | awk '{print $4}')
-        echo "  Success: Job ID $JOB_ID" | tee -a "$LOG_FILE"
-        CHUNK_JOB_IDS+=($JOB_ID)
+    # Submit array job with configured resources
+    JOB_OUTPUT=$(sbatch \
+        --cpus-per-task=$SLURM_CPUS \
+        --mem=$SLURM_MEM \
+        --time=$SLURM_TIME \
+        --partition=$SLURM_PARTITION \
+        --account=$SLURM_ACCOUNT \
+        --export="$EXPORT_VARS" \
+        --array=$ARRAY_RANGE%$MAX_CONCURRENT \
+        slurm_array_processor.sh 2>&1)
+    
+    if [[ $JOB_OUTPUT == *"Submitted batch job"* ]]; then
+        JOB_ID=$(echo "$JOB_OUTPUT" | grep -o '[0-9]\+')
+        echo "  ✓ Job submitted successfully: $JOB_ID" | tee -a "$LOG_FILE"
     else
-        echo "  Failed: $JOB_OUTPUT" | tee -a "$LOG_FILE"
+        echo "  ✗ Job submission failed: $JOB_OUTPUT" | tee -a "$LOG_FILE"
     fi
     
-    sleep 5  # Delay between submissions
+    echo "$JOB_OUTPUT" >> "$LOG_FILE"
+    
+    # Small delay between submissions
+    sleep 1
 done
 
-# Update progress for next run
-NEXT_BATCH=$((END_BATCH + 1))
-echo $NEXT_BATCH > "$PROGRESS_FILE"
-
-# Check if we've completed all batches
-if [ $NEXT_BATCH -ge $TOTAL_BATCHES ]; then
-    echo "All HPC batches have been submitted. Submission complete!" | tee -a "$LOG_FILE"
-    echo "Final job IDs: ${CHUNK_JOB_IDS[@]}" | tee -a "$LOG_FILE"
-    echo "Monitor progress with: squeue -u $USER" | tee -a "$LOG_FILE"
-else
-    # Schedule the next chunk with a delay
-    echo "Scheduling next HPC chunk (batches $NEXT_BATCH to $((NEXT_BATCH+CHUNK_SIZE-1)))" | tee -a "$LOG_FILE"
-    
-    # Submit this script as a job that depends on the completion of this chunk's jobs
-    if [ ${#CHUNK_JOB_IDS[@]} -gt 0 ]; then
-        # Use afterany dependency to continue even if some jobs fail
-        DEPENDENCY_LIST=$(IFS=:; echo "afterany:${CHUNK_JOB_IDS[*]}")
-        NEXT_MANAGER=$(sbatch --dependency=$DEPENDENCY_LIST --time=00:10:00 --wrap="cd $PWD && bash $0" | awk '{print $4}')
-        echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
-    else
-        # If no jobs were submitted in this chunk, continue anyway with a short delay
-        echo "No jobs were submitted in this chunk. Scheduling next manager immediately." | tee -a "$LOG_FILE"
-        NEXT_MANAGER=$(sbatch --time=00:10:00 --wrap="cd $PWD && bash $0" | awk '{print $4}')
-        echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
-    fi
-fi
-
-echo "This HPC submission manager completed at $(date)" | tee -a "$LOG_FILE"
+echo "Job submission complete. Check log file: $LOG_FILE"

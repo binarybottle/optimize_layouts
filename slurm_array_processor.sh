@@ -3,23 +3,23 @@
 # This script is intended to be run as a SLURM array job, 
 # called by slurm_array_submit.sh.
 # It calls parallel_optimize_layout.py for each configuration.
+#
+# Resource allocation (cpus, memory, time, partition) is handled by 
+# the submit script via sbatch command line parameters.
 
-# SLURM configuration (RM-shared vs. EM)
+# SLURM configuration - static parameters only
 #===================================================================
-#SBATCH --time=4:00:00              # Time limit per configuration (1:00:00 vs. 4:00:00)
 #SBATCH --ntasks-per-node=1         # Number of tasks per node
-#SBATCH --cpus-per-task=24          # Number of CPUs per task (16 vs. 24)
-#SBATCH --mem=500GB                 # Memory allocation (8 CPUs × 1900MB = 15.2GB max) (40GB vs. 500GB)
 #SBATCH --job-name=layout           # Job name
 #SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
 #SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
-#SBATCH -p EM                       # Regular Memory-shared or Extreme Memory (RM-shared vs. EM) 
-#SBATCH -A med250002p               # Your allocation ID
 #===================================================================
+# NOTE: Resource allocation (--cpus-per-task, --mem, --time, --partition, --account) 
+# is set by slurm_array_submit.sh via sbatch command line parameters
 
-# Configuration
-config_pre=output/configs1/config_  # Config file path prefix
-config_post=.yaml                   # Config file suffix
+# Configuration - can be overridden by environment variables
+config_pre=${CONFIG_PREFIX:-output/configs1/config_}  # Config file path prefix
+config_post=${CONFIG_SUFFIX:-.yaml}                   # Config file suffix
 
 # The batch file must be provided when submitting
 if [ -z "$CONFIG_FILE" ]; then
@@ -40,13 +40,15 @@ fi
 CONFIG_ID=${CONFIG_IDS[$SLURM_ARRAY_TASK_ID]}
 echo "Array task $SLURM_ARRAY_TASK_ID processing configuration ID: $CONFIG_ID"
 
-# Load required modules (UPDATED TO USE ANACONDA3)
+# Load required modules
 module purge
 module load anaconda3
 
 echo "=== Environment Info ==="
 echo "Hostname: $(hostname)"
 echo "Python: $(python3 --version)"
+echo "CPUs allocated: $SLURM_CPUS_PER_TASK"
+echo "Memory allocated: $SLURM_MEM_PER_NODE"
 module list
 
 # Set environment for HPC parallel processing
@@ -57,8 +59,8 @@ export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
 cd $HOME/keyboard_optimizer/optimize_layouts
 
 # Check if config file exists
-if [ ! -f "${config_pre}${CONFIG_ID}${config_post}" ]; then
-    echo "Configuration file ${config_pre}${CONFIG_ID}${config_post} not found!"
+if [ ! -f "${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX}" ]; then
+    echo "Configuration file ${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX} not found!"
     exit 1
 fi
 
@@ -69,12 +71,21 @@ if find output/layouts -name "$FIND_PATTERN*.csv" | grep -q .; then
     exit 0
 fi
 
-# Run the optimization
-echo "Running optimization for config ${CONFIG_ID}..."
+# Run the parallel optimization with passed parameters
+echo "Running parallel optimization for config ${CONFIG_ID}..."
+echo "  Mode: ${MODE:---moo}"
+echo "  Processes: ${PROCESSES:-8}"
+if [ -n "$MAX_SOLUTIONS" ]; then echo "  Max solutions: $MAX_SOLUTIONS"; fi
+if [ -n "$N_SOLUTIONS" ]; then echo "  N solutions: $N_SOLUTIONS"; fi
+if [ -n "$TIME_LIMIT" ]; then echo "  Time limit: ${TIME_LIMIT}s"; fi
+
 python3 parallel_optimize_layout.py \
-    --config ${config_pre}${CONFIG_ID}${config_post} \
-    --moo \
-    --processes 8 #$SLURM_CPUS_PER_TASK # use fewer processes to avoid oversubscription
+    --config ${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX} \
+    ${MODE:---moo} \
+    --processes ${PROCESSES:-8} \
+    ${MAX_SOLUTIONS:+--max-solutions $MAX_SOLUTIONS} \
+    ${TIME_LIMIT:+--time-limit $TIME_LIMIT} \
+    ${N_SOLUTIONS:+--n-solutions $N_SOLUTIONS}
 
 if [ $? -eq 0 ]; then
     echo "Optimization completed successfully for config ${CONFIG_ID}"

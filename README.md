@@ -245,39 +245,43 @@ by creating your own generate_configs.py script,
 following the example in generate_keyboard_configs1.py:
 ```python3 generate_configs.py```
 
-### Set up slurm parameters
-Replace slurm parameters listed below according to your setup.
-Replace <ALLOCATION_ID> with the actual allocation ID,
-and <TOTAL_CONFIGS> with the total number of config files.
+### Configure and submit jobs
+The submission system supports flexible resource allocation and optimization 
+parameters without requiring manual script editing:
 
-slurm_array_processor.sh:
+#### Available resource presets
+  - debug: 4 CPUs, 20GB, 30min, RM-shared (for testing)
+  - standard: 8 CPUs, 40GB, 2h, RM-shared (moderate workloads)
+  - extreme-memory: 24 CPUs, 500GB, 6h, EM (maximum performance)
+
+#### Basic usage with presets
   ```bash
-  # SLURM configuration (RM-shared vs. EM)
-  #===================================================================
-  #SBATCH --time=4:00:00              # Time limit per configuration (1:00:00 vs. 4:00:00)
-  #SBATCH --ntasks-per-node=1         # Number of tasks per node
-  #SBATCH --cpus-per-task=24          # Number of CPUs per task (16 vs. 24)
-  #SBATCH --mem=500GB                 # Memory allocation (8 CPUs × 1900MB = 15.2GB max) (40GB vs. 500GB)
-  #SBATCH --job-name=layout           # Job name
-  #SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
-  #SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
-  #SBATCH -p EM                       # Regular Memory-shared or Extreme Memory (RM-shared vs. EM) 
-  #SBATCH -A <ALLOCATION_ID>          # Your allocation ID (e.g., med250002p)
-  #===================================================================
+  # Quick testing (small resources, short time)
+  bash slurm_array_submit.sh --preset debug --account "your_allocation_id"
+
+  # Standard workload (moderate resources)
+  bash slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo
+
+  # High-memory intensive optimization  
+  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" \
+      --moo --max-solutions 100
+
+  # Check all available options
+  bash slurm_array_submit.sh --help
   ```
 
-slurm_array_submit.sh:
+#### Custom resource allocation
   ```bash
-  # Configuration (RM-shared vs. EM)
-  #===================================================================
-  TOTAL_CONFIGS=65520                # Total configurations (adjust as needed)
-  BATCH_SIZE=500                     # Configs per batch file 
-  ARRAY_SIZE=500                     # Maximum array tasks per job
-  MAX_CONCURRENT=8                   # Maximum concurrent tasks (4 vs. 8)
-  CHUNK_SIZE=2                       # Number of array jobs to submit at once
-  config_pre=output/configs1/config_ # Config file path prefix
-  config_post=.yaml                  # Config file suffix
-  #===================================================================
+  # Custom resources for specific needs
+  bash slurm_array_submit.sh \
+      --cpus 16 \
+      --mem 200GB \
+      --time 6:00:00 \
+      --partition RM-shared \
+      --account "your_allocation_id" \
+      --config-prefix "experiments/sweep2/config_" \
+      --concurrent 6 \
+      --moo --time-limit 7200
   ```
 
 ### Run scripts
@@ -291,11 +295,11 @@ slurm_array_submit.sh:
   echo "1" > test_single.txt
   sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh
 
-  # Run all batches as a slurm job
-  bash slurm_array_submit.sh --rescan
+  # Submit jobs with fresh configuration scan
+  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" --rescan
 
-  # Or continue from where you left off:
-  bash slurm_array_submit.sh
+  # Or continue from where you left off (uses existing batch files):
+  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id"
   ```
 
 ### Monitor jobs
@@ -315,8 +319,12 @@ slurm_array_submit.sh:
   # Check recent log files
   ls -lt output/outputs/ | head -10
   tail output/outputs/layout_*.out
-  ```
 
+  # View submission logs
+  ls -lt output/logs/submit_*.log | head -5
+  tail output/logs/submit_*.log
+  ```
+  
 ### Cancel jobs
   ```bash
   # Cancel all your jobs at once
