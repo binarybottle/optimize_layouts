@@ -1,17 +1,16 @@
 #!/bin/bash
 # Quota-aware array job submission for HPC optimization.
 # Calls slurm_array_processor.sh to process configurations as array tasks.
-#
+
 # Use preset configurations for common scenarios:
-#   bash slurm_array_submit.sh --account "med250002p" --preset extreme-memory --moo
-#   bash slurm_array_submit.sh --account "med250002p" --preset standard --soo \
-#       --config-prefix "validation_configs/config_" --config-suffix ".yaml" 
+#   bash slurm_array_submit.sh --account "med250002p" --preset standard --moo
 #
-# Custom resource allocation  
-#   bash slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo
+# Custom resource allocation and optimization settings:  
+#   bash slurm_array_submit.sh --account "med250002p" --preset extreme-memory \
+#       --moo --total-configs 1 \
+#       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
 #
-# Override specific parameters
-#   bash slurm_array_submit.sh --preset extreme-memory --processes 48 --time-limit 3600
+#   bash slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo --processes 48
 
 # Default configuration (extreme-memory preset)
 #===================================================================
@@ -121,10 +120,9 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: bash slurm_array_submit.sh [OPTIONS]"
             echo ""
             echo "Resource Presets:"
-            echo "  --preset standard        8 CPUs, 40GB, 2h, RM-shared"
-            echo "  --preset high-memory     16 CPUs, 200GB, 4h, EM"  
-            echo "  --preset extreme-memory  24 CPUs, 500GB, 6h, EM (default)"
-            echo "  --preset debug          4 CPUs, 20GB, 30m, RM-shared"
+            echo "  --preset standard         8 CPUs,  40GB, 2h,  RM-shared"
+            echo "  --preset extreme-memory  24 CPUs, 500GB, 4h,  EM (default)"
+            echo "  --preset debug            4 CPUs,  20GB, 30m, RM-shared"
             echo ""
             echo "Custom Resources:"
             echo "  --cpus N                CPUs per task"

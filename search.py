@@ -4,7 +4,7 @@ Search algorithms for layout optimization.
 
 Consolidates all search logic including:
 - Single-objective branch and bound
-- Multi-objective Pareto search  
+- Multi-objective Pareto search (single-threaded and multi-threaded)
 - Upper bound calculations
 - Constraint handling
 """
@@ -12,13 +12,13 @@ Consolidates all search logic including:
 import numpy as np
 import time
 import gc
+import multiprocessing as mp
 from typing import List, Tuple, Dict, Set, Optional
 from numba import jit
 from math import factorial
 from tqdm import tqdm
 
 from config import Config
-from scoring import LayoutScorer
 from scoring import LayoutScorer, apply_default_combination
 
 #-----------------------------------------------------------------------------
@@ -356,7 +356,7 @@ def single_objective_search(config: Config, scorer: LayoutScorer,
     return solutions, nodes_processed, nodes_pruned
 
 #-----------------------------------------------------------------------------
-# Multi-objective search
+# Multi-objective Pareto dominance
 #-----------------------------------------------------------------------------
 def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
     """Check if obj1 Pareto dominates obj2."""
@@ -368,22 +368,403 @@ def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
             at_least_one_better = True
     return at_least_one_better
 
+def build_pareto_front(all_solutions: List[Dict]) -> List[Dict]:
+    """Build Pareto front from list of solutions."""
+    if not all_solutions:
+        return []
+    
+    pareto_front = []
+    
+    for candidate in all_solutions:
+        is_non_dominated = True
+        dominated_indices = []
+        
+        for i, existing in enumerate(pareto_front):
+            if pareto_dominates(existing['objectives'], candidate['objectives']):
+                is_non_dominated = False
+                break
+            elif pareto_dominates(candidate['objectives'], existing['objectives']):
+                dominated_indices.append(i)
+        
+        if is_non_dominated:
+            # Remove dominated solutions
+            for i in reversed(sorted(dominated_indices)):
+                del pareto_front[i]
+            
+            # Add new solution
+            pareto_front.append(candidate)
+    
+    return pareto_front
+
+#-----------------------------------------------------------------------------
+# Multiprocessing support for MOO
+#-----------------------------------------------------------------------------
+def create_moo_work_chunks(initial_mapping: np.ndarray, initial_used: np.ndarray,
+                          items_list: List[str], positions_list: List[str],
+                          constrained_items: np.ndarray, constrained_positions: np.ndarray,
+                          processes: int) -> List[List[Tuple]]:
+    """Create work chunks for distributed MOO search."""
+    
+    # Get first unassigned item
+    next_item = get_next_item_jit(initial_mapping, constrained_items)
+    if next_item == -1:
+        return []
+    
+    # Get valid positions for first item
+    if next_item in constrained_items:
+        valid_positions = [pos for pos in constrained_positions if not initial_used[pos]]
+    else:
+        valid_positions = [pos for pos in range(len(positions_list)) if not initial_used[pos]]
+    
+    # Create work items (each is a starting state)
+    work_items = []
+    for pos in valid_positions:
+        new_mapping = initial_mapping.copy()
+        new_used = initial_used.copy()
+        new_mapping[next_item] = pos
+        new_used[pos] = True
+        
+        work_items.append((new_mapping.copy(), new_used.copy(), 1))  # depth=1
+    
+    # Distribute work items across processes
+    chunk_size = max(1, len(work_items) // processes)
+    chunks = []
+    
+    for i in range(0, len(work_items), chunk_size):
+        chunk = work_items[i:i + chunk_size]
+        if chunk:  # Only add non-empty chunks
+            chunks.append(chunk)
+    
+    return chunks
+
+def process_moo_chunk(arrays, chunk_data: List[Tuple], params: Dict):
+    """Worker function for processing MOO chunks in parallel."""
+    try:
+        # Recreate scorer from serialized arrays
+        scorer = LayoutScorer(arrays, mode='multi_objective')
+        
+        # Extract parameters
+        items_list = params['items_list']
+        positions_list = params['positions_list']
+        constrained_items = params['constrained_items']
+        constrained_positions = params['constrained_positions']
+        max_solutions = params.get('max_solutions')
+        time_limit = params.get('time_limit')
+        enable_moo_pruning_ALPHA = params.get('enable_moo_pruning_ALPHA', False)
+        
+        n_items = len(items_list)
+        n_positions = len(positions_list)
+        
+        # Local Pareto front for this chunk
+        local_solutions = []
+        local_objectives = []
+        nodes_processed = 0
+        nodes_pruned = 0
+        start_time = time.time()
+        
+        def dfs_moo_chunk(mapping: np.ndarray, used: np.ndarray, depth: int):
+            """Local DFS search for this chunk."""
+            nonlocal nodes_processed, nodes_pruned, local_solutions, local_objectives
+            
+            nodes_processed += 1
+            
+            # Check time limit
+            if time_limit and (time.time() - start_time) > time_limit:
+                return
+            
+            # Check solution limit
+            if max_solutions and len(local_solutions) >= max_solutions:
+                return
+            
+            # Complete solution
+            if depth == n_items:
+                # Validate constraints
+                if len(constrained_items) > 0:
+                    if not validate_constraints_jit(mapping, constrained_items, constrained_positions):
+                        return
+                
+                # Get objectives
+                objectives = scorer.score_layout(mapping)
+                
+                # Check if non-dominated in local front
+                is_non_dominated = True
+                dominated_indices = []
+                
+                for i, existing_obj in enumerate(local_objectives):
+                    if pareto_dominates(existing_obj, objectives):
+                        is_non_dominated = False
+                        break
+                    elif pareto_dominates(objectives, existing_obj):
+                        dominated_indices.append(i)
+                
+                if is_non_dominated:
+                    # Remove dominated solutions
+                    for i in reversed(sorted(dominated_indices)):
+                        del local_solutions[i]
+                        del local_objectives[i]
+                    
+                    # Convert to solution format
+                    item_mapping = {items_list[i]: positions_list[mapping[i]] 
+                                   for i in range(n_items)}
+                    
+                    solution_dict = {
+                        'mapping': item_mapping,
+                        'objectives': objectives
+                    }
+                    local_solutions.append(solution_dict)
+                    local_objectives.append(objectives)
+                
+                return
+            
+            # Get next item
+            next_item = get_next_item_jit(mapping, constrained_items)
+            if next_item == -1:
+                return
+            
+            # Get valid positions
+            if next_item in constrained_items:
+                valid_positions = [pos for pos in constrained_positions if not used[pos]]
+            else:
+                valid_positions = [pos for pos in range(n_positions) if not used[pos]]
+            
+            # Try each position
+            for pos in valid_positions:
+                mapping[next_item] = pos
+                used[pos] = True
+                
+                dfs_moo_chunk(mapping, used, depth + 1)
+                
+                mapping[next_item] = -1
+                used[pos] = False
+        
+        # Process each work item in the chunk
+        for mapping, used, depth in chunk_data:
+            if time_limit and (time.time() - start_time) > time_limit:
+                break
+            if max_solutions and len(local_solutions) >= max_solutions:
+                break
+                
+            dfs_moo_chunk(mapping, used, depth)
+        
+        return local_solutions, nodes_processed, nodes_pruned
+        
+    except Exception as e:
+        print(f"Worker process error: {e}")
+        import traceback
+        traceback.print_exc()
+        return [], 0, 0
+
+#-----------------------------------------------------------------------------
+# Multi-objective search (single-threaded and multi-threaded)
+#-----------------------------------------------------------------------------
+def single_threaded_moo_search(config: Config, scorer: LayoutScorer,
+                              items_list: List[str], positions_list: List[str],
+                              constrained_items: np.ndarray, constrained_positions: np.ndarray,
+                              initial_mapping: np.ndarray, initial_used: np.ndarray,
+                              max_solutions: int = None, time_limit: float = None,
+                              pruner = None, enable_moo_pruning_ALPHA: bool = False) -> Tuple[List[Dict], int, int]:
+    """Single-threaded multi-objective search."""
+    
+    n_items = len(items_list)
+    n_positions = len(positions_list)
+    
+    # Pareto front storage
+    pareto_front = []
+    pareto_objectives = []
+    
+    # Search statistics
+    nodes_processed = 0
+    nodes_pruned = 0
+    start_time = time.time()
+    
+    def dfs_moo_search(mapping: np.ndarray, used: np.ndarray, depth: int):
+        """Recursive multi-objective search."""
+        nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
+        
+        nodes_processed += 1
+        
+        # Pruning check
+        if enable_moo_pruning_ALPHA and depth > 0 and pruner and pruner.can_prune_branch(mapping, used, pareto_objectives):
+            nodes_pruned += 1
+            return
+        
+        # Check termination conditions
+        if time_limit and (time.time() - start_time) > time_limit:
+            return
+        if max_solutions and len(pareto_front) >= max_solutions:
+            return
+        
+        # Complete solution
+        if depth == n_items:
+            # Validate constraints
+            if len(constrained_items) > 0:
+                if not validate_constraints_jit(mapping, constrained_items, constrained_positions):
+                    return
+            
+            # Get objectives
+            objectives = scorer.score_layout(mapping)
+            
+            # Check if non-dominated
+            is_non_dominated = True
+            dominated_indices = []
+            
+            for i, existing_obj in enumerate(pareto_objectives):
+                if pareto_dominates(existing_obj, objectives):
+                    is_non_dominated = False
+                    break
+                elif pareto_dominates(objectives, existing_obj):
+                    dominated_indices.append(i)
+
+            if is_non_dominated:
+                # Remove dominated solutions
+                for i in reversed(sorted(dominated_indices)):
+                    del pareto_front[i]
+                    del pareto_objectives[i]
+                
+                # Convert to solution format
+                item_mapping = {items_list[i]: positions_list[mapping[i]] 
+                               for i in range(n_items)}
+                
+                solution_dict = {
+                    'mapping': item_mapping,
+                    'objectives': objectives
+                }
+                pareto_front.append(solution_dict)
+                pareto_objectives.append(objectives)
+
+            return
+        
+        # Get next item
+        next_item = get_next_item_jit(mapping, constrained_items)
+        if next_item == -1:
+            return
+        
+        # Get valid positions
+        if next_item in constrained_items:
+            valid_positions = [pos for pos in constrained_positions if not used[pos]]
+        else:
+            valid_positions = [pos for pos in range(n_positions) if not used[pos]]
+        
+        # Try each position
+        for pos in valid_positions:
+            mapping[next_item] = pos
+            used[pos] = True
+            
+            dfs_moo_search(mapping, used, depth + 1)
+            
+            mapping[next_item] = -1
+            used[pos] = False
+    
+    # Run search
+    dfs_moo_search(initial_mapping, initial_used, 0)
+    
+    return pareto_front, nodes_processed, nodes_pruned
+
+def distributed_moo_search(config: Config, scorer: LayoutScorer,
+                          items_list: List[str], positions_list: List[str],
+                          constrained_items: np.ndarray, constrained_positions: np.ndarray,
+                          initial_mapping: np.ndarray, initial_used: np.ndarray,
+                          max_solutions: int = None, time_limit: float = None,
+                          pruner = None, enable_moo_pruning_ALPHA: bool = False,
+                          processes: int = None) -> Tuple[List[Dict], int, int]:
+    """Distributed multi-objective search using multiprocessing."""
+    
+    if processes is None:
+        processes = mp.cpu_count()
+    
+    # Create work chunks
+    chunks = create_moo_work_chunks(
+        initial_mapping, initial_used, items_list, positions_list,
+        constrained_items, constrained_positions, processes
+    )
+    
+    if not chunks:
+        print("No work chunks created - running single-threaded")
+        return single_threaded_moo_search(
+            config, scorer, items_list, positions_list,
+            constrained_items, constrained_positions,
+            initial_mapping, initial_used,
+            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
+        )
+    
+    print(f"Created {len(chunks)} work chunks for {processes} processes")
+    
+    # Prepare arguments for worker processes
+    worker_args = []
+    for chunk in chunks:
+        args = (
+            scorer.arrays,  # ScoringArrays will be serialized here
+            chunk,
+            {
+                'items_list': items_list,
+                'positions_list': positions_list,
+                'constrained_items': constrained_items,
+                'constrained_positions': constrained_positions,
+                'max_solutions': max_solutions,
+                'time_limit': time_limit,
+                'enable_moo_pruning_ALPHA': enable_moo_pruning_ALPHA
+            }
+        )
+        worker_args.append(args)
+    
+    # Run multiprocessing
+    print(f"Starting {processes} worker processes...")
+    try:
+        with mp.Pool(processes=processes) as pool:
+            chunk_results = pool.starmap(process_moo_chunk, worker_args)
+    except Exception as e:
+        print(f"Multiprocessing failed: {e}")
+        print("Falling back to single-threaded search...")
+        return single_threaded_moo_search(
+            config, scorer, items_list, positions_list,
+            constrained_items, constrained_positions,
+            initial_mapping, initial_used,
+            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
+        )
+    
+    # Combine results from all chunks
+    all_solutions = []
+    total_nodes_processed = 0
+    total_nodes_pruned = 0
+    
+    for solutions, nodes_proc, nodes_prun in chunk_results:
+        all_solutions.extend(solutions)
+        total_nodes_processed += nodes_proc
+        total_nodes_pruned += nodes_prun
+    
+    # Build final Pareto front
+    pareto_front = build_pareto_front(all_solutions)
+    
+    print(f"Combined {len(all_solutions)} solutions into {len(pareto_front)} Pareto-optimal solutions")
+    
+    return pareto_front, total_nodes_processed, total_nodes_pruned
+
 def multi_objective_search(config: Config, scorer: LayoutScorer, 
                           max_solutions: int = None, time_limit: float = None,
-                          pruner = None, enable_pruning: bool = False):
+                          pruner = None, enable_moo_pruning_ALPHA: bool = False, 
+                          processes: int = None) -> Tuple[List[Dict], int, int]:
     """
-    Multi-objective search finding Pareto-optimal solutions with optional pruning.
+    Multi-objective search finding Pareto-optimal solutions with optional multiprocessing.
     
     Args:
         config: Configuration object
         scorer: Layout scorer (should be in multi_objective mode)
         max_solutions: Maximum solutions to find (None for unlimited)
         time_limit: Time limit in seconds (None for unlimited)
+        pruner: MOO pruner object (optional)
+        enable_moo_pruning_ALPHA: Whether to enable pruning
+        processes: Number of parallel processes (None for auto-detect, 1 for single-threaded)
         
     Returns:
         Tuple of (pareto_front, nodes_processed, nodes_pruned)
     """
+    
+    # Auto-detect process count if not specified
+    if processes is None:
+        processes = mp.cpu_count()
+    
     print("Running Multi-Objective Pareto search...")
+    print(f"Using {processes} process{'es' if processes != 1 else ''}")
     
     opt = config.optimization
     items_list = list(opt.items_to_assign)
@@ -413,113 +794,22 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
                 initial_mapping[item_idx] = pos_idx
                 initial_used[pos_idx] = True
     
-    # Pareto front storage
-    pareto_front = []
-    pareto_objectives = []
-    
-    # Search statistics
-    nodes_processed = 0
-    nodes_pruned = 0
-    start_time = time.time()
-    
-    def can_improve_pareto(upper_bounds: List[float]) -> bool:
-        """Check if upper bounds could improve Pareto front."""
-        if not pareto_objectives:
-            return True
-        
-        for existing_obj in pareto_objectives:
-            if pareto_dominates(existing_obj, upper_bounds):
-                return False
-        return True
-
-    def dfs_moo_search(mapping: np.ndarray, used: np.ndarray, depth: int):
-        """Recursive multi-objective search."""
-        nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
-        
-        nodes_processed += 1
-        
-        # Pruning check
-        if enable_pruning and depth > 0 and pruner and pruner.can_prune_branch(mapping, used, pareto_objectives):
-            nodes_pruned += 1
-            return  # Skip this entire branch
-        
-        # Check termination conditions
-        if time_limit and (time.time() - start_time) > time_limit:
-            return
-        if max_solutions and len(pareto_front) >= max_solutions:
-            return
-        
-        # Complete solution
-        if depth == n_items:
-            # Validate constraints
-            if len(constrained_items) > 0:
-                if not validate_constraints_jit(mapping, constrained_items, constrained_positions):
-                    return
-            
-            # Get objectives
-            objectives = scorer.score_layout(mapping)  # Returns list for MOO mode
-            
-            # Check if non-dominated
-            is_non_dominated = True
-            dominated_indices = []
-            
-            for i, existing_obj in enumerate(pareto_objectives):
-                if pareto_dominates(existing_obj, objectives):
-                    is_non_dominated = False
-                    break
-                elif pareto_dominates(objectives, existing_obj):
-                    dominated_indices.append(i)
-
-            if is_non_dominated:
-                # Remove dominated solutions
-                for i in reversed(sorted(dominated_indices)):
-                    del pareto_front[i]
-                    del pareto_objectives[i]
-                
-                # Convert numpy mapping array to item->position dictionary
-                item_mapping = {items_list[i]: positions_list[mapping[i]] 
-                               for i in range(n_items)}
-                
-                # Add new solution in DICTIONARY format (same as parallel MOO)
-                solution_dict = {
-                    'mapping': item_mapping,
-                    'objectives': objectives
-                }
-                pareto_front.append(solution_dict)  # ✅ DICT FORMAT
-                pareto_objectives.append(objectives)
-
-            return
-        
-        # Get next item
-        next_item = get_next_item_jit(mapping, constrained_items)
-        if next_item == -1:
-            return
-        
-        # Get valid positions
-        if next_item in constrained_items:
-            valid_positions = [pos for pos in constrained_positions if not used[pos]]
-        else:
-            valid_positions = [pos for pos in range(n_positions) if not used[pos]]
-        
-        # Try each position
-        for pos in valid_positions:
-            mapping[next_item] = pos
-            used[pos] = True
-            
-            # 🌟 Pruning implemented above
-
-            dfs_moo_search(mapping, used, depth + 1)
-            
-            mapping[next_item] = -1
-            used[pos] = False
-    
-    # Run search
     print(f"Search limits: {max_solutions or 'unlimited'} solutions, {time_limit or 'unlimited'} seconds")
-    dfs_moo_search(initial_mapping, initial_used, 0)
     
-    elapsed_time = time.time() - start_time
-    print(f"\nMOO search completed in {elapsed_time:.2f}s")
-    print(f"Nodes processed: {nodes_processed:,}")
-    print(f"Pareto solutions found: {len(pareto_front)}")
-    
-    return pareto_front, nodes_processed, nodes_pruned
+    # Choose single-threaded or multi-threaded search
+    if processes == 1:
+        print("Running single-threaded MOO search...")
+        return single_threaded_moo_search(
+            config, scorer, items_list, positions_list,
+            constrained_items, constrained_positions,
+            initial_mapping, initial_used,
+            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
+        )
+    else:
+        print(f"Running distributed MOO search with {processes} processes...")
+        return distributed_moo_search(
+            config, scorer, items_list, positions_list,
+            constrained_items, constrained_positions,
+            initial_mapping, initial_used,
+            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA, processes
+        )

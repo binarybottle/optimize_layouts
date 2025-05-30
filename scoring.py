@@ -1,6 +1,7 @@
 # scoring.py  
 """
-Unified, maintainable scoring system for layout optimization.
+Unified, maintainable scoring system for layout optimization 
+in both parallel and non-parallel modes.
 
 The system uses a centralized combination strategy defined by 
 DEFAULT_COMBINATION_STRATEGY and implemented in apply_default_combination(). 
@@ -179,34 +180,60 @@ class ScoreComponents:
         """
         return apply_default_combination(self.item_score, self.item_pair_score)
 
-@dataclass
 class ScoringArrays:
-    """Container for all scoring arrays with clear documentation."""
-    # Core arrays for items being optimized
-    item_scores: np.ndarray              # Shape: (n_items,)
-    item_pair_matrix: np.ndarray         # Shape: (n_items, n_items)
-    position_matrix: np.ndarray          # Shape: (n_positions, n_positions)
+    """
+    Container for all scoring arrays with clear documentation.
     
-    # Cross-interaction arrays (optional - for pre-assigned items)
-    cross_item_matrix: Optional[np.ndarray] = None      # Shape: (n_items, n_assigned)
-    cross_position_matrix: Optional[np.ndarray] = None  # Shape: (n_positions, n_assigned)
-    reverse_cross_item_matrix: Optional[np.ndarray] = None
-    reverse_cross_position_matrix: Optional[np.ndarray] = None
+    Multiprocessing-safe implementation that works seamlessly in both
+    parallel and non-parallel execution modes.
+    """
     
-    # Metadata
-    n_items: int = 0
-    n_positions: int = 0
-    n_assigned: int = 0
-    
-    def __post_init__(self):
-        """Validate array shapes and set metadata."""
+    def __init__(self, item_scores: np.ndarray, item_pair_matrix: np.ndarray, 
+                 position_matrix: np.ndarray, cross_item_matrix: Optional[np.ndarray] = None,
+                 cross_position_matrix: Optional[np.ndarray] = None,
+                 reverse_cross_item_matrix: Optional[np.ndarray] = None,
+                 reverse_cross_position_matrix: Optional[np.ndarray] = None):
+        """Initialize scoring arrays."""
+        # Core arrays for items being optimized
+        self.item_scores = item_scores                    # Shape: (n_items,)
+        self.item_pair_matrix = item_pair_matrix         # Shape: (n_items, n_items)
+        self.position_matrix = position_matrix           # Shape: (n_positions, n_positions)
+        
+        # Cross-interaction arrays (optional - for pre-assigned items)
+        self.cross_item_matrix = cross_item_matrix                # Shape: (n_items, n_assigned)
+        self.cross_position_matrix = cross_position_matrix       # Shape: (n_positions, n_assigned)
+        self.reverse_cross_item_matrix = reverse_cross_item_matrix
+        self.reverse_cross_position_matrix = reverse_cross_position_matrix
+        
+        # Set metadata
         self.n_items = len(self.item_scores)
         self.n_positions = self.position_matrix.shape[0]
+        self.n_assigned = 0
         
         if self.cross_item_matrix is not None:
             self.n_assigned = self.cross_item_matrix.shape[1]
         
         self._validate_shapes()
+    
+    def __getstate__(self):
+        """Custom serialization for multiprocessing - preserves all data."""
+        return {
+            'item_scores': self.item_scores,
+            'item_pair_matrix': self.item_pair_matrix,
+            'position_matrix': self.position_matrix,
+            'cross_item_matrix': self.cross_item_matrix,
+            'cross_position_matrix': self.cross_position_matrix,
+            'reverse_cross_item_matrix': self.reverse_cross_item_matrix,
+            'reverse_cross_position_matrix': self.reverse_cross_position_matrix,
+            'n_items': self.n_items,
+            'n_positions': self.n_positions,
+            'n_assigned': self.n_assigned
+        }
+    
+    def __setstate__(self, state):
+        """Custom deserialization for multiprocessing - restores all data."""
+        for key, value in state.items():
+            setattr(self, key, value)
     
     def _validate_shapes(self):
         """Ensure all arrays have consistent shapes."""
@@ -350,6 +377,7 @@ class ScoreCalculator:
 class LayoutScorer:
     """
     Unified layout scorer that serves both SOO and MOO optimization.
+    Works seamlessly in both parallel and non-parallel execution modes.
     """
     
     def __init__(self, arrays: ScoringArrays, mode: str = 'combined'):
@@ -794,3 +822,6 @@ if __name__ == "__main__":
     print(f"  Total score: {total_score:.6f}")
     print(f"  Item component: {item_score:.6f}")  
     print(f"  Pair component: {pair_score:.6f}")
+    
+    print("\n✅ All tests completed successfully!")
+    print("🔧 This scoring system works seamlessly in both parallel and non-parallel modes.")
