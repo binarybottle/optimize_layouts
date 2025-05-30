@@ -95,7 +95,7 @@ done
 
 # Test 9: File permissions
 echo -e "\n9. Testing File Permissions:"
-SCRIPTS=("slurm_array_processor.sh" "slurm_quota_smart_array_submit.sh" "slurm_optimize_layout.py")
+SCRIPTS=("slurm_array_processor.sh" "slurm_array_submit.sh" "parallel_optimize_layout.py")
 for script in "${SCRIPTS[@]}"; do
     if [ -f "$script" ]; then
         if [ -x "$script" ]; then

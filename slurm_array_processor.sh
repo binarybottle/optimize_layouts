@@ -1,8 +1,8 @@
 #!/bin/bash
 # Process a single configuration as an array task
 # This script is intended to be run as a SLURM array job, 
-# called by slurm_quota_smart_array_submit.sh.
-# It calls slurm_optimize_layout.py for each configuration.
+# called by slurm_array_submit.sh.
+# It calls parallel_optimize_layout.py for each configuration.
 
 # SLURM configuration (RM-shared vs. EM)
 #===================================================================
@@ -71,7 +71,7 @@ fi
 
 # Run the optimization
 echo "Running optimization for config ${CONFIG_ID}..."
-python3 slurm_optimize_layout.py \
+python3 parallel_optimize_layout.py \
     --config ${config_pre}${CONFIG_ID}${config_post} \
     --moo \
     --processes 8 #$SLURM_CPUS_PER_TASK # use fewer processes to avoid oversubscription

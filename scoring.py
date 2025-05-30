@@ -20,6 +20,9 @@ from numba import jit
 from typing import Dict, List, Tuple, Optional
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
+import pandas as pd
+from typing import Dict, Tuple
+from config import Config
 
 #-----------------------------------------------------------------------------
 # Default combination strategy
@@ -681,6 +684,48 @@ def validate_scorer_consistency(scorer: LayoutScorer, n_tests: int = 100) -> boo
             return False
     
     return True
+
+#-----------------------------------------------------------------------------
+# Loading
+#-----------------------------------------------------------------------------
+def load_normalized_scores(config: Config) -> Tuple[Dict, Dict, Dict, Dict]:
+    """
+    Load normalized scores from CSV files.
+    
+    Args:
+        config: Configuration object containing file paths
+        
+    Returns:
+        Tuple of (item_scores, item_pair_scores, position_scores, position_pair_scores)
+    """
+    def load_score_dict(filepath: str, key_col: str, score_col: str = 'score') -> Dict:
+        """Helper to load score dictionary from CSV."""
+        df = pd.read_csv(filepath)
+        return {row[key_col].lower(): float(row[score_col]) for _, row in df.iterrows()}
+    
+    def load_pair_score_dict(filepath: str, pair_col: str, score_col: str = 'score') -> Dict:
+        """Helper to load pair score dictionary from CSV."""
+        df = pd.read_csv(filepath)
+        result = {}
+        for _, row in df.iterrows():
+            pair_str = str(row[pair_col])
+            if len(pair_str) == 2:
+                key = (pair_str[0].lower(), pair_str[1].lower())
+                result[key] = float(row[score_col])
+        return result
+    
+    # Load all score dictionaries
+    item_scores = load_score_dict(config.paths.item_scores_file, 'item')
+    item_pair_scores = load_pair_score_dict(config.paths.item_pair_scores_file, 'item_pair')
+    position_scores = load_score_dict(config.paths.position_scores_file, 'position')  
+    position_pair_scores = load_pair_score_dict(config.paths.position_pair_scores_file, 'position_pair')
+    
+    print(f"Loaded {len(item_scores)} item scores")
+    print(f"Loaded {len(item_pair_scores)} item pair scores")
+    print(f"Loaded {len(position_scores)} position scores")
+    print(f"Loaded {len(position_pair_scores)} position pair scores")
+    
+    return item_scores, item_pair_scores, position_scores, position_pair_scores
 
 #-----------------------------------------------------------------------------
 # Module testing

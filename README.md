@@ -24,6 +24,9 @@ python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
 # Multi-objective optimization (Pareto front)
 python optimize_layout.py --config config.yaml --moo --max-solutions 50
 
+# Detailed MOO analysis with custom parameters
+python optimize_layout.py --analyze-moo --detailed --test-size 8 --sample-size 500
+
 # With comprehensive validation
 python optimize_layout.py --config config.yaml --validate --verbose
 
@@ -263,7 +266,7 @@ slurm_array_processor.sh:
   #===================================================================
   ```
 
-slurm_quota_smart_array_submit.sh:
+slurm_array_submit.sh:
   ```bash
   # Configuration (RM-shared vs. EM)
   #===================================================================
@@ -289,10 +292,10 @@ slurm_quota_smart_array_submit.sh:
   sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh
 
   # Run all batches as a slurm job
-  bash slurm_quota_smart_array_submit.sh --rescan
+  bash slurm_array_submit.sh --rescan
 
   # Or continue from where you left off:
-  bash slurm_quota_smart_array_submit.sh
+  bash slurm_array_submit.sh
   ```
 
 ### Monitor jobs

@@ -1,4 +1,4 @@
-# slurm_moo_workers.py
+# parallel_moo_workers.py
 """
 Worker functions for parallel multi-objective optimization.
 These functions need to be at module level to be picklable for multiprocessing.
@@ -6,41 +6,31 @@ These functions need to be at module level to be picklable for multiprocessing.
 
 from typing import List, Dict, Tuple
 import numpy as np
+from scoring import LayoutScorer
 
 def process_moo_chunk_worker(args: Tuple) -> Tuple[List[Dict], int, int]:
-    """
-    Worker function to process a chunk of permutations for MOO.
+    chunk, arrays_data, max_solutions = args
     
-    Args:
-        args: Tuple of (chunk_permutations, scorer_data, max_solutions)
-    
-    Returns:
-        Tuple of (pareto_solutions, nodes_processed, nodes_pruned)
-    """
-    chunk, scorer_data, max_solutions = args
+    # Recreate the LayoutScorer from serialized arrays
+    scorer = LayoutScorer(arrays_data, mode='multi_objective')
     
     chunk_solutions = []
     
     for perm in chunk:
-        # Create mapping
-        mapping = dict(zip(perm, scorer_data['positions']))
+        # Create mapping array
+        mapping = np.arange(len(perm), dtype=np.int32)  
         
-        # Calculate multi-objective scores
-        item_score = calculate_item_score(mapping, scorer_data)
-        pair_score = calculate_pair_score(mapping, scorer_data)
+        # Score using centralized system
+        objectives = scorer.score_layout(mapping)  # Returns [item_score, item_pair_score]
         
         solution = {
-            'mapping': mapping,
-            'objectives': [item_score, pair_score],  # Multi-objective scores
-            'score': item_score + pair_score,  # Combined for sorting
-            'permutation': perm
+            'mapping': dict(zip(perm, scorer.arrays.positions)),
+            'objectives': objectives,
+            'score': sum(objectives)  # Or use apply_default_combination
         }
         chunk_solutions.append(solution)
     
-    # Compute local Pareto front for this chunk
-    local_pareto = compute_pareto_front(chunk_solutions)
-    
-    return local_pareto, len(chunk), 0
+    return compute_pareto_front(chunk_solutions), len(chunk), 0
 
 def calculate_item_score(mapping: Dict, scorer_data: Dict) -> float:
     """Calculate item-based objective score."""

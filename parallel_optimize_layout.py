@@ -1,4 +1,4 @@
-# slurm_optimize_layout.py
+# parallel_optimize_layout.py
 """
 High-performance keyboard layout optimizer designed for HPC clusters.
 Leverages extreme memory and parallel processing capabilities.
@@ -86,7 +86,7 @@ class ParallelMOOManager:
         """Run multi-objective search in parallel chunks with Pareto front merging."""
         from itertools import permutations
         import numpy as np
-        from slurm_moo_workers import process_moo_chunk_worker, compute_pareto_front
+        from parallel_moo_workers import process_moo_chunk_worker, compute_pareto_front
         
         # Get all possible assignments
         items = list(self.config.optimization.items_to_assign)

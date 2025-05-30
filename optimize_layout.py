@@ -14,55 +14,14 @@ from pathlib import Path
 
 # Import our consolidated modules
 from config import Config, load_config, print_config_summary
-from scoring import LayoutScorer, prepare_scoring_arrays
+from scoring import LayoutScorer, prepare_scoring_arrays, load_normalized_scores
 from search import single_objective_search, multi_objective_search
 from display import (print_optimization_header, print_search_space_info, 
                     print_soo_results, print_moo_results, visualize_keyboard_layout,
                     save_soo_results_to_csv, save_moo_results_to_csv)
 from validation import run_validation_suite
 from moo_pruning import MOOPruner, create_moo_pruner
-
-#-----------------------------------------------------------------------------
-# Data loading
-#-----------------------------------------------------------------------------
-def load_normalized_scores(config: Config) -> Tuple[Dict, Dict, Dict, Dict]:
-    """
-    Load normalized scores from CSV files.
-    
-    Args:
-        config: Configuration object containing file paths
-        
-    Returns:
-        Tuple of (item_scores, item_pair_scores, position_scores, position_pair_scores)
-    """
-    def load_score_dict(filepath: str, key_col: str, score_col: str = 'score') -> Dict:
-        """Helper to load score dictionary from CSV."""
-        df = pd.read_csv(filepath)
-        return {row[key_col].lower(): float(row[score_col]) for _, row in df.iterrows()}
-    
-    def load_pair_score_dict(filepath: str, pair_col: str, score_col: str = 'score') -> Dict:
-        """Helper to load pair score dictionary from CSV."""
-        df = pd.read_csv(filepath)
-        result = {}
-        for _, row in df.iterrows():
-            pair_str = str(row[pair_col])
-            if len(pair_str) == 2:
-                key = (pair_str[0].lower(), pair_str[1].lower())
-                result[key] = float(row[score_col])
-        return result
-    
-    # Load all score dictionaries
-    item_scores = load_score_dict(config.paths.item_scores_file, 'item')
-    item_pair_scores = load_pair_score_dict(config.paths.item_pair_scores_file, 'item_pair')
-    position_scores = load_score_dict(config.paths.position_scores_file, 'position')  
-    position_pair_scores = load_pair_score_dict(config.paths.position_pair_scores_file, 'position_pair')
-    
-    print(f"Loaded {len(item_scores)} item scores")
-    print(f"Loaded {len(item_pair_scores)} item pair scores")
-    print(f"Loaded {len(position_scores)} position scores")
-    print(f"Loaded {len(position_pair_scores)} position pair scores")
-    
-    return item_scores, item_pair_scores, position_scores, position_pair_scores
+from moo_analysis import analyze_moo_problem_quality, quick_moo_check
 
 #-----------------------------------------------------------------------------
 # Optimization functions
@@ -236,6 +195,17 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     if nodes_processed > 0:
         print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
 
+def run_moo_analysis(config: Config, detailed: bool = True, 
+                    test_size: int = None, sample_size: int = 200) -> float:
+    """Run MOO problem quality analysis."""
+    if not detailed:
+        status = quick_moo_check(config)
+        print(f"🎯 Quick MOO Assessment: {status}")
+        return 0.7 if status == "EXCELLENT" else 0.5 if status == "FAIR" else 0.3
+    
+    result = analyze_moo_problem_quality(config, test_size, sample_size, verbose=True)
+    return result.moo_suitability_score
+
 #-----------------------------------------------------------------------------
 # Command-line interface
 #-----------------------------------------------------------------------------
@@ -279,6 +249,14 @@ Examples:
                        help='Maximum Pareto solutions to find (MOO only)')
     parser.add_argument('--time-limit', type=float, default=None,
                        help='Time limit in seconds (MOO only)')
+    parser.add_argument('--analyze-moo', action='store_true',
+                       help='Analyze MOO problem quality and characteristics')
+    parser.add_argument('--detailed', action='store_true',
+                       help='Run detailed analysis (use with --analyze-moo)')
+    parser.add_argument('--test-size', type=int, default=None,
+                       help='Number of items to test in analysis (default: auto-detect)')
+    parser.add_argument('--sample-size', type=int, default=200,
+                       help='Number of solutions to analyze (default: 200)')
     
     # Validation options
     parser.add_argument('--validate', action='store_true',
@@ -287,21 +265,13 @@ Examples:
     return parser.parse_args()
 
 def main():
-    parser = argparse.ArgumentParser(description='Optimize keyboard layout')
-    parser.add_argument('--config', default='config.yaml', help='Configuration file path')
-    parser.add_argument('--verbose', action='store_true', help='Enable verbose output')
-    parser.add_argument('--moo', action='store_true', help='Run multi-objective optimization')
-    parser.add_argument('--n-solutions', type=int, default=3, help='Number of solutions to find')
-    parser.add_argument('--max-solutions', type=int, help='Maximum solutions for MOO')
-    parser.add_argument('--time-limit', type=float, help='Time limit in seconds')
-    parser.add_argument('--validate', action='store_true', help='Validate configuration')
-    parser.add_argument('--enable-pruning', action='store_true', help='Enable pruning')
+    """Main entry point with integrated MOO analysis."""
+    args = parse_arguments()  # Use the comprehensive argument parser
     
-    args = parser.parse_args()
-    
-    # Process arguments
+    # Load configuration
     config = load_config(args.config)
     
+    # Run validation if requested
     if args.validate:
         validation_mode = "moo" if args.moo else "soo"
         print(f"🧪 Running {validation_mode.upper()} validation suite...")
@@ -309,18 +279,43 @@ def main():
         if not validation_passed:
             print("❌ Validation failed. Please fix issues before running optimization.")
             return
-        print("✅ Validation passed! Proceeding with optimization...\n")
-
+        print("✅ Validation passed!\n")
+    
+    # Run MOO analysis if requested
+    if args.analyze_moo:
+        suitability_score = run_moo_analysis(
+            config=config,
+            detailed=args.detailed,
+            test_size=args.test_size,
+            sample_size=args.sample_size
+        )
+        
+        # If only doing analysis, exit here
+        if not args.moo and args.n_solutions == 5:  # Default values = only analysis requested
+            return
+        
+        # If analysis shows poor suitability, warn before optimization
+        if suitability_score is not None and suitability_score < 0.3 and args.moo:
+            print(f"\n⚠️  Warning: MOO analysis indicates poor suitability ({suitability_score:.2f})")
+            print(f"   Consider using SOO instead, or improving scoring functions.")
+            
+            user_input = input("Continue with MOO anyway? (y/N): ")
+            if user_input.lower() not in ['y', 'yes']:
+                print("Optimization cancelled.")
+                return
+        
+        print()  # Add spacing before optimization
+    
+    # Run optimization
     if args.moo:
         run_multi_objective_optimization(
             config=config,
             max_solutions=args.max_solutions,
             time_limit=args.time_limit,
-            enable_pruning=args.enable_pruning
+            enable_pruning=getattr(args, 'enable_pruning', True)  # Default to True if not set
         )
     else:
-        # Regular single-objective optimization
         run_single_objective_optimization(config, args.n_solutions, args.verbose)
-
+        
 if __name__ == "__main__":
     main()

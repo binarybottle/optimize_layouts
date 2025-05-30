@@ -3,9 +3,9 @@
 # Calls slurm_array_processor.sh to process configurations as array tasks.
 #
 # If you want to start fresh with a new scan:
-#     bash slurm_quota_smart_array_submit.sh --rescan
+#     bash slurm_array_submit.sh --rescan
 # Otherwise:
-#     bash slurm_quota_smart_array_submit.sh
+#     bash slurm_array_submit.sh
 
 # Configuration (RM-shared vs. EM)
 #===================================================================
