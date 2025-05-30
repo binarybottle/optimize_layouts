@@ -29,6 +29,7 @@ check_scripts() {
         "slurm_setup_test_environment.sh"
         "slurm_setup_test_simple_job.sh" 
         "slurm_setup_test_generate_config.py"
+        "slurm_setup_test_scoring_consistency.py"
         "slurm_setup_check_resources.sh"
         "slurm_array_processor.sh"
     )
@@ -96,8 +97,37 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Step 5: Submit compute node test
-echo -e "\n🔍 Step 5: Compute Node Test"
+# Step 5: Scoring consistency validation
+echo -e "\n🔍 Step 5: Scoring Consistency Validation"
+echo "======================================="
+echo "Testing scoring system consistency..."
+
+# Load anaconda3 module for the scoring test
+module purge
+module load anaconda3
+
+if [ $? -eq 0 ]; then
+    echo "✅ anaconda3 module loaded for scoring test"
+    python3 slurm_setup_test_scoring_consistency.py
+    
+    if [ $? -eq 0 ]; then
+        echo "✅ Scoring consistency validation passed!"
+    else
+        echo "❌ Scoring consistency validation failed!"
+        echo "This indicates a critical issue with the scoring system."
+        echo "Please review the scoring implementation before proceeding."
+        exit 1
+    fi
+else
+    echo "❌ Could not load anaconda3 module for scoring test"
+    echo "This is required for validation. Please check module availability."
+    exit 1
+fi
+
+wait_with_countdown 3 "Proceeding to compute node tests..."
+
+# Step 6: Submit compute node test
+echo -e "\n🔍 Step 6: Compute Node Test"
 echo "========================="
 echo "Submitting test job to compute node..."
 
@@ -144,8 +174,8 @@ fi
 
 wait_with_countdown 5 "Proceeding to optimization test..."
 
-# Step 6: Test single optimization
-echo -e "\n🔍 Step 6: Single Optimization Test"
+# Step 7: Test single optimization
+echo -e "\n🔍 Step 7: Single Optimization Test"
 echo "================================"
 echo "Testing single optimization (with module loading)..."
 
@@ -166,11 +196,11 @@ if [ $? -eq 0 ]; then
 else
     echo "⚠️  Could not load anaconda3 on login node"
     echo "ℹ️  Skipping single optimization test - this is normal"
-    echo "ℹ️  Compute nodes work correctly (verified in Step 5)"
+    echo "ℹ️  Compute nodes work correctly (verified in Step 6)"
 fi
 
-# Step 7: Test SLURM array job
-echo -e "\n🔍 Step 7: SLURM Array Test"
+# Step 8: Test SLURM array job
+echo -e "\n🔍 Step 8: SLURM Array Test"
 echo "========================"
 echo "Testing SLURM array processor..."
 
@@ -217,8 +247,8 @@ else
     exit 1
 fi
 
-# Step 8: Verify results
-echo -e "\n🔍 Step 8: Verify Results"
+# Step 9: Verify results
+echo -e "\n🔍 Step 9: Verify Results"
 echo "======================"
 echo "Checking output files..."
 
@@ -248,7 +278,8 @@ echo ""
 echo "📋 Summary:"
 echo "  ✅ Environment validation"
 echo "  ✅ SLURM resource check"
-echo "  ✅ Test data generation" 
+echo "  ✅ Test data generation"
+echo "  ✅ Scoring system consistency"
 echo "  ✅ Compute node validation"
 echo "  ✅ Single optimization"
 echo "  ✅ SLURM array job"
@@ -258,7 +289,7 @@ echo "🚀 Your environment is ready for production runs!"
 echo ""
 echo "Next steps:"
 echo "  1. Generate your real configuration files"
-echo "  2. Run: bash slurm_array_submit.sh --rescan"
+echo "  2. Run: bash slurm_array_submit.sh --preset extreme-memory --account $ALLOCATION --rescan"
 echo "  3. Monitor with: squeue -u $USER"
 echo ""
 echo "Cleanup test files with:"

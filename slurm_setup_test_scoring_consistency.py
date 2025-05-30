@@ -1,4 +1,4 @@
-# slurm_validate_scoring_consistency.py
+# slurm_setup_test_scoring_consistency.py
 """
 Validation script to ensure all scoring methods produce identical results.
 """
