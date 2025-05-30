@@ -28,22 +28,34 @@ OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
 
 # Items in configurations (16 letters to be assigned to keys)
-# etaoinsrhldcumfpgwybvkxj (qz)
-items_assigned  = "etaoi"       # 5 most frequent letters (etaoin in English)
-items_to_assign = "nsrhldcumfp" # next 11 most frequent letters (srhldcumfp in English)
+# Example with 24 items/positions: 
+#    etaoinsrhldcumfpgwybvkxj FDESVRWACQZX JKILMUO;,P/.
+# Optimize arrangements of 16 items by running fixed items in parallel:  
+# 11 items:         79,833,600 permutations (with 5 fixed items)
+# 12 items:        479,001,600 permutations (with 4 fixed items)
+# 13 items:      6,227,020,800 permutations (with 3 fixed items)
+# 14 items:     87,178,291,200 permutations (with 2 fixed items)
+# 16 items: 20,922,789,888,000 permutations
+items_assigned  = "etao"         # 4 most frequent letters (etao in English)
+items_to_assign = "insrhldcumfp" # next 12 most frequent letters (insrhldcumfp in English)
 n_assign_first_round = 1
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
 # Position constraints for items_assigned
-# 2 most comfortable qwerty keys
-positions_for_item_1 = ["F","D"] 
-# 16 most comfortable qwerty keys: FDESVRWACQZX JKILMUO;,P/. 
-positions_for_items_2thruN = ["F","D","E","S","V","R","W","A",
-                              "J","K","I","L","M","U","O",";"] 
+top2positions  = ["F","D"]
+top12positions = ["F","D","E","S","V","R",
+                  "J","K","I","L","M","U"]
+top14positions = ["F","D","E","S","V","R","W",
+                  "J","K","I","L","M","U","O"]
+top16positions = ["F","D","E","S","V","R","W","A",
+                  "J","K","I","L","M","U","O",";"]
+positions_for_item_1 = top12positions 
+positions_for_items_2thruN = top12positions 
+all_positions_to_assign_later = top16positions
 
 # Keys to assign by the optimization process
-all_N_keys = "".join(positions_for_items_2thruN)
+all_N_keys = "".join(all_positions_to_assign_later)
 
 # Base configuration from the original config file
 with open(CONFIG_FILE, 'r') as f:
@@ -64,14 +76,15 @@ def generate_constraint_sets():
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4, pos5 = permN
+                #pos2, pos3, pos4, pos5 = permN
+                pos2, pos3, pos4 = permN
                 
                 # Create final position assignments
                 positions = {items_assigned[0]: pos1, 
                              items_assigned[1]: pos2, 
                              items_assigned[2]: pos3, 
-                             items_assigned[3]: pos4, 
-                             items_assigned[4]: pos5
+                             items_assigned[3]: pos4 #, 
+                             #items_assigned[4]: pos5
                             }
                 
                 # Create the positions_assigned string (must match the order of items_assigned)
