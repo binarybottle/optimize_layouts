@@ -180,81 +180,44 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         if config.visualization.print_keyboard:
             visualize_keyboard_layout(complete_mapping, f"Solution #{i}", config)
 
-def print_moo_results(pareto_front: List[Tuple[np.ndarray, List[float]]], 
-                     config: Config,
-                     normalized_scores: Tuple,
-                     objective_names: List[str] = None,
-                     max_display: int = 5) -> None:
-    """
-    Print multi-objective optimization results with complete layout scores.
-    
-    Args:
-        pareto_front: List of (mapping_array, objectives) tuples
-        config: Configuration object
-        normalized_scores: Tuple of score dictionaries for complete scoring
-        objective_names: Names for the objectives
-        max_display: Maximum number of solutions to display
-    """
-    if objective_names is None:
-        objective_names = ['Item Score', 'Item-Pair Score']
-    
-    opt = config.optimization
-    items_list = list(opt.items_to_assign)
-    positions_list = list(opt.positions_to_assign)
+def print_moo_results(pareto_front, config, normalized_scores, objective_names, top_n=5):
+    """Print multi-objective optimization results."""
     
     print(f"\nPareto Front: {len(pareto_front)} non-dominated solutions")
     
-    # Sort by combined score for display
-    pareto_with_combined = []
-    for mapping_array, objectives in pareto_front:
-        combined_score = apply_default_combination(objectives[0], objectives[1])
-        pareto_with_combined.append((combined_score, mapping_array, objectives))
-
-    pareto_with_combined.sort(key=lambda x: x[0], reverse=True)
+    if not pareto_front:
+        return
     
-    n_display = min(len(pareto_with_combined), max_display)
-    print(f"Showing top {n_display} by combined score:")
+    # Print header
+    print(f"\nTop {min(top_n, len(pareto_front))} Pareto solutions:")
+    print("=" * 80)
     
-    for i, (opt_combined_score, mapping_array, objectives) in enumerate(pareto_with_combined[:n_display], 1):
-        # Build mapping dictionary
-        item_mapping = {item: positions_list[pos] for item, pos in 
-                       zip(items_list, mapping_array) if pos >= 0}
+    # Sort by first objective for display
+    sorted_front = sorted(pareto_front, key=lambda x: x['objectives'][0], reverse=True)
+    
+    for i, solution in enumerate(sorted_front[:top_n]):
+        # Extract the correct data structure
+        mapping = solution['mapping']  # This is already a dict
+        objectives = solution['objectives']  # This is a list of objective values
         
-        # Complete mapping including pre-assigned
-        complete_mapping = {}
-        if opt.items_assigned:
-            complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
-        complete_mapping.update({k: v.upper() for k, v in item_mapping.items()})
+        print(f"\nSolution {i+1}:")
+        print(f"  {objective_names[0]}: {objectives[0]:.6f}")
+        print(f"  {objective_names[1]}: {objectives[1]:.6f}")
+        print(f"  Combined Score: {solution.get('score', sum(objectives)):.6f}")
         
-        # Calculate complete layout score using centralized function
-        try:
-            complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
-                complete_mapping, normalized_scores)
-        except Exception as e:
-            print(f"Warning: Could not calculate complete score: {e}")
-            complete_total = opt_combined_score
-            complete_item = complete_item_pair = 0.0
-        
-        print(f"\n#{i}: Optimization Combined = {opt_combined_score:.6f}")
-        print(f"    Complete Layout Score = {complete_total:.6f}")
-        
-        # Display objectives
-        print("  Optimization Objectives:")
-        for obj_name, obj_value in zip(objective_names, objectives):
-            print(f"    {obj_name}: {obj_value:.6f}")
-        
-        print("  Complete Layout Breakdown:")
-        print(f"    Item component:  {complete_item:.6f}")
-        print(f"    Pair component:  {complete_item_pair:.6f}")
-        
-        # Display layout
-        all_items = ''.join(complete_mapping.keys())  
-        all_positions = ''.join(complete_mapping.values())
-        print(f"  Layout: {all_items} → {all_positions}")
-        
-        # Keyboard visualization
-        if config.visualization.print_keyboard:
-            visualize_keyboard_layout(complete_mapping, f"Pareto Solution #{i}", config)
+        # Print mapping
+        print("  Layout mapping:")
+        for item, position in mapping.items():
+            print(f"    {item} -> {position}")
+    
+    # Print objective ranges
+    print(f"\n📊 Objective Ranges:")
+    obj_values = [[sol['objectives'][i] for sol in pareto_front] for i in range(len(objective_names))]
+    
+    for i, name in enumerate(objective_names):
+        min_val = min(obj_values[i])
+        max_val = max(obj_values[i])
+        print(f"  {name}: [{min_val:.6f}, {max_val:.6f}]")
 
 #-----------------------------------------------------------------------------
 # CSV output

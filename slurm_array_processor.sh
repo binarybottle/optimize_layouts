@@ -1,19 +1,20 @@
 #!/bin/bash
 # Process a single configuration as an array task
 # This script is intended to be run as a SLURM array job, 
-# called by slurm_quota_smart_array_submit.sh
+# called by slurm_quota_smart_array_submit.sh.
+# It calls slurm_optimize_layout.py for each configuration.
 
 # SLURM configuration
 #===================================================================
-#SBATCH --time=4:00:00              # Time limit per configuration
+#SBATCH --time=2:00:00              # Time limit per configuration
 #SBATCH --ntasks-per-node=1         # Number of tasks per node
-#SBATCH --cpus-per-task=2           # Number of CPUs per task   
-#SBATCH --mem=2GB                   # Memory allocation
+#SBATCH --cpus-per-task=8           # Number of CPUs per task
+#SBATCH --mem=15GB                  # Memory allocation (8 CPUs × 1900MB = 15.2GB max)
 #SBATCH --job-name=layout           # Job name
 #SBATCH --output=output/outputs/layout_%A_%a.out   # Output file with array job and task IDs
 #SBATCH --error=output/errors/layout_%A_%a.err    # Error file with array job and task IDs
 #SBATCH -p RM-shared                # Regular Memory-shared
-#SBATCH -A <ALLOCATION_ID>          # Your allocation ID (e.g., med250002p)
+#SBATCH -A med250002p               # Your allocation ID
 #===================================================================
 
 # Configuration
@@ -39,13 +40,18 @@ fi
 CONFIG_ID=${CONFIG_IDS[$SLURM_ARRAY_TASK_ID]}
 echo "Array task $SLURM_ARRAY_TASK_ID processing configuration ID: $CONFIG_ID"
 
-# Load required modules
+# Load required modules (UPDATED TO USE ANACONDA3)
 module purge
-module load python/3.8.6
+module load anaconda3
 
-# Use the Python directly from the virtual environment
-export PATH="$HOME/keyboard_optimizer/keyboard_env/bin:$PATH"
-export PYTHONPATH="$HOME/keyboard_optimizer:$PYTHONPATH"
+echo "=== Environment Info ==="
+echo "Hostname: $(hostname)"
+echo "Python: $(python3 --version)"
+module list
+
+# Set environment for HPC parallel processing
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Set working directory
 cd $HOME/keyboard_optimizer/optimize_layouts
@@ -65,7 +71,10 @@ fi
 
 # Run the optimization
 echo "Running optimization for config ${CONFIG_ID}..."
-python optimize_layout.py --config ${config_pre}${CONFIG_ID}${config_post} --moo
+python3 slurm_optimize_layout.py \
+    --config ${config_pre}${CONFIG_ID}${config_post} \
+    --moo \
+    --processes $SLURM_CPUS_PER_TASK
 
 if [ $? -eq 0 ]; then
     echo "Optimization completed successfully for config ${CONFIG_ID}"

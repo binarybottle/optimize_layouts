@@ -1,22 +1,23 @@
 #!/bin/bash
-# Quota-aware array job submission
-# 
+# Quota-aware array job submission for HPC optimization.
+# Calls slurm_array_processor.sh to process configurations as array tasks.
+#
 # If you want to start fresh with a new scan:
 #     bash slurm_quota_smart_array_submit.sh --rescan
 # Otherwise:
 #     bash slurm_quota_smart_array_submit.sh
 
-# Configuration
-TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (e.g., 65520)
-BATCH_SIZE=1000                    # Configs per batch file
-ARRAY_SIZE=1000                    # Maximum array tasks per job
-MAX_CONCURRENT=500                 # Maximum concurrent tasks
-CHUNK_SIZE=4                       # Number of array jobs to submit at once
+# Configuration (UPDATED FOR BRIDGES2 LIMITS)
+TOTAL_CONFIGS=65520                # Total configurations (adjust as needed)
+BATCH_SIZE=500                     # Configs per batch file 
+ARRAY_SIZE=500                     # Maximum array tasks per job
+MAX_CONCURRENT=8                   # Maximum concurrent tasks (8 CPUs each = 64 total CPUs)
+CHUNK_SIZE=2                       # Number of array jobs to submit at once
 config_pre=output/configs1/config_ # Config file path prefix
 config_post=.yaml                  # Config file suffix
 
 # Create needed directories
-mkdir -p output/outputs output/errors submission_logs batch_files
+mkdir -p output/outputs output/errors submission_logs batch_files output/layouts
 
 # Decide whether to scan for new configurations or use existing batches
 if [ "$1" == "--rescan" ] || [ ! -f "pending_configs.txt" ]; then
@@ -54,7 +55,7 @@ if [ "$1" == "--rescan" ] || [ ! -f "pending_configs.txt" ]; then
                     break  # Found at least one valid file, no need to check others
                 fi
             fi
-        done < <(find output/layouts -name "$FIND_PATTERN*.csv" -print0)
+        done < <(find output/layouts -name "$FIND_PATTERN*.csv" -print0 2>/dev/null)
 
         if [ "$HAS_VALID_OUTPUT" = true ]; then
             TOTAL_COMPLETED=$((TOTAL_COMPLETED+1))
@@ -136,12 +137,12 @@ fi
 # Log file
 LOG_FILE="submission_logs/array_submission_$(date +%Y%m%d_%H%M%S)_chunk${CURRENT_BATCH}.log"
 
-echo "=== SLURM Quota-Aware Array Job Submission ===" | tee -a "$LOG_FILE"
+echo "=== SLURM HPC Array Job Submission ===" | tee -a "$LOG_FILE"
 echo "Total pending configurations: $TOTAL_PENDING" | tee -a "$LOG_FILE"
 echo "Total batch files: $TOTAL_BATCHES" | tee -a "$LOG_FILE"
 echo "Submitting batches $CURRENT_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
 echo "Array size: $ARRAY_SIZE" | tee -a "$LOG_FILE"
-echo "Max concurrent tasks: $MAX_CONCURRENT" | tee -a "$LOG_FILE"
+echo "Max concurrent tasks: $MAX_CONCURRENT (8 CPUs each = $((MAX_CONCURRENT * 8)) total CPUs)" | tee -a "$LOG_FILE"
 echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
 
 # Array to store job IDs from this chunk
@@ -166,7 +167,8 @@ for ((i=CURRENT_BATCH; i<=END_BATCH; i++)); do
         ARRAY_RANGE="0-$((ARRAY_SIZE-1))"
     fi
     
-    echo "Submitting batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
+    echo "Submitting HPC batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
+    echo "  Resource usage: $CONFIG_COUNT × 8 CPUs × 15GB = moderate workload" | tee -a "$LOG_FILE"
     
     # Submit array job
     JOB_OUTPUT=$(sbatch --export=CONFIG_FILE=$BATCH_FILE --array=$ARRAY_RANGE%$MAX_CONCURRENT slurm_array_processor.sh 2>&1)
@@ -180,7 +182,7 @@ for ((i=CURRENT_BATCH; i<=END_BATCH; i++)); do
         echo "  Failed: $JOB_OUTPUT" | tee -a "$LOG_FILE"
     fi
     
-    sleep 2  # Small delay between submissions
+    sleep 5  # Delay between submissions
 done
 
 # Update progress for next run
@@ -189,24 +191,25 @@ echo $NEXT_BATCH > "$PROGRESS_FILE"
 
 # Check if we've completed all batches
 if [ $NEXT_BATCH -ge $TOTAL_BATCHES ]; then
-    echo "All batches have been submitted. Submission complete!" | tee -a "$LOG_FILE"
+    echo "All HPC batches have been submitted. Submission complete!" | tee -a "$LOG_FILE"
     echo "Final job IDs: ${CHUNK_JOB_IDS[@]}" | tee -a "$LOG_FILE"
+    echo "Monitor progress with: squeue -u $USER" | tee -a "$LOG_FILE"
 else
     # Schedule the next chunk with a delay
-    echo "Scheduling next chunk (batches $NEXT_BATCH to $((NEXT_BATCH+CHUNK_SIZE-1)))" | tee -a "$LOG_FILE"
+    echo "Scheduling next HPC chunk (batches $NEXT_BATCH to $((NEXT_BATCH+CHUNK_SIZE-1)))" | tee -a "$LOG_FILE"
     
     # Submit this script as a job that depends on the completion of this chunk's jobs
     if [ ${#CHUNK_JOB_IDS[@]} -gt 0 ]; then
         # Use afterany dependency to continue even if some jobs fail
         DEPENDENCY_LIST=$(IFS=:; echo "afterany:${CHUNK_JOB_IDS[*]}")
-        NEXT_MANAGER=$(sbatch --dependency=$DEPENDENCY_LIST --time=00:10:00 "$0" | awk '{print $4}')
+        NEXT_MANAGER=$(sbatch --dependency=$DEPENDENCY_LIST --time=00:10:00 --wrap="cd $PWD && bash $0" | awk '{print $4}')
         echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
     else
         # If no jobs were submitted in this chunk, continue anyway with a short delay
         echo "No jobs were submitted in this chunk. Scheduling next manager immediately." | tee -a "$LOG_FILE"
-        NEXT_MANAGER=$(sbatch --time=00:10:00 "$0" | awk '{print $4}')
+        NEXT_MANAGER=$(sbatch --time=00:10:00 --wrap="cd $PWD && bash $0" | awk '{print $4}')
         echo "Next manager job scheduled with ID: $NEXT_MANAGER" | tee -a "$LOG_FILE"
     fi
 fi
 
-echo "This submission manager completed at $(date)" | tee -a "$LOG_FILE"
+echo "This HPC submission manager completed at $(date)" | tee -a "$LOG_FILE"

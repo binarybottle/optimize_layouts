@@ -178,8 +178,6 @@ item_component = Σ(item_score_i × position_score_i) / N_items
 
 pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
 
-cross_component = Σ(assigned_interactions) / N_cross_pairs
-
 ## Branch-and-bound optimization
 -------------------------------------------------------------------
   - Calculates exact scores for placed letters
@@ -213,105 +211,112 @@ were used as part of a keyboard layout optimization study supported
 by NSF and Pittsburgh Supercomputing Center computing resources 
 (see **README_keyboards**).
 
-  ### Connect and set up the code environment
-    ```bash
-    # Log in
-    ssh username@bridges2.psc.edu
+### Connect and set up the code environment
+  ```bash
+  # Log in
+  ssh username@bridges2.psc.edu
 
-    # Create directory for the project
-    mkdir -p keyboard_optimizer; cd keyboard_optimizer
+  # Create directory for the project
+  mkdir -p keyboard_optimizer; cd keyboard_optimizer
 
-    # Load Python module, create virtual environment, 
-    # and make activate script executable
-    module load python/3.8.6
-    python -m venv keyboard_env
-    source keyboard_env/bin/activate
-    chmod +x $HOME/keyboard_optimizer/keyboard_env/bin/activate
+  # Clone repository and make scripts executable
+  git clone https://github.com/binarybottle/optimize_layouts.git
+  cd optimize_layouts
+  chmod +x *.py *.sh
 
-    # Install required packages
-    pip install pyyaml numpy pandas tqdm numba psutil matplotlib
-  
-    # Clone repository, make scripts executable, 
-    # and make output directories
-    git clone https://github.com/binarybottle/optimize_layouts.git
-    cd optimize_layouts
-    chmod +x *.py *.sh
-    mkdir -p output
-    mkdir -p output/layouts
-    mkdir -p output/outputs
-    mkdir -p output/errors
-    ```
+  # Make output directories
+  mkdir -p output/layouts output/outputs output/errors output/configs1
 
-  ### Generate config files and prepare to submit jobs
-  You can generate configuration files in output/configs/ 
-  by creating your own generate_configs.py script, 
-  following the example in generate_keyboard_configs1.py:
-  `python generate_configs.py`
+  # Test that anaconda3 module works (no virtual environment needed)
+  module load anaconda3
+  python3 --version
+  python3 -c "import numpy, pandas, yaml; print('Required packages available')"
+  ```
 
-  ### Set up slurm parameters:  
-  Replace slurm parameters listed below according to your setup.
-  Replace <ALLOCATION_ID> with the actual allocation ID,
-  and <TOTAL_CONFIGS> with the total number of config files.
-  
-  slurm_array_processor.sh:
+### Generate config files and prepare to submit jobs
+You can generate configuration files in output/configs1/
+by creating your own generate_configs.py script,
+following the example in generate_keyboard_configs1.py:
+```python3 generate_configs.py```
 
-    ```bash
+### Set up slurm parameters
+Replace slurm parameters listed below according to your setup.
+Replace <ALLOCATION_ID> with the actual allocation ID,
+and <TOTAL_CONFIGS> with the total number of config files.
+
+slurm_array_processor.sh:
+  ```bash
   # SLURM configuration
-    #===================================================================
-    #SBATCH --time=4:00:00       # Time limit per configuration
-    #SBATCH --ntasks-per-node=1  # Number of tasks per node
-    #SBATCH --cpus-per-task=2    # Number of CPUs per task   
-    #SBATCH --mem=2GB            # Memory allocation
-    #SBATCH --job-name=layout    # Job name
-    #SBATCH --output=output/outputs/layout_%A_%a.out # Output file
-    #SBATCH --error=output/errors/layout_%A_%a.err # Error file
-    #SBATCH -p RM-shared         # Regular Memory-shared
-    #SBATCH -A <ALLOCATION_ID>   # Your allocation ID (e.g., med250002p)
-    #===================================================================
-    ```
+  #===================================================================
+  #SBATCH --time=2:00:00              # Time limit per configuration
+  #SBATCH --ntasks-per-node=1         # Number of tasks per node
+  #SBATCH --cpus-per-task=8           # Number of CPUs per task   
+  #SBATCH --mem=15GB                  # Memory allocation (8 CPUs × 1900MB max)
+  #SBATCH --job-name=layout           # Job name
+  #SBATCH --output=output/outputs/layout_%A_%a.out # Output file
+  #SBATCH --error=output/errors/layout_%A_%a.err   # Error file
+  #SBATCH -p RM-shared                # Regular Memory-shared
+  #SBATCH -A <ALLOCATION_ID>          # Your allocation ID (e.g., med250002p)
+  #===================================================================
+  ```
 
-  slurm_quota_smart_array_submit.sh:
+slurm_quota_smart_array_submit.sh:
+  ```bash
+  # Configuration (UPDATED FOR BRIDGES2 LIMITS)
+  TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (adjust as needed)
+  BATCH_SIZE=500                     # Configs per batch file 
+  ARRAY_SIZE=500                     # Maximum array tasks per job
+  MAX_CONCURRENT=8                   # Maximum concurrent tasks (8 CPUs each = 64 total CPUs)
+  CHUNK_SIZE=2                       # Number of array jobs to submit at once
+  config_pre=output/configs1/config_ # Config file path prefix
+  config_post=.yaml                  # Config file suffix
+  ```
 
-    ```bash
-    # Configuration
-    TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (e.g., 65520)
-    BATCH_SIZE=1000                    # Configs per batch file
-    ARRAY_SIZE=1000                    # Maximum array tasks per job
-    MAX_CONCURRENT=500                 # Maximum concurrent tasks
-    CHUNK_SIZE=4                       # Number of array jobs to submit at once
-    config_pre=output/configs1/config_ # Config file path prefix
-    config_post=.yaml                  # Config file suffix
-    ```
+### Run scripts
+  ```bash
+  # Use screen to keep session active
+  screen -S submission
 
-  ### Run scripts
+  # Test with a single config file output/configs1/config_1.yaml
+  # (First make sure you have a config file at that location):
+  ls output/configs1/config_1.yaml  # Check if file exists
+  echo "1" > test_single.txt
+  sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh
 
-    ```bash
-    # Use screen
-    screen -S submission
+  # Run all batches as a slurm job
+  bash slurm_quota_smart_array_submit.sh --rescan
 
-    # Run all batches as a slurm job
-    bash slurm_quota_smart_array_submit.sh [--rescan]
-    ```
+  # Or continue from where you left off:
+  bash slurm_quota_smart_array_submit.sh
+  ```
 
-  ### Monitor jobs
+### Monitor jobs
+  ```bash
+  # Check all your running jobs
+  squeue -u $USER
 
-    ```bash
-    # Check all your running jobs
-    squeue -u $USER
+  # Watch jobs in real-time
+  watch squeue -u $USER
 
-    # See how many jobs are running vs. pending
-    squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
+  # See how many jobs are running vs. pending
+  squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 
-    # Check number of output files
-    sh count_files.sh output/layouts
-    ```
+  # Check number of output files
+  sh count_files.sh output/layouts
 
-  ### Cancel jobs
+  # Check recent log files
+  ls -lt output/outputs/ | head -10
+  tail output/outputs/layout_*.out
+  ```
 
-    ```bash
-    # Cancel all your jobs at once
-    scancel -u $USER
+### Cancel jobs
+  ```bash
+  # Cancel all your jobs at once
+  scancel -u $USER
 
-    # Cancel a specific job ID, such as:
-    scancel <job_array_id>
-    ```
+  # Cancel a specific job ID, such as:
+  scancel <job_array_id>
+
+  # Cancel all array jobs for a specific job ID:
+  scancel <job_array_id>_{1..1000}
+  ```
