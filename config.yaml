@@ -28,11 +28,10 @@ paths:
 # 14 letters:     87,178,291,200 permutations (with 2 fixed letters)
 # 16 letters: 20,922,789,888,000 permutations
 optimization:   
-  items_assigned:       "etaoi"         # Items already assigned to positions
-  positions_assigned:   "FJDES"         # Positions that are already filled 
-
-  items_to_assign:      "srhldcumfpg"       # items to arrange in positions
-  positions_to_assign:  "VRWAKILMUO;"       # available positions
+  items_assigned:       "etao"         # Items already assigned to positions
+  positions_assigned:   "FJDES"        # Positions that are already filled 
+  items_to_assign:      "insrhldcum"   # items to arrange in positions
+  positions_to_assign:  "VRWAKILMUO;"  # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain, and
   # subset of positions_to_assign to constrain arrangement of items_to_constrain

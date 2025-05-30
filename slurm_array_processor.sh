@@ -13,7 +13,7 @@
 #SBATCH --job-name=layout           # Job name
 #SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
 #SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
-#SBATCH -p EM                       # Regular Memory-shared (RM-shared) vs. Extreme Memory (EM) 
+#SBATCH -p EM                       # Regular Memory-shared or Extreme Memory (RM-shared vs. EM) 
 #SBATCH -A med250002p               # Your allocation ID
 #===================================================================
 

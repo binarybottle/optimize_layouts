@@ -469,17 +469,25 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
                     break
                 elif pareto_dominates(objectives, existing_obj):
                     dominated_indices.append(i)
-            
+
             if is_non_dominated:
                 # Remove dominated solutions
                 for i in reversed(sorted(dominated_indices)):
                     del pareto_front[i]
                     del pareto_objectives[i]
                 
-                # Add new solution
-                pareto_front.append((mapping.copy(), objectives))
+                # Convert numpy mapping array to item->position dictionary
+                item_mapping = {items_list[i]: positions_list[mapping[i]] 
+                               for i in range(n_items)}
+                
+                # Add new solution in DICTIONARY format (same as parallel MOO)
+                solution_dict = {
+                    'mapping': item_mapping,
+                    'objectives': objectives
+                }
+                pareto_front.append(solution_dict)  # ✅ DICT FORMAT
                 pareto_objectives.append(objectives)
-            
+
             return
         
         # Get next item

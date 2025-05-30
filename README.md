@@ -249,30 +249,32 @@ and <TOTAL_CONFIGS> with the total number of config files.
 
 slurm_array_processor.sh:
   ```bash
-  # SLURM configuration
+  # SLURM configuration (RM-shared vs. EM)
   #===================================================================
-  #SBATCH --time=2:00:00              # Time limit per configuration
+  #SBATCH --time=4:00:00              # Time limit per configuration (1:00:00 vs. 4:00:00)
   #SBATCH --ntasks-per-node=1         # Number of tasks per node
-  #SBATCH --cpus-per-task=8           # Number of CPUs per task   
-  #SBATCH --mem=15GB                  # Memory allocation (8 CPUs × 1900MB max)
+  #SBATCH --cpus-per-task=24          # Number of CPUs per task (16 vs. 24)
+  #SBATCH --mem=500GB                 # Memory allocation (8 CPUs × 1900MB = 15.2GB max) (40GB vs. 500GB)
   #SBATCH --job-name=layout           # Job name
-  #SBATCH --output=output/outputs/layout_%A_%a.out # Output file
-  #SBATCH --error=output/errors/layout_%A_%a.err   # Error file
-  #SBATCH -p RM-shared                # Regular Memory-shared
+  #SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
+  #SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
+  #SBATCH -p EM                       # Regular Memory-shared or Extreme Memory (RM-shared vs. EM) 
   #SBATCH -A <ALLOCATION_ID>          # Your allocation ID (e.g., med250002p)
   #===================================================================
   ```
 
 slurm_quota_smart_array_submit.sh:
   ```bash
-  # Configuration (UPDATED FOR BRIDGES2 LIMITS)
-  TOTAL_CONFIGS=<TOTAL_CONFIGS>      # Total configurations (adjust as needed)
+  # Configuration (RM-shared vs. EM)
+  #===================================================================
+  TOTAL_CONFIGS=65520                # Total configurations (adjust as needed)
   BATCH_SIZE=500                     # Configs per batch file 
   ARRAY_SIZE=500                     # Maximum array tasks per job
-  MAX_CONCURRENT=8                   # Maximum concurrent tasks (8 CPUs each = 64 total CPUs)
+  MAX_CONCURRENT=8                   # Maximum concurrent tasks (4 vs. 8)
   CHUNK_SIZE=2                       # Number of array jobs to submit at once
   config_pre=output/configs1/config_ # Config file path prefix
   config_post=.yaml                  # Config file suffix
+  #===================================================================
   ```
 
 ### Run scripts

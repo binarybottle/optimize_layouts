@@ -189,7 +189,7 @@ def print_moo_results(pareto_front, config, normalized_scores, objective_names, 
         return
     
     # Print header
-    print(f"\nTop {min(top_n, len(pareto_front))} Pareto solutions:")
+    print(f"\First {min(top_n, len(pareto_front))} Pareto solutions:")
     print("=" * 80)
     
     # Sort by first objective for display
