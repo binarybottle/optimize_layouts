@@ -28,9 +28,9 @@ For the following, we:
     etaoinsrhldcumfpgwybvkxj (not q or z)
   - Focus on the 24 keys in, above, and below the home row.
     FDRSEVAWCQXZJKULIM;O,P./ (not ' or [)
-  - Arrange letters in stages (more detail below).
-  - Refer to the "comfort" of a key based on typing research data.
-    The rank order of estimated key comfort is:
+  - Arrange letters in two stages (more detail below).
+  - Refer to the "comfort" of a key based on typing research data,
+    with rank order (1 high to 12 low) of estimated key comfort:
     ╭───────────────────────────────────────────────╮
     │  10 │  7  │  3  │  6  ║  6  │  3  │  7  │  10 │
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -40,43 +40,21 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
-1. Generate 65,520 configuration files.
+1. Generate configuration files with letters and keys to assign.
 2. Optimally arrange frequent letters for each configuration. 
-3. Generate a second set of configuration files, removing letters.
+3. Generate a second set of configuration files.
 4. Optimally arrange remaining letters.
 5. Select the layout with the highest score.
 
-### Step 1. Generate 65,520 configuration files 
+### Step 1. Generate 11,880 configuration files 
 
-  `cd keyboards; python generate_keyboard_configs1.py`
+  `cd keyboards; python generate_configs1.py`
 
-  ##### Assign the most frequent letter to the 2 most comfortable left keys.
-  We will start by constraining the placement of the most frequent letter 
-  (`e` in English, by a wide margin) to one of the 2 most comfortable keys
-  (again, by a considerable margin, according to typing data). 
-  There are 2 permutations (1 letter in either of 2 keys): 
-    ╭───────────────────────────────────────────────╮
-    │     │     │     │     ║     │     │     │     │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │     │     │  -  │  -  ║     │     │     │     │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │     │     │     │     ║     │     │     │     │
-    ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
-  We'll choose one key for our example going forward:
-    ╭───────────────────────────────────────────────╮
-    │     │     │     │     ║     │     │     │     │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │     │     │  e  │     ║     │     │     │     │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │     │     │     │     ║     │     │     │     │
-    ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
-
-  #### Assign the next 4 letters to any available top-16 keys
-  We then allow the next 4 letters (`taoi` in English) 
-  to be placed in any available of the 16 most comfortable keys.
-  There are 32,760 permutations:
-    - 1,365 ways to choose 4 keys from 15 keys
+  ##### Assign the 4 most frequent letters to the 12 most comfortable keys.
+  We will start by allowing the 4 most frequent letters (etao in English) 
+  to be assigned to any of the 12 most comfortable keys (half the 24 keys).
+  There are 11,880 permutations:
+    - 1,365 ways to choose 4 keys from 12 keys
     - 24 ways to arrange 4 letters in those 4 keys
 
     ╭───────────────────────────────────────────────╮

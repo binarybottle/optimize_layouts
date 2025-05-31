@@ -293,7 +293,7 @@ echo "  2. Run: bash slurm_array_submit.sh --preset extreme-memory --account $AL
 echo "  3. Monitor with: squeue -u $USER"
 echo ""
 echo "Cleanup test files with:"
-echo "  rm -f test_*.* test_job_*.* data/test_*.csv output/layouts/test_*"
+echo "  rm -f test_*.* test_job_*.* test_*.csv output/layouts/test_*"
 
 # Clean up on success (optional)
 read -p "Clean up test files? (y/N): " -n 1 -r
@@ -301,7 +301,7 @@ echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
     echo "🧹 Cleaning up test files..."
     rm -f test_*.* test_job_*.*
-    rm -rf data/test_*.csv
+    rm -rf test_*.csv
     rm -f output/layouts/test_*
     echo "✅ Cleanup complete"
 fi

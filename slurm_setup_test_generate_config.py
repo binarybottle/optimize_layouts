@@ -14,10 +14,10 @@ def create_test_config():
     # Minimal test configuration
     config = {
         'paths': {
-            'item_scores_file': 'data/test_item_scores.csv',
-            'item_pair_scores_file': 'data/test_item_pair_scores.csv', 
-            'position_scores_file': 'data/test_position_scores.csv',
-            'position_pair_scores_file': 'data/test_position_pair_scores.csv'
+            'item_scores_file': 'test_item_scores.csv',
+            'item_pair_scores_file': 'test_item_pair_scores.csv', 
+            'position_scores_file': 'test_position_scores.csv',
+            'position_pair_scores_file': 'test_position_pair_scores.csv'
         },
         'optimization': {
             'items_to_assign': ['a', 'b', 'c', 'd'],
@@ -77,10 +77,10 @@ cd,0.6
     
     # Write test data files
     test_files = {
-        'data/test_item_scores.csv': item_scores,
-        'data/test_item_pair_scores.csv': item_pair_scores,
-        'data/test_position_scores.csv': position_scores,
-        'data/test_position_pair_scores.csv': position_pair_scores
+        'test_item_scores.csv': item_scores,
+        'test_item_pair_scores.csv': item_pair_scores,
+        'test_position_scores.csv': position_scores,
+        'test_position_pair_scores.csv': position_pair_scores
     }
     
     for filepath, content in test_files.items():
