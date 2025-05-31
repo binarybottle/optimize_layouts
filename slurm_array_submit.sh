@@ -19,7 +19,7 @@ SLURM_MEM="500GB"
 SLURM_TIME="4:00:00"
 SLURM_PARTITION="EM"
 SLURM_ACCOUNT="med250002p"               # Default allocation ID
-TOTAL_CONFIGS=65520                
+TOTAL_CONFIGS=11880                
 BATCH_SIZE=500                     
 ARRAY_SIZE=500                     
 MAX_CONCURRENT=8                   
@@ -113,7 +113,6 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --rescan)
-            # Keep existing rescan logic
             shift
             ;;
         --help)
@@ -133,7 +132,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --concurrent N          Max concurrent array tasks"
             echo ""
             echo "Configuration:"
-            echo "  --total-configs N       Total number of configurations (default: 65520)"
+            echo "  --total-configs N       Total number of configurations (default: 11880)"
             echo "  --config-prefix PATH    Config file prefix (default: output/configs1/config_)"
             echo "  --config-suffix EXT     Config file suffix (default: .yaml)"
             echo ""
