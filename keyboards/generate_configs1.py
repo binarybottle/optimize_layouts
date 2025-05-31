@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate configuration files to run keyboard layout optimizations 
-in parallel with specific letter-to-key constraints specified in each file.
+Generate configuration files to run keyboard layout optimizations in parallel 
+with specific letter-to-key constraints specified in each file.
 
 This is Step 1 in a process to optimally arrange the 24 most frequent letters 
 in the 24 keys of the home block of a keyboard. 
@@ -12,7 +12,7 @@ There are two versions of this script:
   - optimize_layout.py generates optimal keyboard layouts for a given config file.
   - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
-Usage: ``python generate_keyboard_configs1.py``
+Usage: ``python generate_configs1.py``
     
 See **README_keyboards.md** for a full description.
 

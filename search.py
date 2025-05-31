@@ -13,7 +13,7 @@ import numpy as np
 import time
 import gc
 import multiprocessing as mp
-from typing import List, Tuple, Dict, Set, Optional
+from typing import List, Tuple, Dict
 from numba import jit
 from math import factorial
 from tqdm import tqdm
@@ -813,3 +813,108 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
             initial_mapping, initial_used,
             max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA, processes
         )
+
+def get_valid_positions(item_idx: int, available_positions: List[int], 
+                       constrained_items: np.ndarray, constrained_positions: np.ndarray) -> List[int]:
+    """Get valid positions for an item considering constraints."""
+    
+    if item_idx in constrained_items:
+        # Item is constrained to specific positions
+        valid = [pos for pos in constrained_positions if pos in available_positions]
+    else:
+        # Item can go to any available position
+        valid = available_positions.copy()
+    
+    return valid
+
+def complete_pattern_with_dfs(
+    mapping: np.ndarray,
+    used: np.ndarray, 
+    items_list: List[str],
+    positions_list: List[str],
+    constrained_items: np.ndarray,
+    constrained_positions: np.ndarray,
+    scorer,
+    max_solutions_per_pattern: int = 25
+) -> List[np.ndarray]:
+    """Complete a partial assignment using DFS."""
+    
+    solutions = []
+    
+    def dfs_recursive(current_mapping: np.ndarray, current_used: np.ndarray, depth: int):
+        if len(solutions) >= max_solutions_per_pattern:
+            return
+        
+        # Find next unassigned item
+        next_item = -1
+        for i in range(len(current_mapping)):
+            if current_mapping[i] == -1:
+                next_item = i
+                break
+        
+        if next_item == -1:
+            # Complete solution
+            solutions.append(current_mapping.copy())
+            return
+        
+        # Get valid positions for this item
+        valid_positions = get_valid_positions(next_item, 
+                                            [i for i, used in enumerate(current_used) if not used],
+                                            constrained_items, constrained_positions)
+        
+        # Try each valid position
+        for pos in valid_positions:
+            if len(solutions) >= max_solutions_per_pattern:
+                break
+                
+            # Make assignment
+            current_mapping[next_item] = pos
+            current_used[pos] = True
+            
+            # Recurse
+            dfs_recursive(current_mapping, current_used, depth + 1)
+            
+            # Backtrack
+            current_mapping[next_item] = -1
+            current_used[pos] = False
+    
+    dfs_recursive(mapping, used, 0)
+    return solutions
+
+def compute_pareto_front(solution_scores: List[Dict]) -> List[Dict]:
+    """Compute Pareto front from scored solutions."""
+    
+    if not solution_scores:
+        return []
+    
+    # Assume solutions have 'scores' field with [item_score, item_pair_score]
+    pareto_front = []
+    
+    for candidate in solution_scores:
+        is_dominated = False
+        
+        # Check if candidate is dominated by any existing solution
+        for existing in pareto_front:
+            if dominates(existing['scores'], candidate['scores']):
+                is_dominated = True
+                break
+        
+        if not is_dominated:
+            # Remove any existing solutions dominated by candidate
+            pareto_front = [sol for sol in pareto_front 
+                           if not dominates(candidate['scores'], sol['scores'])]
+            pareto_front.append(candidate)
+    
+    return pareto_front
+
+def dominates(scores1: List[float], scores2: List[float]) -> bool:
+    """Check if scores1 dominates scores2 (assuming maximization)."""
+    better_in_one = False
+    
+    for s1, s2 in zip(scores1, scores2):
+        if s1 < s2:  # Worse in this objective
+            return False
+        elif s1 > s2:  # Better in this objective
+            better_in_one = True
+    
+    return better_in_one

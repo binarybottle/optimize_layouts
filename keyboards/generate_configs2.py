@@ -4,7 +4,7 @@
 Generate configuration files to run keyboard layout optimizations in parallel 
 with specific letter-to-key constraints specified in each file.
 
-This is one step in a process to optimally arrange the 24 most frequent letters 
+This is Step 2 in a process to optimally arrange the 24 most frequent letters 
 in the 24 keys of the home block of a keyboard. 
 
 There are two versions of this script:
@@ -19,7 +19,7 @@ See **README.md** for instructions to run batches of config files in parallel.
 Usage:
 
     Per-config approach (default: 1 layout per config file):
-    ``python generate_keyboard_configs2.py --layouts-per-config 10``
+    ``python generate_keyboard_configs1.py --layouts-per-config 10``
 
     Across-all approach (top 1,000 layouts across all config files):
     ``python generate_keyboard_configs2.py --top-across-all 1000``

@@ -2,10 +2,7 @@
 # Process a single configuration as an array task
 # This script is intended to be run as a SLURM array job, 
 # called by slurm_array_submit.sh.
-# It calls parallel_optimize_layout.py for each configuration.
-#
-# Resource allocation (cpus, memory, time, partition) is handled by 
-# the submit script via sbatch command line parameters.
+# It calls optimize_layout.py for each configuration.
 
 # SLURM configuration - static parameters only
 #===================================================================
@@ -14,8 +11,6 @@
 #SBATCH --output=output/outputs/layout_%A_%a.out # Output file with array job and task IDs
 #SBATCH --error=output/errors/layout_%A_%a.err   # Error file with array job and task IDs
 #===================================================================
-# NOTE: Resource allocation (--cpus-per-task, --mem, --time, --partition, --account) 
-# is set by slurm_array_submit.sh via sbatch command line parameters
 
 # Configuration - can be overridden by environment variables
 config_pre=${CONFIG_PREFIX:-output/configs1/config_}  # Config file path prefix
@@ -52,8 +47,9 @@ echo "Memory allocated: $SLURM_MEM_PER_NODE"
 module list
 
 # Set environment for HPC parallel processing
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-export MKL_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export OMP_NUM_THREADS=1              # Prevent thread oversubscription
+export PYTHONHASHSEED=0               # Deterministic hashing
+export NUMBA_NUM_THREADS=1            # Control Numba threading
 
 # Set working directory
 cd $HOME/keyboard_optimizer/optimize_layouts
@@ -65,24 +61,25 @@ if [ ! -f "${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX}" ]; then
 fi
 
 # Check if output already exists
-FIND_PATTERN="layout_results_${CONFIG_ID}_[0-9]*"
+FIND_PATTERN="*results_${CONFIG_ID}_[0-9]*"
 if find output/layouts -name "$FIND_PATTERN*.csv" | grep -q .; then
     echo "Output file already exists for config ${CONFIG_ID}. Skipping optimization."
     exit 0
 fi
 
-# Run the parallel optimization with passed parameters
-echo "Running parallel optimization for config ${CONFIG_ID}..."
+# Run the PROVEN optimization with passed parameters
+echo "Running optimization for config ${CONFIG_ID} using optimize_layout.py..."
 echo "  Mode: ${MODE:---moo}"
-echo "  Processes: ${PROCESSES:-8}"
+echo "  Processes: ${PROCESSES:-$SLURM_CPUS_PER_TASK}"
 if [ -n "$MAX_SOLUTIONS" ]; then echo "  Max solutions: $MAX_SOLUTIONS"; fi
 if [ -n "$N_SOLUTIONS" ]; then echo "  N solutions: $N_SOLUTIONS"; fi
 if [ -n "$TIME_LIMIT" ]; then echo "  Time limit: ${TIME_LIMIT}s"; fi
 
-python3 parallel_optimize_layout.py \
+# ✅ CHANGE THIS LINE: Use your proven script instead of parallel_optimize_layout.py
+python3 optimize_layout.py \
     --config ${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX} \
     ${MODE:---moo} \
-    --processes ${PROCESSES:-8} \
+    --processes ${PROCESSES:-$SLURM_CPUS_PER_TASK} \
     ${MAX_SOLUTIONS:+--max-solutions $MAX_SOLUTIONS} \
     ${TIME_LIMIT:+--time-limit $TIME_LIMIT} \
     ${N_SOLUTIONS:+--n-solutions $N_SOLUTIONS}

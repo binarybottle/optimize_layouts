@@ -101,7 +101,7 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
 
 def run_multi_objective_optimization(config: Config, max_solutions: int = None, 
                                    time_limit: float = None, processes: int=None, 
-                                   enable_moo_pruning_ALPHA: bool = False) -> None:
+                                   enable_pruning: bool = False) -> None:
     """
     Multi-objective search with configurable process count.
     
@@ -111,7 +111,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
         max_solutions: Maximum solutions to find
         time_limit: Time limit in seconds  
         pruner: MOO pruner object (optional)
-        enable_moo_pruning_ALPHA: Whether to enable pruning
+        enable_pruning: Whether to enable pruning
         processes: Number of parallel processes (None = auto-detect)
     """
     import multiprocessing as mp
@@ -158,7 +158,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     # Create pruner if enabled
     pruner = None
-    if enable_moo_pruning_ALPHA:
+    if enable_pruning:
         items_list = list(config.optimization.items_to_assign)
         positions_list = list(config.optimization.positions_to_assign)
         pruner = create_moo_pruner(normalized_scores, items_list, positions_list)
@@ -167,7 +167,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
         print(f"   Max pair score: {pruner.max_item_pair_score:.6f}")
     
     # Run MOO search
-    print(f"\nSearching for {'pruned ' if enable_moo_pruning_ALPHA else ''}Pareto-optimal solutions...")
+    print(f"\nSearching for {'pruned ' if enable_pruning else ''}Pareto-optimal solutions...")
     if max_solutions:
         print(f"  Maximum solutions: {max_solutions}")
     if time_limit:
@@ -177,7 +177,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     # Pass pruner to multi_objective_search
     pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, scorer, max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA, processes
+        config, scorer, max_solutions, time_limit, pruner, enable_pruning, processes
     )
 
     elapsed_time = time.time() - start_time
@@ -197,7 +197,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     print(f"\nMulti-Objective Summary:")
     print(f"  Pareto solutions: {len(pareto_front)}")
     print(f"  Nodes processed: {nodes_processed:,}")
-    if enable_moo_pruning_ALPHA and nodes_pruned > 0:
+    if enable_pruning and nodes_pruned > 0:
         print(f"  Nodes pruned: {nodes_pruned:,}")
         prune_rate = 100 * nodes_pruned / (nodes_processed + nodes_pruned)
         print(f"  Pruning efficiency: {prune_rate:.1f}%")
@@ -325,8 +325,8 @@ def main():
             config=config,
             max_solutions=args.max_solutions,
             time_limit=args.time_limit,
-            processes=args.processes,
-            enable_moo_pruning_ALPHA=getattr(args, 'enable_moo_pruning_ALPHA', False)  # Default to False if not set
+            processes=args.processes,  # ADD THIS LINE
+            enable_pruning=getattr(args, 'enable_pruning', False)  # Default to False if not set
         )
     else:
         run_single_objective_optimization(config, args.n_solutions, args.verbose)
