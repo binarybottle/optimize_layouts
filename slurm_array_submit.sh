@@ -7,7 +7,7 @@
 #
 # Custom resource allocation and optimization settings:  
 #   bash slurm_array_submit.sh --account "med250002p" --preset extreme-memory \
-#       --moo --total-configs 1 \
+#       --moo --total-configs 11880 \
 #       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
 #
 #   bash slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo --processes 48

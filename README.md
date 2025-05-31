@@ -272,16 +272,17 @@ parameters without requiring manual script editing:
 
 #### Custom resource allocation
   ```bash
-  # Custom resources for specific needs
+  # Example: keyboard layout optimization settings phase 1
   bash slurm_array_submit.sh \
-      --cpus 16 \
-      --mem 200GB \
-      --time 6:00:00 \
-      --partition RM-shared \
-      --account "your_allocation_id" \
-      --config-prefix "experiments/sweep2/config_" \
-      --concurrent 6 \
-      --moo --time-limit 7200
+      --account "med250002p" \
+      --preset extreme-memory \
+      --moo --total-configs 11880 \
+      --max_concurrent 8 \
+      --slurm_cpus 24 \
+      --slurm_mem 500GB
+      --time 4:00:00 \
+      --config-prefix "output/configs1/config_" \
+      --config-suffix ".yaml"
   ```
 
 ### Run scripts
