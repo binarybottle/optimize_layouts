@@ -18,7 +18,7 @@ SLURM_CPUS=24
 SLURM_MEM="500GB"
 SLURM_TIME="4:00:00"
 SLURM_PARTITION="EM"
-SLURM_ACCOUNT="med250002p"               # Default allocation ID
+SLURM_ACCOUNT="med250002p"               
 TOTAL_CONFIGS=11880                
 BATCH_SIZE=500                     
 ARRAY_SIZE=500                     
@@ -80,6 +80,18 @@ while [[ $# -gt 0 ]]; do
             TOTAL_CONFIGS="$2"
             shift 2
             ;;
+        --batch-size)
+            BATCH_SIZE="$2"
+            shift 2
+            ;;
+        --array-size)
+            ARRAY_SIZE="$2"
+            shift 2
+            ;;
+        --chunk-size)
+            CHUNK_SIZE="$2"
+            shift 2
+            ;;
         --config-prefix)
             CONFIG_PREFIX="$2"
             shift 2
@@ -135,6 +147,11 @@ while [[ $# -gt 0 ]]; do
             echo "  --total-configs N       Total number of configurations (default: 11880)"
             echo "  --config-prefix PATH    Config file prefix (default: output/configs1/config_)"
             echo "  --config-suffix EXT     Config file suffix (default: .yaml)"
+            echo ""
+            echo "Batch Processing:"
+            echo "  --batch-size N          Configurations per batch file (default: 500)"
+            echo "  --array-size N          Max array size per SLURM job (default: 500)"
+            echo "  --chunk-size N          Number of batches to submit at once (default: 2)"
             echo ""
             echo "Optimization:"
             echo "  --moo (default), --soo, --max-solutions N, --n-solutions N, --time-limit SEC"

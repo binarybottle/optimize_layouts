@@ -1,22 +1,9 @@
 # README_keyboards
-Optimize an English keyboard layout
+Optimize an English language keyboard layout
 ===============================================================================
 https://github.com/binarybottle/optimize_layouts.git
 Author: Arno Klein (arnoklein.info)
-License: MIT License (see LICENSE)
-
-## Acknowledgments
-NSF and the Pittsburgh Supercomputing Center (PSC) generously provided 
-computing resources for a keyboard layout optimization study. 
-The study used Bridges-2 at PSC through allocation MED250010 from the 
-Advanced Cyberinfrastructure Coordination Ecosystem: Services & Support 
-(ACCESS) program, which is supported by National Science Foundation grants 
-#2138259, #2138286, #2138307, #2137603, and #2138296. Citation:
-
-  Brown, ST, Buitrago, P, Hanna, E, Sanielevici, S, Scibek, R, 
-  Nystrom, NA (2021). Bridges-2: A Platform for Rapidly-Evolving 
-  and Data Intensive Research. In Practice and Experience in 
-  Advanced Research Computing (pp 1-4). doi:10.1145/3437359.3465593
+MIT License
 
 ## Introduction
 Let's apply this software to the challenge of optimizing the 
@@ -24,13 +11,12 @@ arrangement of letters on a computer keyboard for typing in English.
 
 For the following, we:
   - Assume bilateral symmetry in left- and right-hand ergonomics.
-  - Focus on the 24 most frequent letters in English:
-    etaoinsrhldcumfpgwybvkxj (not q or z)
-  - Focus on the 24 keys in, above, and below the home row.
-    FDRSEVAWCQXZJKULIM;O,P./ (not ' or [)
-  - Arrange letters in two stages (more detail below).
-  - Refer to the "comfort" of a key based on typing research data,
-    with rank order (1 high to 12 low) of estimated key comfort:
+  - Focus on the 24 keys in, above, and below the home row:
+    FDRSEVAWCQXZJKULIM;O,P./ (qwerty keys, excluding ' and [).
+  - Focus on the 24 most frequent letters in English to assign to the 24 keys:
+    etaoinsrhldcumfpgwybvkxj (not q or z).
+  - Refer to the "comfort" of a key based on typing preference research data,
+    with resulting key comfort ranking 1 (high) to 12 (low) for each hand:
     ╭───────────────────────────────────────────────╮
     │  10 │  7  │  3  │  6  ║  6  │  3  │  7  │  10 │
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
@@ -40,7 +26,11 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
-1. Generate configuration files with letters and keys to assign.
+1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
+   1. Create every possible arrangement (11,880) of the 4 most frequent letters 
+      to the 12 most comfortable keys.
+   2. For each 
+   Generate 11,880 configuration files to set up letters and keys.
 2. Optimally arrange frequent letters for each configuration. 
 3. Generate a second set of configuration files.
 4. Optimally arrange remaining letters.
@@ -75,6 +65,7 @@ For the following, we:
 ### Step 2. Optimally arrange frequent letters for each configuration
 
   `python optimize_layout.py`
+  bash slurm_array_submit.sh --moo --rescan
 
   #### Assign the next 11 letters to the 11 remaining top-16 keys
   For each of Step 1's 65,520 configuration files, a branch-and-bound algorithm 
@@ -187,3 +178,16 @@ For the following, we:
     ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤─────╯
     │  k  │  x  │  j  │  g  ║  r  │  m  │  f  │  p  │
     ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+
+## Acknowledgments
+NSF and the Pittsburgh Supercomputing Center (PSC) generously provided 
+computing resources for a keyboard layout optimization study. 
+The study used Bridges-2 at PSC through allocation MED250010 from the 
+Advanced Cyberinfrastructure Coordination Ecosystem: Services & Support 
+(ACCESS) program, which is supported by National Science Foundation grants 
+#2138259, #2138286, #2138307, #2137603, and #2138296. Citation:
+
+  Brown, ST, Buitrago, P, Hanna, E, Sanielevici, S, Scibek, R, 
+  Nystrom, NA (2021). Bridges-2: A Platform for Rapidly-Evolving 
+  and Data Intensive Research. In Practice and Experience in 
+  Advanced Research Computing (pp 1-4). doi:10.1145/3437359.3465593

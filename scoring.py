@@ -638,6 +638,65 @@ def calculate_complete_layout_score(complete_mapping: Dict[str, str],
     
     return total_score, item_score, item_pair_score
 
+def calculate_complete_layout_score_direct(complete_mapping: dict, normalized_scores: tuple) -> tuple:
+    """
+    Calculate complete layout score directly from the mapping without going through optimization scoring.
+    This ensures the score matches what SLURM calculates.
+    
+    Args:
+        complete_mapping: Dictionary mapping items to positions (e.g., {'e': 'F', 't': 'D', ...})
+        normalized_scores: Tuple of (norm_item_scores, norm_item_pair_scores, 
+                          norm_position_scores, norm_position_pair_scores)
+    
+    Returns:
+        Tuple of (total_score, item_component, item_pair_component)
+    """
+    norm_item_scores, norm_item_pair_scores, norm_position_scores, norm_position_pair_scores = normalized_scores
+    
+    items = list(complete_mapping.keys())
+    positions = list(complete_mapping.values())
+    n_items = len(items)
+    
+    # Calculate item component: sum(item_score * position_score) / n_items
+    item_raw_score = 0.0
+    for item, pos in complete_mapping.items():
+        item_score = norm_item_scores.get(item.lower(), 0.0)
+        pos_score = norm_position_scores.get(pos.lower(), 0.0)
+        item_raw_score += item_score * pos_score
+    
+    item_component = item_raw_score / n_items
+    
+    # Calculate item-pair component: all pairwise interactions
+    pair_raw_score = 0.0
+    pair_count = 0
+    
+    items_list = list(complete_mapping.keys())
+    positions_list = list(complete_mapping.values())
+    
+    for i in range(n_items):
+        for j in range(n_items):
+            if i != j:  # Skip self-pairs
+                item1, item2 = items_list[i], items_list[j]
+                pos1, pos2 = positions_list[i], positions_list[j]
+                
+                # Get item pair score
+                item_pair_key = (item1.lower(), item2.lower())
+                item_pair_score = norm_item_pair_scores.get(item_pair_key, 1.0)
+                
+                # Get position pair score  
+                pos_pair_key = (pos1.lower(), pos2.lower())
+                pos_pair_score = norm_position_pair_scores.get(pos_pair_key, 1.0)
+                
+                pair_raw_score += item_pair_score * pos_pair_score
+                pair_count += 1
+    
+    pair_component = pair_raw_score / max(1, pair_count)
+    
+    # Combine using default strategy (multiplicative: item_score * item_pair_score)
+    total_score = item_component * pair_component
+    
+    return total_score, item_component, pair_component
+
 def score_layout_from_strings(items_str: str, 
                              positions_str: str,
                              normalized_scores: Tuple) -> Tuple[float, float, float]:

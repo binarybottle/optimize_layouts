@@ -252,7 +252,7 @@ parameters without requiring manual script editing:
 #### Available resource presets
   - debug: 4 CPUs, 20GB, 30min, RM-shared (for testing)
   - standard: 8 CPUs, 40GB, 2h, RM-shared (moderate workloads)
-  - extreme-memory: 24 CPUs, 500GB, 6h, EM (maximum performance)
+  - extreme-memory: 24 CPUs, 500GB, 4h, EM (maximum performance)
 
 #### Basic usage with presets
   ```bash
@@ -272,17 +272,22 @@ parameters without requiring manual script editing:
 
 #### Custom resource allocation
   ```bash
-  # Example: keyboard layout optimization settings phase 1
+  # Example: keyboard layout optimization settings (phase 1)
   bash slurm_array_submit.sh \
       --account "med250002p" \
       --preset extreme-memory \
-      --moo --total-configs 11880 \
-      --max_concurrent 8 \
-      --slurm_cpus 24 \
-      --slurm_mem 500GB
+      --moo \
+      --total-configs 11880 \
+      --concurrent 8 \
+      --cpus 24 \
+      --mem 500GB \
       --time 4:00:00 \
+      --batch-size 500 \
+      --array-size 500 \
+      --chunk-size 2 \
       --config-prefix "output/configs1/config_" \
-      --config-suffix ".yaml"
+      --config-suffix ".yaml" \
+      --rescan
   ```
 
 ### Run scripts

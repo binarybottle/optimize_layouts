@@ -2,11 +2,21 @@
 """
 Analyze layout optimization results and create scatter plots of scores.
 
+Median-MAD Mode:
+  - 6 median-MAD plots (3 score types × 2 sorting methods):
+    - median_by_total.png & median_by_total_sorted.png
+    - median_by_item.png & median_by_item_sorted.png
+    - median_by_item_pair.png & median_by_item_pair_sorted.png
+Without the --median-mad flag, you get 3 plots:
+    - scores_by_total.png - Scatter plot of all individual layouts sorted by total score
+    - scores_by_item.png  - Scatter plot sorted by item score
+    - scores_by_pair.png  - Scatter plot sorted by pair score
+
+python3 analyze_results.py --median-mad
 python3 analyze_results.py --results-dir output/layouts
+python3 analyze_results.py --file-pattern "moo_results_config_*.csv"
 python3 analyze_results.py --max-files 1000
 python3 analyze_results.py --debug
-python3 analyze_results.py --median-mad-only
-python3 analyze_results.py --scoring-comparison
 
 """
 import os
@@ -16,7 +26,6 @@ import matplotlib.pyplot as plt
 import csv
 import argparse
 import numpy as np
-from scipy.stats import spearmanr
 from matplotlib.lines import Line2D
 
 from scoring import apply_default_combination_vectorized, DEFAULT_COMBINATION_STRATEGY
@@ -32,17 +41,20 @@ except ImportError:
 #-----------------------------------------------------------------------------
 # Consolidated file processing utilities
 #-----------------------------------------------------------------------------
-def process_files_batch(results_dir, max_files=None, progress_step=1000):
+def process_files_batch(results_dir, file_pattern="moo_results_config_*.csv", max_files=None, progress_step=1000):
     """Generic file finder and iterator with progress tracking."""
-    files = glob.glob(f"{results_dir}/layout_results_*.csv")
+    # Use the specified pattern
+    pattern_path = f"{results_dir}/{file_pattern}"
+    files = glob.glob(pattern_path)
+    
     if max_files:
         files = files[:max_files]
     
     if not files:
-        print(f"No CSV files found matching pattern: {results_dir}/layout_results_*.csv")
+        print(f"No CSV files found matching pattern: {pattern_path}")
         return []
     
-    print(f"Found {len(files)} files to process")
+    print(f"Found {len(files)} files matching pattern: {pattern_path}")
     return files
 
 def calculate_mad(values):
@@ -55,7 +67,7 @@ def calculate_mad(values):
 #-----------------------------------------------------------------------------
 def parse_result_csv(filepath, scores_only=False, debug=False):
     """
-    Parse a layout results CSV file.
+    Parse a layout results CSV file (updated for new format).
     
     Args:
         filepath: Path to CSV file
@@ -89,32 +101,98 @@ def parse_result_csv(filepath, scores_only=False, debug=False):
                 key, value = parts[0].strip('"'), parts[1].strip('"')
                 config_info[key] = value
         
-        # Find data header
+        # Find data header - look for new format headers
         data_section = lines[header_end+1:]
         header_row = None
         
         for i, line in enumerate(data_section):
-            if 'Total score' in line or 'score' in line.lower():
+            # Look for new format headers
+            if ('Complete Layout Score' in line or 'Complete Item' in line or 
+                'Total score' in line or 'score' in line.lower()):
                 header_row = i
                 break
         
         if header_row is None:
+            if debug:
+                print(f"No header row found in {filepath}")
+            return None
+        
+        # Parse header to get column indices
+        header_line = data_section[header_row].strip()
+        try:
+            reader = csv.reader([header_line])
+            headers = [h.strip('"') for h in next(reader)]
+        except:
+            if debug:
+                print(f"Failed to parse header in {filepath}")
+            return None
+        
+        # Find column indices for new format
+        column_indices = _get_column_indices(headers, debug, filepath)
+        if not column_indices:
             return None
         
         # Process data rows
         if scores_only:
-            return _extract_scores_only(data_section, header_row)
+            return _extract_scores_only_new(data_section, header_row, column_indices)
         else:
-            return _extract_full_results(data_section, header_row, config_info, filepath, debug)
+            return _extract_full_results_new(data_section, header_row, column_indices, config_info, filepath, debug)
             
     except Exception as e:
         if debug:
             print(f"Error parsing {filepath}: {e}")
         return None
 
-def _extract_scores_only(data_section, header_row):
-    """Extract only scores for memory-efficient processing."""
+def _get_column_indices(headers, debug=False, filepath=""):
+    """Get column indices for both old and new formats."""
+    indices = {}
+    
+    # Map header names to our internal names
+    header_mappings = {
+        # New format
+        'Rank': 'rank',
+        'Items': 'items', 
+        'Positions': 'positions',
+        'Complete Layout Score': 'total_score',
+        'Complete Item': 'item_score',
+        'Complete Pair': 'item_pair_score',
+        
+        # Old format fallbacks
+        'Total score': 'total_score',
+        'Item score': 'item_score', 
+        'Item-pair score': 'item_pair_score',
+        
+        # Additional possible variations
+        'Opt Item Score': 'opt_item_score',
+        'Opt Item-Pair Score': 'opt_item_pair_score',
+        'Opt Combined': 'opt_combined'
+    }
+    
+    # Find indices
+    for i, header in enumerate(headers):
+        header_clean = header.strip()
+        if header_clean in header_mappings:
+            indices[header_mappings[header_clean]] = i
+    
+    # Verify we have the essential columns
+    required = ['total_score', 'item_score', 'item_pair_score']
+    missing = [col for col in required if col not in indices]
+    
+    if missing:
+        if debug:
+            print(f"Missing required columns in {filepath}: {missing}")
+            print(f"Available headers: {headers}")
+        return None
+    
+    return indices
+
+def _extract_scores_only_new(data_section, header_row, column_indices):
+    """Extract only scores using dynamic column indices."""
     total_scores, item_scores, item_pair_scores = [], [], []
+    
+    total_idx = column_indices['total_score']
+    item_idx = column_indices['item_score'] 
+    pair_idx = column_indices['item_pair_score']
     
     for row_idx in range(header_row + 1, len(data_section)):
         data_row = data_section[row_idx].strip()
@@ -125,17 +203,10 @@ def _extract_scores_only(data_section, header_row):
             reader = csv.reader([data_row])
             row_data = next(reader)
             
-            # Determine indices based on row length
-            if len(row_data) >= 8:
-                total_idx, item_idx, pair_idx = 5, 6, 7
-            elif len(row_data) >= 6:
-                total_idx, item_idx, pair_idx = 3, 4, 5
-            else:
-                continue
-            
-            total_scores.append(float(row_data[total_idx].strip('"')))
-            item_scores.append(float(row_data[item_idx].strip('"')))
-            item_pair_scores.append(float(row_data[pair_idx].strip('"')))
+            if len(row_data) > max(total_idx, item_idx, pair_idx):
+                total_scores.append(float(row_data[total_idx].strip('"')))
+                item_scores.append(float(row_data[item_idx].strip('"')))
+                item_pair_scores.append(float(row_data[pair_idx].strip('"')))
             
         except (ValueError, IndexError):
             continue
@@ -146,9 +217,17 @@ def _extract_scores_only(data_section, header_row):
         'item_pair_scores': item_pair_scores
     }
 
-def _extract_full_results(data_section, header_row, config_info, filepath, debug):
-    """Extract full result data."""
+def _extract_full_results_new(data_section, header_row, column_indices, config_info, filepath, debug):
+    """Extract full result data using dynamic column indices."""
     results = []
+    
+    # Get required indices
+    rank_idx = column_indices.get('rank', 0)  # Default to 0 if not found
+    items_idx = column_indices.get('items', 1)  # Default to 1 if not found
+    positions_idx = column_indices.get('positions', 2)  # Default to 2 if not found
+    total_idx = column_indices['total_score']
+    item_idx = column_indices['item_score']
+    pair_idx = column_indices['item_pair_score']
     
     for row_idx in range(header_row + 1, len(data_section)):
         data_row = data_section[row_idx].strip()
@@ -159,30 +238,32 @@ def _extract_full_results(data_section, header_row, config_info, filepath, debug
             reader = csv.reader([data_row])
             row_data = next(reader)
             
-            # Parse based on format
-            if len(row_data) >= 8:
-                items, positions = row_data[0].strip('"'), row_data[1].strip('"')
-                opt_items, opt_positions = row_data[2].strip('"'), row_data[3].strip('"')
-                rank, total_score = int(row_data[4].strip('"')), float(row_data[5].strip('"'))
-                item_score, item_pair_score = float(row_data[6].strip('"')), float(row_data[7].strip('"'))
-            elif len(row_data) >= 6:
-                items, positions = row_data[0].strip('"'), row_data[1].strip('"')
-                opt_items = opt_positions = ""
-                rank, total_score = int(row_data[2].strip('"')), float(row_data[3].strip('"'))
-                item_score, item_pair_score = float(row_data[4].strip('"')), float(row_data[5].strip('"'))
-            else:
+            # Check we have enough columns
+            required_max_idx = max(rank_idx, items_idx, positions_idx, total_idx, item_idx, pair_idx)
+            if len(row_data) <= required_max_idx:
                 continue
+            
+            # Extract data
+            rank = int(row_data[rank_idx].strip('"')) if rank_idx < len(row_data) else 0
+            items = row_data[items_idx].strip('"') if items_idx < len(row_data) else ""
+            positions = row_data[positions_idx].strip('"') if positions_idx < len(row_data) else ""
+            total_score = float(row_data[total_idx].strip('"'))
+            item_score = float(row_data[item_idx].strip('"'))
+            item_pair_score = float(row_data[pair_idx].strip('"'))
             
             # Clean special characters in positions
             for special, replacement in [('[semicolon]', ';'), ('[comma]', ','), ('[period]', '.'), ('[slash]', '/')]:
                 positions = positions.replace(special, replacement)
-                opt_positions = opt_positions.replace(special, replacement)
             
             results.append({
-                'config_id': os.path.basename(filepath).replace('layout_results_', '').replace('.csv', ''),
-                'items': items, 'positions': positions,
-                'opt_items': opt_items, 'opt_positions': opt_positions,
-                'total_score': total_score, 'item_score': item_score, 'item_pair_score': item_pair_score,
+                'config_id': os.path.basename(filepath).replace('moo_results_config_', '').replace('soo_results_config_', '').replace('layout_results_', '').replace('.csv', ''),
+                'items': items,
+                'positions': positions,
+                'opt_items': "",  # Not in new format
+                'opt_positions': "",  # Not in new format
+                'total_score': total_score,
+                'item_score': item_score, 
+                'item_pair_score': item_pair_score,
                 'items_to_assign': config_info.get('Items to assign', ''),
                 'positions_to_assign': config_info.get('Available positions', ''),
                 'items_assigned': config_info.get('Assigned items', ''),
@@ -190,7 +271,9 @@ def _extract_full_results(data_section, header_row, config_info, filepath, debug
                 'rank': rank
             })
             
-        except (ValueError, IndexError):
+        except (ValueError, IndexError) as e:
+            if debug:
+                print(f"Error parsing row in {filepath}: {e}")
             continue
     
     return results
@@ -198,9 +281,9 @@ def _extract_full_results(data_section, header_row, config_info, filepath, debug
 #-----------------------------------------------------------------------------
 # Consolidated data loading
 #-----------------------------------------------------------------------------
-def load_results(results_dir, max_files=None, debug=False):
+def load_results(results_dir, file_pattern="moo_results_config_*.csv", max_files=None, debug=False):
     """Load layout result files and return a dataframe."""
-    files = process_files_batch(results_dir, max_files)
+    files = process_files_batch(results_dir, file_pattern, max_files)
     if not files:
         return pd.DataFrame()
     
@@ -342,7 +425,7 @@ def plot_score_comparison(df, save_path=None):
 #-----------------------------------------------------------------------------
 # Generic median-MAD plotting
 #-----------------------------------------------------------------------------
-def plot_median_mad_generic(results_dir, score_type='total', sort_by_total=False, max_files=None):
+def plot_median_mad_generic(results_dir, score_type='total', sort_by_total=False, max_files=None, file_pattern="moo_results_config_*.csv"):
     """
     Generic median-MAD plot function that replaces multiple similar functions.
     
@@ -351,8 +434,9 @@ def plot_median_mad_generic(results_dir, score_type='total', sort_by_total=False
         score_type: 'total', 'item', or 'item_pair'
         sort_by_total: If True, sort by total score median instead of file order
         max_files: Maximum number of files to process
+        file_pattern: File pattern to match (e.g., "moo_results_config_*.csv", "soo_results_config_*.csv")
     """
-    files = process_files_batch(results_dir, max_files)
+    files = process_files_batch(results_dir, file_pattern, max_files)
     if not files:
         return
     
@@ -373,7 +457,7 @@ def plot_median_mad_generic(results_dir, score_type='total', sort_by_total=False
             median_score = np.median(scores_array)
             mad_score = calculate_mad(scores_array)
             
-            file_key = os.path.basename(filepath).replace('layout_results_', '').replace('.csv', '')
+            file_key = os.path.basename(filepath).replace('moo_results_config_', '').replace('soo_results_config_', '').replace('layout_results_', '').replace('.csv', '')
             
             stat_entry = {
                 'file_key': file_key,
@@ -524,144 +608,21 @@ def save_results_summary(df):
         print("Results saved to layout_scores_summary.csv")
 
 #-----------------------------------------------------------------------------
-# Scoring comparison utilities
-#-----------------------------------------------------------------------------
-def plot_scoring_comparison(results_dir, max_files=None, 
-                          item_range=(0.08, 0.13), pair_range=(0.214, 0.228),
-                          weights=(0.3, 0.7), save_path=None):
-    """Compare current scoring with weighted normalized scoring."""
-    files = process_files_batch(results_dir, max_files)
-    if not files:
-        return
-    
-    item_min, item_max = item_range
-    pair_min, pair_max = pair_range
-    item_weight, pair_weight = weights
-    
-    print(f"Comparing scoring methods on {len(files)} files...")
-    print(f"Item range: [{item_min:.3f}, {item_max:.3f}], weight: {item_weight:.1f}")
-    print(f"Pair range: [{pair_min:.3f}, {pair_max:.3f}], weight: {pair_weight:.1f}")
-    
-    # Collect data
-    current_scores, weighted_scores = [], []
-    
-    for i, filepath in enumerate(files):
-        if i % 1000 == 0:
-            print(f"Processing file {i+1}/{len(files)}")
-        
-        scores_data = parse_result_csv(filepath, scores_only=True)
-        if not scores_data:
-            continue
-        
-        for j in range(len(scores_data['total_scores'])):
-            current_total = scores_data['total_scores'][j]
-            item_score = scores_data['item_scores'][j]
-            pair_score = scores_data['item_pair_scores'][j]
-            
-            # Calculate weighted normalized score
-            item_norm = (item_score - item_min) / (item_max - item_min)
-            pair_norm = (pair_score - pair_min) / (pair_max - pair_min)
-            weighted_score = item_weight * item_norm + pair_weight * pair_norm
-            
-            current_scores.append(current_total)
-            weighted_scores.append(weighted_score)
-    
-    if not current_scores:
-        print("No data collected!")
-        return
-    
-    # Convert to arrays and analyze
-    current_scores = np.array(current_scores)
-    weighted_scores = np.array(weighted_scores)
-    
-    correlation = np.corrcoef(current_scores, weighted_scores)[0, 1]
-    rank_correlation, _ = spearmanr(current_scores, weighted_scores)
-    
-    print(f"Collected {len(current_scores):,} layout scores")
-    print(f"Pearson correlation: {correlation:.4f}")
-    print(f"Spearman rank correlation: {rank_correlation:.4f}")
-    
-    # Create comparison plot
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
-    
-    # 1. Scatter plot
-    ax1.scatter(current_scores, weighted_scores, alpha=0.5, s=1)
-    ax1.set_xlabel('Current Total Score (multiplication)')
-    ax1.set_ylabel('Weighted Normalized Score')
-    ax1.set_title(f'Score Comparison\nPearson r={correlation:.3f}, Spearman ρ={rank_correlation:.3f}')
-    ax1.grid(True, alpha=0.3)
-    
-    # 2. Histogram comparison
-    ax2.hist(current_scores, bins=50, alpha=0.7, label='Current (mult)', density=True)
-    ax2.hist(weighted_scores, bins=50, alpha=0.7, label='Weighted norm', density=True)
-    ax2.set_xlabel('Score')
-    ax2.set_ylabel('Density')
-    ax2.set_title('Score Distributions')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    
-    # 3. Top N overlap analysis
-    n_top = min(1000, len(current_scores) // 10)
-    current_top_idx = np.argsort(current_scores)[-n_top:]
-    weighted_top_idx = np.argsort(weighted_scores)[-n_top:]
-    overlap = len(set(current_top_idx) & set(weighted_top_idx))
-    overlap_pct = overlap / n_top * 100
-    
-    ax3.scatter(current_scores[current_top_idx], weighted_scores[current_top_idx], 
-               alpha=0.7, s=2, color='red', label=f'Top {n_top} by current')
-    ax3.scatter(current_scores[weighted_top_idx], weighted_scores[weighted_top_idx], 
-               alpha=0.7, s=2, color='blue', label=f'Top {n_top} by weighted')
-    ax3.set_xlabel('Current Total Score')
-    ax3.set_ylabel('Weighted Normalized Score')
-    ax3.set_title(f'Top {n_top} Layouts\nOverlap: {overlap} ({overlap_pct:.1f}%)')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
-    
-    # 4. Summary statistics
-    ax4.axis('off')
-    stats_text = [
-        f"Layouts analyzed: {len(current_scores):,}",
-        f"Current range: {current_scores.min():.5f} to {current_scores.max():.5f}",
-        f"Weighted range: {weighted_scores.min():.3f} to {weighted_scores.max():.3f}",
-        f"Item range: [{item_min:.3f}, {item_max:.3f}]",
-        f"Pair range: [{pair_min:.3f}, {pair_max:.3f}]",
-        f"Weights: {item_weight:.1f} item + {pair_weight:.1f} pair",
-        f"Top {n_top} overlap: {overlap_pct:.1f}%",
-        f"Pearson correlation: {correlation:.4f}",
-        f"Spearman correlation: {rank_correlation:.4f}"
-    ]
-    ax4.text(0.1, 0.9, '\n'.join(stats_text), fontsize=11, verticalalignment='top')
-    
-    if save_path is None:
-        save_path = f'scoring_comparison_w{item_weight:.1f}_{pair_weight:.1f}.png'
-    
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300, bbox_inches='tight')
-    print(f"Scoring comparison saved as {save_path}")
-    plt.close()
-    
-    return {
-        'pearson_correlation': correlation,
-        'spearman_correlation': rank_correlation,
-        'top_n_overlap_percent': overlap_pct,
-        'n_layouts': len(current_scores)
-    }
-
-#-----------------------------------------------------------------------------
 # Main function
 #-----------------------------------------------------------------------------
 def main():
     parser = argparse.ArgumentParser(description='Analyze layout optimization results (streamlined version)')
     parser.add_argument('--results-dir', type=str, default='output/layouts', help='Directory containing result files')
+    parser.add_argument('--file-pattern', type=str, default='moo_results_config_*.csv', help='File pattern to match (e.g., "moo_results_config_*.csv", "soo_results_config_*.csv")')
     parser.add_argument('--max-files', type=int, default=None, help='Maximum number of files to process')
     parser.add_argument('--debug', action='store_true', help='Enable debug output')
-    parser.add_argument('--median-mad-only', action='store_true', help='Only generate median-MAD plots')
-    parser.add_argument('--scoring-comparison', action='store_true', help='Generate scoring comparison plots')
+    parser.add_argument('--median-mad', action='store_true', help='Only generate median-MAD plots')
     
     args = parser.parse_args()
     
     print(f"Streamlined analyze_results.py starting...")
     print(f"Results directory: {args.results_dir}")
+    print(f"File pattern: {args.file_pattern}")
     print(f"Max files: {args.max_files or 'all'}")
     
     try:
@@ -674,21 +635,13 @@ def main():
         if args.median_mad_only:
             print("Running memory-efficient median-MAD analysis...")
             for score_type in ['total', 'item', 'item_pair']:
-                plot_median_mad_generic(args.results_dir, score_type, False, args.max_files)
-                plot_median_mad_generic(args.results_dir, score_type, True, args.max_files)
-            return
-        
-        # Scoring comparison analysis
-        if args.scoring_comparison:
-            print("Running scoring comparison analysis...")
-            # Test multiple weight combinations
-            for weights in [(0.5, 0.5), (0.3, 0.7), (0.2, 0.8), (0.7, 0.3)]:
-                plot_scoring_comparison(args.results_dir, args.max_files, weights=weights)
+                plot_median_mad_generic(args.results_dir, score_type, False, args.max_files, args.file_pattern)
+                plot_median_mad_generic(args.results_dir, score_type, True, args.max_files, args.file_pattern)
             return
         
         # Full analysis
         print("Loading results for full analysis...")
-        df = load_results(args.results_dir, args.max_files, args.debug)
+        df = load_results(args.results_dir, args.file_pattern, args.max_files, args.debug)
         
         if df.empty:
             print("No valid results found!")
