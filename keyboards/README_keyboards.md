@@ -52,7 +52,7 @@ For the following, we:
   3. Select the highest-scoring 24-letter/key layouts.
     1. Repeat Step 2 for 24-letter/key layouts.
     2. Select the final layout by ?????? 
-    
+
 3. Arrange periphery of the 12-letter/key home blocks.
   1. Assign the two least frequent letters (q & z in English) 
       to the two upper-right corner keys.
@@ -74,7 +74,7 @@ For the following, we:
 
   In the example below, the 4 most frequent letters (etao in English)
   are assigned to 4 of the 12 most comfortable keys in the home blocks
-  (available keys are empty; restricted keys are represented by a dash):
+  (available keys are empty; restricted keys are represented by "|||||"):
 
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||     │  o  │     │    │     │     │     │|||||│
