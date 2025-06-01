@@ -19,7 +19,6 @@ For the following, we:
     etaoinsrhldcumfpgwybvkxj (q or z are dealt with at the end).
   - Refer to the "comfort" of a key (and key-pairs) based on typing preference 
     research data, with comfort ranking 1 (high) to 12 (low) for each hand:
-    
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │  10 │  7  │  3  │  6  │    │  6  │  3  │  7  │  10 │
@@ -78,7 +77,7 @@ For the following, we:
   In the example below, the 4 most frequent letters (etao in English)
   are assigned to 4 of the 12 most comfortable keys in the home blocks
   (available keys are empty; restricted keys are represented by "|||||"):
-
+    ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||     │  o  │     │    │     │     │     │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
@@ -86,6 +85,7 @@ For the following, we:
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │|||||||||||||||||│     │    │     │|||||||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ```
 
 ##### 1.2. Optimally arrange 12 letters in the 12 available of the top 16 keys.
 
@@ -99,7 +99,7 @@ Command for optimizing layouts with constraints specified in a configuration fil
     ```
 
   Following the example, 12 letters are optimally arranged in 12 available keys:
-
+    ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||  f  │  o  │  u  │    │  l  │  d  │  m  │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
@@ -107,7 +107,7 @@ Command for optimizing layouts with constraints specified in a configuration fil
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │|||||||||||||||||│  p  │    │  r  │|||||||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
-
+    ```
 
 ### Step 2. Optimally arrange the remaining letters.
 The following steps act on each of Step 1's 11,880 configuration files. 
@@ -120,6 +120,7 @@ The following steps act on each of Step 1's 11,880 configuration files.
     cd keyboards; python generate_configs2.py
     ```
 
+    ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │     |  f  │  o  │  u  │    │  l  │  d  │  m  │     │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
@@ -127,12 +128,13 @@ The following steps act on each of Step 1's 11,880 configuration files.
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │     |     |     │  p  │    │  r  │     |     |     │
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ```
 
   ##### 2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.
   There are XXXX permutations of 10 letters in 10 keys:
 
   Run the same command as above: `python optimize_layout.py`
-
+    ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
@@ -140,11 +142,12 @@ The following steps act on each of Step 1's 11,880 configuration files.
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │  k  │  x  │  j  │  p  │    │  r  │  m  │  f  │  p  │
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ```
 
 ### Step 3. Arrange periphery of the 12-letter/key home blocks.
 We assign the two least frequent letters (q & z in English) 
 to the two upper-right corner keys:
-
+    ```
     ╭───────────────────────╮    ╭─────────────────────────────╮
     │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │  z  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┼─────┤
@@ -152,6 +155,7 @@ to the two upper-right corner keys:
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤─────╯
     │  k  │  x  │  j  │  p  │    │  r  │  m  │  f  │  p  │
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ```
 
 Finally, we assign punctuation to the two middle columns between the home blocks. 
 
