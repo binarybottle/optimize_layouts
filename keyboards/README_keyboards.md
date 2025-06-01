@@ -32,42 +32,41 @@ For the following, we:
 
 ## Overview of Steps
 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
-    (The remaining 8 letters have negligible interaction with the top 16 letters,
-    and the remaining 8 keys have much lower comfort scores than the top 16 keys.)
-    Use multi-objective optimization (MOO, with item- and item-pair objectives) 
-    to find a Pareto front of equally viable, 16-letter/key layout candidates.
-  1. To parallelize the branch-and-bound, depth-first search, 
-      fix the 4 most frequent letters in every possible arrangement (11,880) 
-      within the 12 most comfortable keys (half of our 24 keys in the home blocks).
-  2. For each 4-letter arrangement, use MOO to optimally arrange 12 letters 
-      in the 12 available of the 16 keys.
-  3. Select the highest-scoring 16-letter/key layouts.
-    1. For each MOO objective, replace scores with their rankings.
-    2. Sum the rankings for each layout.
-    3. Sort layouts by these sums.
-    4. Select layouts whose sums are less than ?????? 
+  (The remaining 8 letters have negligible interaction with the top 16 letters,
+  and the remaining 8 keys have much lower comfort scores than the top 16 keys.)
+  Use multi-objective optimization (MOO, with item- and item-pair objectives) 
+  to find a Pareto front of equally viable, 16-letter/key layout candidates.
+    1. To parallelize the branch-and-bound, depth-first search, 
+       fix the 4 most frequent letters in every possible arrangement (11,880) 
+       within the 12 most comfortable keys (half of our 24 keys in the home blocks).
+    2. For each 4-letter arrangement, use MOO to optimally arrange 12 letters 
+       in the 12 available of the 16 keys.
+    3. Select the highest-scoring 16-letter/key layouts.
+        1. For each MOO objective, replace scores with their rankings.
+        2. Sum the rankings for each layout.
+        3. Sort layouts by these sums.
+        4. Select layouts whose sums are less than ?????? 
 
 2. Optimally arrange the remaining letters.
-  1. Remove 2 letters from the 2 least comfortable of the 16 keys 
-      in the selected layouts (to explore a broader solution space).
-  2. For each resulting 14-letter/key layout, optimally arrange the 10 
-      (out of 24) remaining letters in the 10 remaining keys.
-  3. Select the highest-scoring 24-letter/key layouts.
-    1. Repeat Step 2 for 24-letter/key layouts.
-    2. Select the final layout by ?????? 
+    1. Remove 2 letters from the 2 least comfortable of the 16 keys 
+       in the selected layouts (to explore a broader solution space).
+    2. For each resulting 14-letter/key layout, optimally arrange the 10 
+       (out of 24) remaining letters in the 10 remaining keys.
+    3. Select the highest-scoring 24-letter/key layouts.
+        1. Repeat Step 2 for 24-letter/key layouts.
+        2. Select the final layout by ?????? 
 
 3. Arrange periphery of the 12-letter/key home blocks.
-  1. Assign the two least frequent letters (q & z in English) 
-      to the two upper-right corner keys.
-  2. Assign punctuation to the two middle columns between the home blocks. 
+    1. Assign the two least frequent letters (q & z in English) 
+       to the two upper-right corner keys.
+    2. Assign punctuation to the two middle columns between the home blocks. 
 
 
 ### Step 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
 
   ##### 1.1. Fix 4 of the letters in every possible arrangement within 12 keys.
-  There are 11,880 permutations of 4 letters in 12 keys (see example below):
-    - 1,365 ways to choose 4 keys from 12 keys
-    - 24 ways to arrange 4 letters in those 4 keys
+  There are 11,880 permutations of 4 letters in 12 keys 
+  (1,365 ways to choose 4 keys from 12 keys, 24 ways to arrange 4 letters in those 4 keys).
 
   Command for generating the 11,880 configuration files:
 
