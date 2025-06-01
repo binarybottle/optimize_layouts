@@ -71,9 +71,9 @@ For the following, we:
 
   Command for generating the 11,880 configuration files:
 
-    ```bash
+  ```bash
     cd keyboards; python generate_configs1.py
-    ```
+  ```
 
   In the example below, the 4 most frequent letters (etao in English)
   are assigned to 4 of the 12 most comfortable keys in the home blocks
@@ -93,12 +93,12 @@ For the following, we:
 
 Command for optimizing layouts with constraints specified in a configuration file:
 
-    ```bash
+  ```bash
     python optimize_layout.py
 
     # Script to parallelize across the 11,880 configuration files:
     bash slurm_array_submit.sh --moo --rescan
-    ```
+  ```
 
   Following the example, 12 letters are optimally arranged in 12 available keys:
 
@@ -119,9 +119,9 @@ The following steps act on each of Step 1's 11,880 configuration files.
 
   Command for generating the second set of configuration files:
 
-    ```bash
+  ```bash
     cd keyboards; python generate_configs2.py
-    ```
+  ```
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
