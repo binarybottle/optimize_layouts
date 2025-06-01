@@ -19,13 +19,13 @@ For the following, we:
   - Refer to the "comfort" of a key (and key-pairs) based on typing preference 
     research data, with comfort ranking 1 (high) to 12 (low) for each hand:
     
-    ╭───────────────────────────────────────────────╮
-    │  10 │  7  │  3  │  6  ║  6  │  3  │  7  │  10 │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │  8  │  4  │  2  │  1  ║  1  │  2  │  4  │  8  │
-    ├─────┼─────┼─────┼─────╫─────┼─────┼─────┼─────┤
-    │  11 │  12 │  9  │  5  ║  5  │  9  │  12 │  11 │
-    ╰─────┴─────┴─────┴─────╨─────┴─────┴─────┴─────╯
+    ╭───────────────────────╮    ╭───────────────────────╮
+    │  10 │  7  │  3  │  6  │    │  6  │  3  │  7  │  10 │
+    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
+    │  8  │  4  │  2  │  1  │    │  1  │  2  │  4  │  8  │
+    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
+    │  11 │  12 │  9  │  5  │    │  5  │  9  │  12 │  11 │
+    ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
 
 ## Overview of Steps
 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
@@ -43,6 +43,7 @@ For the following, we:
     2. Sum the rankings for each layout.
     3. Sort layouts by these sums.
     4. Select layouts whose sums are less than ?????? 
+
 2. Optimally arrange the remaining letters.
   1. Remove 2 letters from the 2 least comfortable of the 16 keys 
       in the selected layouts (to explore a broader solution space).
@@ -51,6 +52,7 @@ For the following, we:
   3. Select the highest-scoring 24-letter/key layouts.
     1. Repeat Step 2 for 24-letter/key layouts.
     2. Select the final layout by ?????? 
+    
 3. Arrange periphery of the 12-letter/key home blocks.
   1. Assign the two least frequent letters (q & z in English) 
       to the two upper-right corner keys.
