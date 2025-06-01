@@ -10,7 +10,7 @@ from typing import Dict, List, Tuple, Optional
 import numpy as np
 
 from config import Config
-from scoring import LayoutScorer, calculate_complete_layout_score, apply_default_combination
+from scoring import LayoutScorer, calculate_complete_layout_score_direct, apply_default_combination
 
 #-----------------------------------------------------------------------------
 # Keyboard visualization
@@ -147,7 +147,7 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         
         # Calculate TRUE complete layout score using centralized function
         try:
-            complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+            complete_total, complete_item, complete_item_pair = calculate_complete_layout_score_direct(
                 complete_mapping, score_dicts)
         except Exception as e:
             print(f"Warning: Could not calculate complete score: {e}")
@@ -277,7 +277,7 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
             
             # Calculate complete score using centralized function
             try:
-                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score_direct(
                     complete_mapping, normalized_scores)
             except Exception:
                 complete_total = complete_item = complete_item_pair = 0.0
@@ -360,7 +360,7 @@ def save_moo_results_to_csv(pareto_front: List[Dict],
             
             # Calculate complete score using centralized function
             try:
-                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score(
+                complete_total, complete_item, complete_item_pair = calculate_complete_layout_score_direct(
                     complete_mapping, normalized_scores)
             except Exception:
                 complete_total = complete_item = complete_item_pair = 0.0

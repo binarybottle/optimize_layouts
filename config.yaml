@@ -31,8 +31,8 @@ paths:
 optimization:   
   items_assigned:       "etao"         # Items already assigned to positions
   positions_assigned:   "MEUF" #"FJDE"         # Positions that are already filled 
-  items_to_assign:      "insrhldcum"   # items to arrange in positions
-  positions_to_assign:  "DSRVWAJKIL" #"SVRWAKILMU"   # available positions
+  items_to_assign:      "insrhldcu"   # items to arrange in positions
+  positions_to_assign:  "DSRVWAJKI" #"SVRWAKILMU"   # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain, and
   # subset of positions_to_assign to constrain arrangement of items_to_constrain
