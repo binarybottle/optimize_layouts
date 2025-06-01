@@ -35,13 +35,12 @@ python analyze_results.py
 
 # Score a specific layout
 python score_layout.py --items "etaoi" --positions "FJDSV"
+```
 
 For running parallel processes, 
 see **Running parallel processes** below.
-```
 
 ## Overview
--------------------------------------------------------------------
 This code optimizes a layout, an arrangement of items,
 and takes into account scores for individual items, 
 item-pairs (a,b and b,a), positions, and position-pairs.
@@ -59,7 +58,6 @@ for touch typing (see **keyboards/README_keyboards.md**):
     (in any language, as usage frequencies are regressed out).
 
 ## Architecture
--------------------------------------------------------------------
 The system is built with a modular, maintainable architecture:
   - config.py: Configuration management and validation
   - scoring.py: Unified scoring system with JIT optimization
@@ -69,9 +67,8 @@ The system is built with a modular, maintainable architecture:
   - optimize_layout.py: Main CLI interface
 
 ## Optimization Modes
--------------------------------------------------------------------
-### Single-Objective Optimization (SOO)
 
+### Single-Objective Optimization (SOO)
   - Algorithm: Branch-and-bound with tight upper bounds
   - Goal: Find top N highest-scoring layouts
   - Scoring: Combined item × pair score or individual components
@@ -86,7 +83,6 @@ python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
 ```
 
 ### Multi-Objective Optimization (MOO)
-
   - Algorithm: Pareto-optimal search
   - Goal: Find non-dominated solutions across multiple objectives
   - Objectives: Item scores, internal pair scores, cross-interaction scores
@@ -101,7 +97,6 @@ python optimize_layout.py --config config.yaml --moo --max-solutions 100 --time-
 ```
 
 ## Inputs
--------------------------------------------------------------------
 The system accepts normalized score files in CSV format.
 The code will accept any set of letters (or special characters) 
 to represent items, item-pairs, positions, and position-pairs, 
@@ -157,7 +152,6 @@ A configuration file (config.yaml) specifies input filenames
       to constrain the possible assignment of items_to_constrain
 
 ## Scoring system
--------------------------------------------------------------------
 Layouts are scored based on normalized item and item-pair scores 
 and corresponding normalized position and position-pair scores, 
 where direction (sequence of a given pair) matters.
@@ -168,12 +162,12 @@ where direction (sequence of a given pair) matters.
 
 ### Scoring Modes
 
-*** SOO ***
+#### SOO
   - item_only: Only individual item-position matches
   - pair_only: Only pair interactions (internal + cross)
   - combined: Multiplicative combination (item × total_pairs)
 
-*** MOO ***
+#### MOO
   - multi_objective: Separate objectives for MOO
 
 ### Score Calculation Formula
@@ -182,7 +176,6 @@ item_component = Σ(item_score_i × position_score_i) / N_items
 pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
 
 ## Branch-and-bound optimization
--------------------------------------------------------------------
   - Calculates exact scores for placed letters
   - Uses provable upper bounds for unplaced letters
   - Prunes branches that cannot exceed best known solution
@@ -193,7 +186,7 @@ pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
   - Optional constraints for a subset of items
 
 ## Output
--------------------------------------------------------------------
+
 ### Console Output
   - Configuration summary and search space analysis
   - Real-time progress with pruning statistics
@@ -208,13 +201,12 @@ Automatically saved timestamped files:
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
 
 ## Optional: Running parallel processes on SLURM
--------------------------------------------------------------------
 The example commands below to parallelize layout optimization
 were used as part of a keyboard layout optimization study supported 
 by NSF and Pittsburgh Supercomputing Center computing resources 
 (see **README_keyboards**).
 
-### Connect and set up the code environment
+#### Connect and set up the code environment
   ```bash
   # Log in
   ssh username@bridges2.psc.edu
@@ -239,22 +231,22 @@ by NSF and Pittsburgh Supercomputing Center computing resources
   python3 slurm_setup_run_all_tests.sh
   ```
 
-### Generate config files and prepare to submit jobs
+#### Generate config files and prepare to submit jobs
 You can generate configuration files in output/configs1/
 by creating your own generate_configs.py script,
 following the example in generate_keyboard_configs1.py:
 ```python3 generate_configs.py```
 
-### Configure and submit jobs
+#### Configure and submit jobs
 The submission system supports flexible resource allocation and optimization 
 parameters without requiring manual script editing:
 
-#### Available resource presets
+##### Available resource presets
   - debug: 4 CPUs, 20GB, 30min, RM-shared (for testing)
   - standard: 8 CPUs, 40GB, 2h, RM-shared (moderate workloads)
   - extreme-memory: 24 CPUs, 500GB, 4h, EM (maximum performance)
 
-#### Basic usage with presets
+##### Basic usage with presets
   ```bash
   # Quick testing (small resources, short time)
   bash slurm_array_submit.sh --preset debug --account "your_allocation_id"
@@ -270,7 +262,7 @@ parameters without requiring manual script editing:
   bash slurm_array_submit.sh --help
   ```
 
-#### Custom resource allocation
+##### Custom resource allocation
   ```bash
   # Example: keyboard layout optimization settings (phase 1)
   bash slurm_array_submit.sh \
@@ -290,7 +282,7 @@ parameters without requiring manual script editing:
       --rescan
   ```
 
-### Run scripts
+#### Run scripts
   ```bash
   # Use screen to keep session active
   screen -S submission
@@ -308,7 +300,7 @@ parameters without requiring manual script editing:
   bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id"
   ```
 
-### Monitor jobs
+#### Monitor jobs
   ```bash
   # Check all your running jobs
   squeue -u $USER
@@ -331,7 +323,7 @@ parameters without requiring manual script editing:
   tail output/logs/submit_*.log
   ```
   
-### Cancel jobs
+#### Cancel jobs
   ```bash
   # Cancel all your jobs at once
   scancel -u $USER
