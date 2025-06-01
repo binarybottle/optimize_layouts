@@ -2,8 +2,6 @@
 
 Optimize layouts of items and item-pairs with advanced single- and multi-objective algorithms.
 
----
-
 **Repository**: https://github.com/binarybottle/optimize_layouts.git  
 **Author**: Arno Klein (arnoklein.info)  
 **License**: MIT License (see LICENSE)

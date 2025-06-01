@@ -1,9 +1,10 @@
 # README_keyboards
+
 Optimize an English language keyboard layout
-===============================================================================
-https://github.com/binarybottle/optimize_layouts.git
-Author: Arno Klein (arnoklein.info)
-MIT License
+
+**Repository**: https://github.com/binarybottle/optimize_layouts.git  
+**Author**: Arno Klein (arnoklein.info)  
+**License**: MIT License (see LICENSE)
 
 ## Introduction
 Let's apply the optimize_layouts software to the challenge of optimizing the 
@@ -19,6 +20,7 @@ For the following, we:
   - Refer to the "comfort" of a key (and key-pairs) based on typing preference 
     research data, with comfort ranking 1 (high) to 12 (low) for each hand:
     
+    ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │  10 │  7  │  3  │  6  │    │  6  │  3  │  7  │  10 │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
@@ -26,6 +28,7 @@ For the following, we:
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │  11 │  12 │  9  │  5  │    │  5  │  9  │  12 │  11 │
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ```
 
 ## Overview of Steps
 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
