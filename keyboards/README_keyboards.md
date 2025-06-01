@@ -19,6 +19,7 @@ For the following, we:
     etaoinsrhldcumfpgwybvkxj (q or z are dealt with at the end).
   - Refer to the "comfort" of a key (and key-pairs) based on typing preference 
     research data, with comfort ranking 1 (high) to 12 (low) for each hand:
+
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │  10 │  7  │  3  │  6  │    │  6  │  3  │  7  │  10 │
@@ -77,6 +78,7 @@ For the following, we:
   In the example below, the 4 most frequent letters (etao in English)
   are assigned to 4 of the 12 most comfortable keys in the home blocks
   (available keys are empty; restricted keys are represented by "|||||"):
+
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||     │  o  │     │    │     │     │     │|||||│
@@ -99,6 +101,7 @@ Command for optimizing layouts with constraints specified in a configuration fil
     ```
 
   Following the example, 12 letters are optimally arranged in 12 available keys:
+
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||  f  │  o  │  u  │    │  l  │  d  │  m  │|||||│
@@ -134,6 +137,7 @@ The following steps act on each of Step 1's 11,880 configuration files.
   There are XXXX permutations of 10 letters in 10 keys:
 
   Run the same command as above: `python optimize_layout.py`
+
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │
@@ -147,6 +151,7 @@ The following steps act on each of Step 1's 11,880 configuration files.
 ### Step 3. Arrange periphery of the 12-letter/key home blocks.
 We assign the two least frequent letters (q & z in English) 
 to the two upper-right corner keys:
+
     ```
     ╭───────────────────────╮    ╭─────────────────────────────╮
     │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │  z  │
