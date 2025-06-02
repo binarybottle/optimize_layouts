@@ -14,7 +14,7 @@ There are two versions of this script:
 
 Usage (input files assumed to be in output/layouts1/):
 
-    All unique layouts from all config files (default):
+    All unique layouts from all config files (default), with optional removal of letters in specified positions:
     ``python generate_configs2.py --remove-positions "A;" --file-pattern "moo_results_config_*.csv"``
 
     Top layouts per config (number of top-scoring layouts per config file):
@@ -207,14 +207,13 @@ def main():
     """Main function to process layouts and generate Step 2 configurations."""
     args = parse_arguments()
     
-    if not args.remove_positions:
-        print("Error: --remove-positions is required")
-        print("Example: --remove-positions 'A;' to remove positions A and semicolon")
-        return
-    
-    positions_to_remove = list(args.remove_positions)
-    print(f"Will remove positions: {positions_to_remove}")
-    
+    if args.remove_positions:
+        positions_to_remove = list(args.remove_positions)
+        print(f"Will remove positions: {positions_to_remove}")
+    else:
+        positions_to_remove = []
+        print("No positions specified for removal - using original layouts")
+
     # Find all Step 1 result files and sort them to ensure consistent order
     results_pattern = os.path.join(args.results_path, args.file_pattern)
     result_files = sorted(glob.glob(results_pattern))  # Sort for consistent order
@@ -286,11 +285,14 @@ def main():
                 error_count += 1
                 continue
             
-            # Remove specified positions
-            remaining_positions, remaining_items, removed_positions = remove_specified_positions(
-                positions, items, positions_to_remove
-            )
-            
+            # Remove specified positions (if any)
+            if positions_to_remove:
+                remaining_positions, remaining_items, removed_positions = remove_specified_positions(
+                    positions, items, positions_to_remove
+                )
+            else:
+                remaining_positions, remaining_items, removed_positions = positions, items, ""
+
             # Get unassigned items and positions, maintaining original frequency order
             all_positions = "FDESVRWACQZXJKILMUO;,P/."  # 24 positions
             all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in frequency order
@@ -356,7 +358,7 @@ def parse_arguments():
                        help='Path to output Step 2 configurations')
     parser.add_argument('--file-pattern', type=str, default='moo_results_config_*.csv',
                        help='File pattern to match (default: "moo_results_config_*.csv")')
-    parser.add_argument('--remove-positions', type=str, required=True,
+    parser.add_argument('--remove-positions', type=str, required=False,
                        help='Positions to remove (e.g., "A;" for A and semicolon)')
     parser.add_argument('--layouts-per-config', type=int, default=None,
                        help='Number of top layouts to take from each config file')

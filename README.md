@@ -263,6 +263,7 @@ parameters without requiring manual script editing:
 ##### Custom resource allocation
   ```bash
   # Example: keyboard layout optimization settings (phase 1)
+  # (Delete output/batches if using --rescan)
   bash slurm_array_submit.sh \
       --account "med250002p" \
       --preset extreme-memory \
