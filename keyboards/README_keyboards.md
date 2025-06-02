@@ -96,7 +96,7 @@ Command for optimizing layouts with constraints specified in a configuration fil
     python optimize_layout.py
 
     # Script to parallelize across the 11,880 configuration files:
-    bash slurm_array_submit.sh --moo --rescan
+    bash slurm/slurm_array_submit.sh --moo --rescan
   ```
 
   Following the example, 12 letters are optimally arranged in 12 available keys:
@@ -135,7 +135,9 @@ The following steps act on each of Step 1's 11,880 configuration files.
   ##### 2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.
   There are XXXX permutations of 10 letters in 10 keys:
 
-  Run the same command as above: `python optimize_layout.py`
+  Run the same command as above (after renaming Step 1 output folders): 
+  `python optimize_layout.py` or 
+  `bash slurm/slurm_array_submit.sh --moo --rescan`
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮

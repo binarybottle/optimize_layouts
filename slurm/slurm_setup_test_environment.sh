@@ -1,5 +1,5 @@
 #!/bin/bash
-# slurm_setup_test_environment.sh
+# slurm/slurm_setup_test_environment.sh
 # Comprehensive test of HPC environment for keyboard optimization
 
 echo "🧪 Testing HPC Environment for Keyboard Optimization"
@@ -95,7 +95,7 @@ done
 
 # Test 9: File permissions
 echo -e "\n9. Testing File Permissions:"
-SCRIPTS=("slurm_array_processor.sh" "slurm_array_submit.sh" "parallel_optimize_layout.py")
+SCRIPTS=("slurm/slurm_array_processor.sh" "slurm/slurm_array_submit.sh" "optimize_layout.py")
 for script in "${SCRIPTS[@]}"; do
     if [ -f "$script" ]; then
         if [ -x "$script" ]; then
@@ -131,6 +131,6 @@ else
 fi
 
 echo -e "\n📋 Next Steps:"
-echo "   1. Test simple job: sbatch slurm_setup_test_simple_job.sh"
-echo "   2. Generate test config: python3 slurm_setup_test_generate_config.py"
-echo "   3. Run single optimization: sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh"
+echo "   1. Test simple job: sbatch slurm/slurm_setup_test_simple_job.sh"
+echo "   2. Generate test config: python3 slurm/slurm_setup_test_generate_config.py"
+echo "   3. Run single optimization: sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh"

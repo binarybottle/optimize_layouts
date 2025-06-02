@@ -1,5 +1,5 @@
 #!/bin/bash
-# slurm_setup_test_simple_job.sh
+# slurm/slurm_setup_test_simple_job.sh
 # Simple SLURM job to test compute node environment
 
 #SBATCH --time=00:05:00

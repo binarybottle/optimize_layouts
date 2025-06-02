@@ -1,16 +1,16 @@
 #!/bin/bash
 # Quota-aware array job submission for HPC optimization.
-# Calls slurm_array_processor.sh to process configurations as array tasks.
+# Calls slurm/slurm_array_processor.sh to process configurations as array tasks.
 
 # Use preset configurations for common scenarios:
-#   bash slurm_array_submit.sh --account "med250002p" --preset standard --moo
+#   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard --moo
 #
 # Custom resource allocation and optimization settings:  
-#   bash slurm_array_submit.sh --account "med250002p" --preset extreme-memory \
+#   bash slurm/slurm_array_submit.sh --account "med250002p" --preset extreme-memory \
 #       --moo --total-configs 11880 \
 #       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
 #
-#   bash slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo --processes 48
+#   bash slurm/slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo --processes 48
 
 # Default configuration (extreme-memory preset)
 #===================================================================
@@ -128,7 +128,7 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --help)
-            echo "Usage: bash slurm_array_submit.sh [OPTIONS]"
+            echo "Usage: bash slurm/slurm_array_submit.sh [OPTIONS]"
             echo ""
             echo "Resource Presets:"
             echo "  --preset standard         8 CPUs,  40GB, 2h,  RM-shared"
@@ -323,7 +323,7 @@ for ((i=CURRENT_BATCH-1; i<END_BATCH; i++)); do
         --account=$SLURM_ACCOUNT \
         --export="$EXPORT_VARS" \
         --array=$ARRAY_RANGE%$MAX_CONCURRENT \
-        slurm_array_processor.sh 2>&1)
+        slurm/slurm_array_processor.sh 2>&1)
     
     if [[ $JOB_OUTPUT == *"Submitted batch job"* ]]; then
         JOB_ID=$(echo "$JOB_OUTPUT" | grep -o '[0-9]\+')

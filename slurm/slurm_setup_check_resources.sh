@@ -1,5 +1,5 @@
 #!/bin/bash
-# slurm_setup_check_resources.sh
+# slurm/slurm_setup_check_resources.sh
 # Check SLURM resources, quotas, and system status
 
 echo "📊 SLURM Resource and Quota Check"

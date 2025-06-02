@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-slurm_generate_test_config.py
+slurm/slurm_generate_test_config.py
 Generate a minimal test configuration for HPC environment testing
 """
 
@@ -130,7 +130,7 @@ def main():
     print(f"   python3 optimize_layout.py --config test_config.yaml")
     print(f"")
     print(f"2. Test SLURM job:")
-    print(f"   sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh")
+    print(f"   sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh")
     print(f"")
     print(f"3. Check results:")
     print(f"   ls -la output/layouts/")

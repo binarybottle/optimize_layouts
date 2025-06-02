@@ -1,5 +1,5 @@
 #!/bin/bash
-# slurm_setup_run_all_tests.sh
+# slurm/slurm_setup_run_all_tests.sh
 # Orchestrates all HPC environment testing steps
 
 echo "🧪 Comprehensive HPC Testing Suite"
@@ -26,12 +26,12 @@ check_scripts() {
     local missing=0
     
     scripts=(
-        "slurm_setup_test_environment.sh"
-        "slurm_setup_test_simple_job.sh" 
-        "slurm_setup_test_generate_config.py"
-        "slurm_setup_test_scoring_consistency.py"
-        "slurm_setup_check_resources.sh"
-        "slurm_array_processor.sh"
+        "slurm/slurm_setup_test_environment.sh"
+        "slurm/slurm_setup_test_simple_job.sh" 
+        "slurm/slurm_setup_test_generate_config.py"
+        "slurm/slurm_setup_test_scoring_consistency.py"
+        "slurm/slurm_setup_check_resources.sh"
+        "slurm/slurm_array_processor.sh"
     )
     
     echo "Checking required scripts..."
@@ -75,7 +75,7 @@ check_scripts
 # Step 2: Environment check
 echo -e "\n🔍 Step 2: Environment Check"
 echo "=========================="
-bash slurm_setup_test_environment.sh $ALLOCATION
+bash slurm/slurm_setup_test_environment.sh $ALLOCATION
 
 if [ $? -ne 0 ]; then
     echo "❌ Environment check failed! Please fix issues before continuing."
@@ -85,12 +85,12 @@ fi
 # Step 3: Resource check  
 echo -e "\n🔍 Step 3: SLURM Resources Check"
 echo "============================="
-bash slurm_setup_check_resources.sh $ALLOCATION
+bash slurm/slurm_setup_check_resources.sh $ALLOCATION
 
 # Step 4: Generate test data
 echo -e "\n🔍 Step 4: Generate Test Data"
 echo "=========================="
-python3 slurm_setup_test_generate_config.py
+python3 slurm/slurm_setup_test_generate_config.py
 
 if [ $? -ne 0 ]; then
     echo "❌ Test data generation failed!"
@@ -108,7 +108,7 @@ module load anaconda3
 
 if [ $? -eq 0 ]; then
     echo "✅ anaconda3 module loaded for scoring test"
-    python3 slurm_setup_test_scoring_consistency.py
+    python3 slurm/slurm_setup_test_scoring_consistency.py
     
     if [ $? -eq 0 ]; then
         echo "✅ Scoring consistency validation passed!"
@@ -131,7 +131,7 @@ echo -e "\n🔍 Step 6: Compute Node Test"
 echo "========================="
 echo "Submitting test job to compute node..."
 
-JOB_OUTPUT=$(sbatch slurm_setup_test_simple_job.sh 2>&1)
+JOB_OUTPUT=$(sbatch slurm/slurm_setup_test_simple_job.sh 2>&1)
 JOB_STATUS=$?
 
 if [ $JOB_STATUS -eq 0 ]; then
@@ -204,7 +204,7 @@ echo -e "\n🔍 Step 8: SLURM Array Test"
 echo "========================"
 echo "Testing SLURM array processor..."
 
-ARRAY_OUTPUT=$(sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh 2>&1)
+ARRAY_OUTPUT=$(sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh 2>&1)
 ARRAY_STATUS=$?
 
 if [ $ARRAY_STATUS -eq 0 ]; then
@@ -289,7 +289,7 @@ echo "🚀 Your environment is ready for production runs!"
 echo ""
 echo "Next steps:"
 echo "  1. Generate your real configuration files"
-echo "  2. Run: bash slurm_array_submit.sh --preset extreme-memory --account $ALLOCATION --rescan"
+echo "  2. Run: bash slurm/slurm_array_submit.sh --preset extreme-memory --account $ALLOCATION --rescan"
 echo "  3. Monitor with: squeue -u $USER"
 echo ""
 echo "Cleanup test files with:"

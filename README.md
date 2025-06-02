@@ -226,7 +226,7 @@ by NSF and Pittsburgh Supercomputing Center computing resources
   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
 
   # Run all setup tests to make sure everything is working
-  python3 slurm_setup_run_all_tests.sh
+  python3 slurm/slurm_setup_run_all_tests.sh
   ```
 
 #### Generate config files and prepare to submit jobs
@@ -247,24 +247,24 @@ parameters without requiring manual script editing:
 ##### Basic usage with presets
   ```bash
   # Quick testing (small resources, short time)
-  bash slurm_array_submit.sh --preset debug --account "your_allocation_id"
+  bash slurm/slurm_array_submit.sh --preset debug --account "your_allocation_id"
 
   # Standard workload (moderate resources)
-  bash slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo
+  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo
 
   # High-memory intensive optimization  
-  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" \
+  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" \
       --moo --max-solutions 100
 
   # Check all available options
-  bash slurm_array_submit.sh --help
+  bash slurm/slurm_array_submit.sh --help
   ```
 
 ##### Custom resource allocation
   ```bash
   # Example: keyboard layout optimization settings (phase 1)
   # (Delete output/batches if using --rescan)
-  bash slurm_array_submit.sh \
+  bash slurm/slurm_array_submit.sh \
       --account "med250002p" \
       --preset extreme-memory \
       --moo \
@@ -290,13 +290,13 @@ parameters without requiring manual script editing:
   # (First make sure you have a config file at that location):
   ls output/configs1/config_1.yaml  # Check if file exists
   echo "1" > test_single.txt
-  sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm_array_processor.sh
+  sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh
 
   # Submit jobs with fresh configuration scan
-  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" --rescan
+  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" --rescan
 
   # Or continue from where you left off (uses existing batch files):
-  bash slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id"
+  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id"
   ```
 
 #### Monitor jobs

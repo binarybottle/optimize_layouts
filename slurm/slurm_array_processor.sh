@@ -1,7 +1,7 @@
 #!/bin/bash
 # Process a single configuration as an array task
 # This script is intended to be run as a SLURM array job, 
-# called by slurm_array_submit.sh.
+# called by slurm/slurm_array_submit.sh.
 # It calls optimize_layout.py for each configuration.
 
 # SLURM configuration - static parameters only
