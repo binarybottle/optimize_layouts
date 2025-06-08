@@ -48,13 +48,17 @@ QWERTY_LAYOUT = {
     '-': (0, 4, 'R'), '=': (0, 4, 'R'),
 }
 
-# Define home row and home block (easily accessible keys)
+# Define home row and home block (24 keys, excluding middle columns)
 HOME_ROW = 2
 HOME_BLOCK_KEYS = {
-    # Core home block - keys easily reachable from home position
-    'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',  # Home row
-    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p',  # Top row (direct reach)
-    'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/',  # Bottom row (direct reach)
+    # Left home block (12 keys) - excludes T, G, B
+    'q', 'w', 'e', 'r',          # Top left
+    'a', 's', 'd', 'f',          # Home left  
+    'z', 'x', 'c', 'v',          # Bottom left
+    # Right home block (12 keys) - excludes Y, H, N
+    'u', 'i', 'o', 'p',          # Top right
+    'j', 'k', 'l', ';',          # Home right
+    'm', ',', '.', '/',          # Bottom right
 }
 
 # Finger strength classification (1=index, 2=middle, 3=ring, 4=pinky)
@@ -109,7 +113,7 @@ def get_hand_from_pos(pos: str) -> str:
 class Dvorak10Scorer:
     """Implements the Dvorak-10 scoring model."""
     
-    def __init__(self, layout_mapping: Dict[str, str], text: str = None):
+    def __init__(self, layout_mapping: Dict[str, str], text: str):
         """
         Initialize scorer with layout mapping and optional text.
         
@@ -118,28 +122,60 @@ class Dvorak10Scorer:
             text: Optional text to analyze (if None, uses layout_mapping keys)
         """
         self.layout_mapping = layout_mapping
-        self.text = text if text else ''.join(layout_mapping.keys())
+        self.text = text
+        
+        # Flow-based digraphs (for criteria 1-2) - ignores word boundaries
         self.digraphs = self._extract_digraphs()
         
+        # Word-aware digraphs (for criteria 3-10) - respects word boundaries  
+        self.word_digraphs = self._extract_word_digraphs()
+
     def _extract_digraphs(self) -> List[Tuple[str, str]]:
-        """Extract letter digraphs from text."""
-        # Remove spaces and non-letter characters, convert to lowercase
-        clean_text = re.sub(r'[^a-zA-Z]', '', self.text.lower())
+        """Extract digraphs for typing flow analysis (criteria 1-2) - ignores word boundaries."""
         digraphs = []
         
-        for i in range(len(clean_text) - 1):
-            char1, char2 = clean_text[i], clean_text[i + 1]
-            if char1 in self.layout_mapping and char2 in self.layout_mapping:
+        # Convert text to lowercase and filter to only characters in layout_mapping
+        text_lower = self.text.lower()
+        filtered_chars = [char for char in text_lower if char in self.layout_mapping]
+        
+        # Create digraphs from consecutive characters (ignoring spaces)
+        for i in range(len(filtered_chars) - 1):
+            char1, char2 = filtered_chars[i], filtered_chars[i + 1]
+            digraphs.append((char1, char2))
+        
+        return digraphs
+
+    def _extract_word_digraphs(self) -> List[Tuple[str, str]]:
+        """Extract digraphs for finger coordination analysis (criteria 3-10) - respects word boundaries."""
+        import re
+        
+        digraphs = []
+        
+        # Split text into words (separated by spaces or other word-breaking punctuation)
+        words = re.split(r'[\s\n\r\t]+', self.text.lower())
+        
+        for word in words:
+            if not word:  # Skip empty strings
+                continue
+                
+            # Filter characters to only those in our layout mapping
+            filtered_chars = [char for char in word if char in self.layout_mapping]
+            
+            # Create digraphs within this word only
+            for i in range(len(filtered_chars) - 1):
+                char1, char2 = filtered_chars[i], filtered_chars[i + 1]
                 digraphs.append((char1, char2))
         
         return digraphs
-    
+
     def get_key_counts(self) -> Dict[str, int]:
-        """Get frequency count of each character."""
+        """Get frequency count of each character in layout_mapping."""
         counts = defaultdict(int)
-        clean_text = re.sub(r'[^a-zA-Z]', '', self.text.lower())
         
-        for char in clean_text:
+        # Convert text to lowercase and count only characters in layout_mapping
+        text_lower = self.text.lower()
+        
+        for char in text_lower:
             if char in self.layout_mapping:
                 counts[char] += 1
         
@@ -212,12 +248,12 @@ class Dvorak10Scorer:
     def score_3_different_fingers(self) -> Tuple[float, Dict]:
         """Criterion 3: Don't use the same finger."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'same_finger': 0, 'different_finger': 0, 'digraphs': []}
+            return 0.0, {'same_finger': 0, 'different_finger': 0, 'digraphs': []}
         
         same_finger = different_finger = 0
         details = {'same_finger_digraphs': [], 'different_finger_digraphs': []}
@@ -248,29 +284,23 @@ class Dvorak10Scorer:
     
     def score_4_non_adjacent_fingers(self) -> Tuple[float, Dict]:
         """Criterion 4: Use non-adjacent fingers (same-hand digraphs only)."""
-        same_hand_digraphs = []
-        
-        # Get same-hand digraphs first  
-        for char1, char2 in self.digraphs:
-            pos1 = self.layout_mapping.get(char1, 'j')
-            pos2 = self.layout_mapping.get(char2, 'j')
-            if same_hand(pos1, pos2):
-                same_hand_digraphs.append((char1, char2))
+        same_hand_digraphs = [
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
+            if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
+        ]
         
         if not same_hand_digraphs:
-            return 1.0, {'adjacent': 0, 'non_adjacent': 0, 'same_finger': 0, 'digraphs': []}
+            return 0.0, {'adjacent': 0, 'non_adjacent': 0, 'same_finger': 0, 'digraphs': []}
         
         adjacent = non_adjacent = same_finger_count = 0
         details = {'adjacent_digraphs': [], 'non_adjacent_digraphs': [], 'same_finger_digraphs': []}
         
         for char1, char2 in same_hand_digraphs:
-            pos1 = self.layout_mapping.get(char1, 'j')
-            pos2 = self.layout_mapping.get(char2, 'j')
+            pos1 = self.layout_mapping[char1]
+            pos2 = self.layout_mapping[char2]
             
-            finger1 = get_finger_from_pos(pos1)
-            finger2 = get_finger_from_pos(pos2)
-            hand1 = get_hand_from_pos(pos1)
-            hand2 = get_hand_from_pos(pos2)
+            row1, finger1, hand1 = get_key_info(pos1)
+            row2, finger2, hand2 = get_key_info(pos2)
             
             if finger1 == finger2:
                 same_finger_count += 1
@@ -291,7 +321,7 @@ class Dvorak10Scorer:
         details['total_different_finger'] = different_finger_total
         
         if different_finger_total == 0:
-            return 1.0, details
+            return 0.0, details
         
         # Score: 1 - A/(A + !A) among different-finger digraphs only
         score = 1 - (adjacent / different_finger_total)
@@ -300,12 +330,12 @@ class Dvorak10Scorer:
     def score_5_home_block(self) -> Tuple[float, Dict]:
         """Criterion 5: Stay within the home block (same-hand digraphs only)."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'outside_home_block': 0, 'inside_home_block': 0, 'digraphs': []}
+            return 0.0, {'outside_home_block': 0, 'inside_home_block': 0, 'digraphs': []}
         
         outside = inside = 0
         details = {'outside_digraphs': [], 'inside_digraphs': []}
@@ -313,10 +343,13 @@ class Dvorak10Scorer:
         for char1, char2 in same_hand_digraphs:
             pos1, pos2 = self.layout_mapping[char1], self.layout_mapping[char2]
             
-            # Compare lowercase positions to lowercase HOME_BLOCK_KEYS
-            if pos1.lower() not in HOME_BLOCK_KEYS or pos2.lower() not in HOME_BLOCK_KEYS:
+            # Check if both positions are in home block (case-insensitive)
+            pos1_in_home = pos1.lower() in HOME_BLOCK_KEYS
+            pos2_in_home = pos2.lower() in HOME_BLOCK_KEYS
+            
+            if not pos1_in_home or not pos2_in_home:
                 outside += 1
-                details['outside_digraphs'].append((char1, char2, pos1, pos2))
+                details['outside_digraphs'].append((char1, char2, pos1, pos2, pos1_in_home, pos2_in_home))
             else:
                 inside += 1
                 details['inside_digraphs'].append((char1, char2, pos1, pos2))
@@ -326,19 +359,22 @@ class Dvorak10Scorer:
         details['inside_home_block'] = inside
         details['total_same_hand'] = total
         
+        if total == 0:
+            return 1.0, details
+        
         # Score: 1 - O/(O + I)
         score = 1 - (outside / total)
         return score, details
-    
+
     def score_6_dont_skip_home(self) -> Tuple[float, Dict]:
         """Criterion 6: Don't skip over the home row."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'jump_home': 0, 'dont_jump_home': 0, 'digraphs': []}
+            return 0.0, {'jump_home': 0, 'dont_jump_home': 0, 'digraphs': []}
         
         jump = dont_jump = 0
         details = {'jump_digraphs': [], 'no_jump_digraphs': []}
@@ -371,13 +407,13 @@ class Dvorak10Scorer:
     def score_7_same_row(self) -> Tuple[float, Dict]:
         """Criterion 7: Stay in the same row."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'different_row': 0, 'same_row': 0, 'digraphs': []}
-        
+            return 0.0, {'different_row': 0, 'same_row': 0, 'digraphs': []}
+
         different_row = same_row = 0
         details = {'different_row_digraphs': [], 'same_row_digraphs': []}
         
@@ -408,13 +444,13 @@ class Dvorak10Scorer:
     def score_8_include_home(self) -> Tuple[float, Dict]:
         """Criterion 8: Use the home row (same-hand digraphs only)."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'outside_home_row': 0, 'include_home_row': 0, 'digraphs': []}
-        
+            return 0.0, {'outside_home_row': 0, 'include_home_row': 0, 'digraphs': []}
+
         outside = include = 0
         details = {'outside_digraphs': [], 'include_digraphs': []}
         
@@ -441,29 +477,23 @@ class Dvorak10Scorer:
     
     def score_9_roll_inward(self) -> Tuple[float, Dict]:
         """Criterion 9: Strum inward (roll in, not out) - same-hand digraphs only."""
-        same_hand_digraphs = []
-        
-        # Get same-hand digraphs first
-        for char1, char2 in self.digraphs:
-            pos1 = self.layout_mapping.get(char1, 'j')
-            pos2 = self.layout_mapping.get(char2, 'j')
-            if same_hand(pos1, pos2):
-                same_hand_digraphs.append((char1, char2))
+        same_hand_digraphs = [
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
+            if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
+        ]
         
         if not same_hand_digraphs:
-            return 1.0, {'outward': 0, 'inward': 0, 'same_finger': 0, 'digraphs': []}
-        
+            return 0.0, {'outward': 0, 'inward': 0, 'same_finger': 0, 'digraphs': []}
+
         outward = inward = same_finger_count = 0
         details = {'outward_digraphs': [], 'inward_digraphs': [], 'same_finger_digraphs': []}
         
         for char1, char2 in same_hand_digraphs:
-            pos1 = self.layout_mapping.get(char1, 'j')
-            pos2 = self.layout_mapping.get(char2, 'j')
+            pos1 = self.layout_mapping[char1]
+            pos2 = self.layout_mapping[char2]
             
-            finger1 = get_finger_from_pos(pos1)
-            finger2 = get_finger_from_pos(pos2)
-            hand1 = get_hand_from_pos(pos1)
-            hand2 = get_hand_from_pos(pos2)
+            row1, finger1, hand1 = get_key_info(pos1)
+            row2, finger2, hand2 = get_key_info(pos2)
             
             roll_dir = get_roll_direction(finger1, finger2, hand1, hand2)
             
@@ -486,7 +516,7 @@ class Dvorak10Scorer:
         details['total_different_finger'] = different_finger_total
         
         if different_finger_total == 0:
-            return 1.0, details
+            return 0.0, details
         
         # Score: 1 - O/(O + I) among different-finger digraphs only
         score = 1 - (outward / different_finger_total)
@@ -495,13 +525,13 @@ class Dvorak10Scorer:
     def score_10_strong_fingers(self) -> Tuple[float, Dict]:
         """Criterion 10: Use strong fingers (same-hand digraphs only)."""
         same_hand_digraphs = [
-            (c1, c2) for c1, c2 in self.digraphs
+            (c1, c2) for c1, c2 in self.word_digraphs  # Use word_digraphs
             if get_key_info(self.layout_mapping[c1])[2] == get_key_info(self.layout_mapping[c2])[2]
         ]
         
         if not same_hand_digraphs:
-            return 1.0, {'weak_finger': 0, 'strong_finger': 0, 'digraphs': []}
-        
+            return 0.0, {'weak_finger': 0, 'strong_finger': 0, 'digraphs': []}
+
         weak = strong = 0
         details = {'weak_digraphs': [], 'strong_digraphs': []}
         
