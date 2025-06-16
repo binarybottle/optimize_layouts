@@ -3,8 +3,8 @@
 # Permutation & Combination Calculator
 # PERMUTATIONS (order matters): P(n,r) = n! / (n-r)!
 # COMBINATIONS (order doesn't matter): C(n,r) = n! / (r! × (n-r)!)
-# Usage: ./permutation_calc.sh <total_positions> <items_to_arrange> [--combinations]
-# Example: ./permutation_calc.sh 16 3  (3 letters in 16 keys, ORDER MATTERS)
+# Usage: ./calc_positions.sh <total_positions> <items_to_arrange> [--combinations]
+# Example: ./calc_positions.sh 16 3  (3 letters in 16 keys, ORDER MATTERS)
 
 # Colors for output
 RED='\033[0;31m'

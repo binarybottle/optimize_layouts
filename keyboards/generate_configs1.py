@@ -31,13 +31,15 @@ CONFIG_FILE = '../config.yaml'
 # Example with 24 items/positions: 
 #    etaoinsrhldcumfpgwybvkxj FDESVRWACQZX JKILMUO;,P/.
 # Optimize arrangements of 16 items by running fixed items in parallel:  
-# 11 items:         79,833,600 permutations (with 5 fixed items)
-# 12 items:        479,001,600 permutations (with 4 fixed items)
+# 11 items:         79,833,600 permutations (with 5 fixed items): 11,880 files
+# 12 items:        479,001,600 permutations (with 4 fixed items): 95,040 files
 # 13 items:      6,227,020,800 permutations (with 3 fixed items)
 # 14 items:     87,178,291,200 permutations (with 2 fixed items)
 # 16 items: 20,922,789,888,000 permutations
-items_assigned  = "etao"         # 4 most frequent letters (etao in English)
-items_to_assign = "insrhldcumfp" # next 12 most frequent letters (insrhldcumfp in English)
+nfixed_items = 4  # Number of fixed items in the first round (4 or 5)
+top_16_letters = "etaoinsrhldcumfpg" # 16 most frequent letters in English
+items_assigned  = top_16_letters[:nfixed_items]   # First letters to assign
+items_to_assign = top_16_letters[nfixed_items:16] # Remaining of 16 letters to assign
 n_assign_first_round = 1
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
@@ -76,17 +78,20 @@ def generate_constraint_sets():
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
-                #pos2, pos3, pos4, pos5 = permN
-                pos2, pos3, pos4 = permN
+                if nfixed_items == 4:
+                    pos2, pos3, pos4 = permN
+                elif nfixed_items == 5:
+                    pos2, pos3, pos4, pos5 = permN
                 
                 # Create final position assignments
-                positions = {items_assigned[0]: pos1, 
-                             items_assigned[1]: pos2, 
-                             items_assigned[2]: pos3, 
-                             items_assigned[3]: pos4 #, 
-                             #items_assigned[4]: pos5
-                            }
-                
+                positions = {items_assigned[0]: pos1,
+                             items_assigned[1]: pos2,
+                             items_assigned[2]: pos3,
+                             items_assigned[3]: pos4
+                             }
+                if nfixed_items == 5:
+                    positions[items_assigned[4]] = pos5
+
                 # Create the positions_assigned string (must match the order of items_assigned)
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])
                 

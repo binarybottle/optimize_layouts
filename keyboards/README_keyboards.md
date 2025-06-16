@@ -99,7 +99,8 @@ Command for optimizing layouts with constraints specified in a configuration fil
     bash slurm/slurm_array_submit.sh --moo --rescan
   ```
 
-  Following the example, 12 letters are optimally arranged in 12 available keys:
+  12 letters are then optimally arranged in 12 available keys (479,001,600 permutations) 
+  for each of the 11,880 configurations above:
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮
@@ -112,7 +113,7 @@ Command for optimizing layouts with constraints specified in a configuration fil
   ```
 
 ### Step 2. Optimally arrange the remaining letters.
-The following steps act on each of Step 1's 11,880 configuration files. 
+The following steps act on each of Step 1's output files. 
 
   ##### 2.1. Remove 2 letters from the 2 least comfortable of the 16 keys.
 
@@ -133,7 +134,7 @@ The following steps act on each of Step 1's 11,880 configuration files.
   ```
 
   ##### 2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.
-  There are XXXX permutations of 10 letters in 10 keys:
+  There are 3,628,800 permutations of 10 letters in 10 keys.
 
   Run the same command as above (after renaming Step 1 output folders): 
   `python optimize_layout.py` or 
