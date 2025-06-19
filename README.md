@@ -266,13 +266,13 @@ parameters without requiring manual script editing:
   # (Delete output/batches if using --rescan)
   bash slurm/slurm_array_submit.sh \
       --account "med250002p" \
-      --preset extreme-memory \
+      --preset standard \
       --moo \
-      --total-configs 11880 \
-      --concurrent 8 \
-      --cpus 24 \
-      --mem 500GB \
-      --time 4:00:00 \
+      --total-configs 95040 \
+      --concurrent 4 \
+      --cpus 8 \
+      --mem 2GB \
+      --time 2:00:00 \
       --batch-size 500 \
       --array-size 500 \
       --chunk-size 2 \
@@ -293,10 +293,10 @@ parameters without requiring manual script editing:
   sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh
 
   # Submit jobs with fresh configuration scan
-  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" --rescan
+  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx --rescan
 
   # Or continue from where you left off (uses existing batch files):
-  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id"
+  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs
   ```
 
 #### Monitor jobs

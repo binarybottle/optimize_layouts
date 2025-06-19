@@ -65,7 +65,7 @@ def print_detailed_breakdown(complete_mapping: dict, normalized_scores: tuple):
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
-        description="Calculate COMPLETE layout score including all items and pairs.",
+        description="Calculate complete layout score including all items and pairs.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:

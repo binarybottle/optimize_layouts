@@ -37,10 +37,19 @@ For the following, we:
   Use multi-objective optimization (MOO, with item- and item-pair objectives) 
   to find a Pareto front of equally viable, 16-letter/key layout candidates.
     1. To parallelize the branch-and-bound, depth-first search, 
-       fix the 4 most frequent letters in every possible arrangement (11,880) 
+       fix the 5 most frequent letters in every possible arrangement (95,040) 
        within the 12 most comfortable keys (half of our 24 keys in the home blocks).
-    2. For each 4-letter arrangement, use MOO to optimally arrange 12 letters 
-       in the 12 available of the 16 keys.
+    2. For each of the 95,040 possible arrangements of 5 letters, 
+       use MOO to optimally arrange 12 letters in the 12 available of 16 keys. 
+       The result is 95,040 Pareto fronts of possible solutions.
+
+
+
+OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
+
     3. Select the highest-scoring 16-letter/key layouts.
         1. For each MOO objective, replace scores with their rankings.
         2. Sum the rankings for each layout.
@@ -52,6 +61,14 @@ For the following, we:
        in the selected layouts (to explore a broader solution space).
     2. For each resulting 14-letter/key layout, optimally arrange the 10 
        (out of 24) remaining letters in the 10 remaining keys.
+
+
+
+
+OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
+
+
+
     3. Select the highest-scoring 24-letter/key layouts.
         1. Repeat Step 2 for 24-letter/key layouts.
         2. Select the final layout by ?????? 
@@ -65,24 +82,22 @@ For the following, we:
 ### Step 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
 
   ##### 1.1. Fix 4 of the letters in every possible arrangement within 12 keys.
-  There are 11,880 permutations of 4 letters in 12 keys 
-  (1,365 ways to choose 4 keys from 12 keys, 24 ways to arrange 4 letters in those 4 keys).
-
-  Command for generating the 11,880 configuration files:
+  There are 95,040 permutations of 5 letters in 12 keys.
+  Command for generating the 95,040 configuration files:
 
   ```bash
     cd keyboards; python generate_configs1.py
   ```
 
-  In the example below, the 4 most frequent letters (etao in English)
-  are assigned to 4 of the 12 most comfortable keys in the home blocks
+  In the example below, the 5 most frequent letters (etaoi in English)
+  are assigned to 5 of the 12 most comfortable keys in the home blocks
   (available keys are empty; restricted keys are represented by "|||||"):
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │||||||     │  o  │     │    │     │     │     │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │     │     │  e  │  a  │    │     │  t  │     │     │
+    │     │  i  │  e  │  a  │    │     │  t  │     │     │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │|||||||||||||||||│     │    │     │|||||||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
@@ -95,12 +110,12 @@ Command for optimizing layouts with constraints specified in a configuration fil
   ```bash
     python optimize_layout.py
 
-    # Script to parallelize across the 11,880 configuration files:
+    # Script to parallelize across the 95,040 configuration files:
     bash slurm/slurm_array_submit.sh --moo --rescan
   ```
 
   12 letters are then optimally arranged in 12 available keys (479,001,600 permutations) 
-  for each of the 11,880 configurations above:
+  for each of the 95,040 configurations above:
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮

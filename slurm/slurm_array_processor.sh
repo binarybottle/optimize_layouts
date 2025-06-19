@@ -60,8 +60,8 @@ if [ ! -f "${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX}" ]; then
     exit 1
 fi
 
-# Check if output already exists
-FIND_PATTERN="*results_${CONFIG_ID}_[0-9]*"
+# Check if output already exists (any file with this config ID)
+FIND_PATTERN="*config_${CONFIG_ID}_*"
 if find output/layouts -name "$FIND_PATTERN*.csv" | grep -q .; then
     echo "Output file already exists for config ${CONFIG_ID}. Skipping optimization."
     exit 0

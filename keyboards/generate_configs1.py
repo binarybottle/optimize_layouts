@@ -36,7 +36,7 @@ CONFIG_FILE = '../config.yaml'
 # 13 items:      6,227,020,800 permutations (with 3 fixed items)
 # 14 items:     87,178,291,200 permutations (with 2 fixed items)
 # 16 items: 20,922,789,888,000 permutations
-nfixed_items = 4  # Number of fixed items in the first round (4 or 5)
+nfixed_items = 5  # Number of fixed items in the first round (4 or 5)
 top_16_letters = "etaoinsrhldcumfpg" # 16 most frequent letters in English
 items_assigned  = top_16_letters[:nfixed_items]   # First letters to assign
 items_to_assign = top_16_letters[nfixed_items:16] # Remaining of 16 letters to assign

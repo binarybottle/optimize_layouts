@@ -6,23 +6,23 @@
 #   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard --moo
 #
 # Custom resource allocation and optimization settings:  
-#   bash slurm/slurm_array_submit.sh --account "med250002p" --preset extreme-memory \
-#       --moo --total-configs 11880 \
+#   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard \
+#       --moo --total-configs 95040 \
 #       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
 #
-#   bash slurm/slurm_array_submit.sh --cpus 16 --mem 200GB --time 6:00:00 --moo --processes 48
+#   bash slurm/slurm_array_submit.sh --cpus 16 --mem 40GB --time 2:00:00 --moo --processes 24
 
-# Default configuration (extreme-memory preset)
+# Default configuration (standard preset)
 #===================================================================
-SLURM_CPUS=24
-SLURM_MEM="500GB"
-SLURM_TIME="4:00:00"
-SLURM_PARTITION="EM"
+SLURM_CPUS=8
+SLURM_MEM="40GB"
+SLURM_TIME="2:00:00"
+SLURM_PARTITION="RM-shared"  # Default partition
 SLURM_ACCOUNT="med250002p"               
-TOTAL_CONFIGS=11880                
+TOTAL_CONFIGS=95040                
 BATCH_SIZE=500                     
 ARRAY_SIZE=500                     
-MAX_CONCURRENT=8                   
+MAX_CONCURRENT=4                   
 CHUNK_SIZE=2                       
 CONFIG_PREFIX="output/configs1/config_"  # Config file path prefix
 CONFIG_SUFFIX=".yaml"                    # Config file suffix
@@ -36,7 +36,7 @@ OPT_PROCESSES=""
 
 # Resource presets
 declare -A PRESETS
-PRESETS[standard]="8,40GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
+PRESETS[standard]="8,2GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
 PRESETS[extreme-memory]="24,500GB,4:00:00,EM,8"        # Maximum performance
 PRESETS[debug]="4,20GB,0:30:00,RM-shared,2"            # Quick testing
 
@@ -214,8 +214,8 @@ if [ ! -f "$CURRENT_BATCH_FILE" ] || [ "$RESCAN" = true ]; then
             continue
         fi
         
-        # Check if output already exists
-        FIND_PATTERN="layout_results_${CONFIG_ID}_[0-9]*"
+        # Check if output already exists (any file with this config ID)
+        FIND_PATTERN="*config_${CONFIG_ID}_*"
         if find output/layouts -name "$FIND_PATTERN*.csv" 2>/dev/null | grep -q .; then
             continue  # Skip if output exists
         fi
