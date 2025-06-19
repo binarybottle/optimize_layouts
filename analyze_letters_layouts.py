@@ -1,3 +1,34 @@
+#!/usr/bin/env python3
+"""
+Analyze Keyboard Layout Target Matches
+
+This script processes keyboard layout optimization results to count how many
+target item-position matches occur in each layout. It's designed to analyze
+specific combinations like vowels (e,a,o,i) placed on home row positions.
+
+Features:
+- Processes multiple CSV files containing layout results
+- Counts target item-position matches for each individual layout
+- Handles special character replacements (semicolon, comma, etc.)
+- Generates summary statistics and distributions
+- Exports results with one row per layout
+
+Target Analysis:
+- Target items: e, a, o, i (common vowels)
+- Target positions: U, I, O, J, K, L, ;, M (right-hand home/adjacent keys)
+
+Input:
+- Directory containing CSV files with layout results
+- Expected format: "Items","Positions" columns with layout data
+
+Output:
+- layout_match_counts.csv (one row per layout with match counts)
+- Console summary with distribution statistics
+
+Usage:
+    python analyze_letters_layouts.py
+    # (will prompt for directory path)
+"""
 import pandas as pd
 import os
 import glob

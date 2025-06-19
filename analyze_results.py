@@ -1,23 +1,43 @@
 #!/usr/bin/env python3
 """
-Analyze layout optimization results and create scatter plots of scores.
+Analyze Layout Optimization Results and Create Visualizations
+
+This script analyzes keyboard layout optimization results and creates scatter plots
+of scores with support for both edian-MAD analysis and full dataset analysis. 
+Supports both MOO (Multi-Objective Optimization) and 
+SOO (Single-Objective Optimization) result formats.
+
+Analysis Modes:
+1. Full Analysis: Loads all layouts, creates scatter plots, correlations, summaries
+2. Median-MAD Mode: Analysis of file-level statistics with error bars
+
+Key Features:
+- Supports multiple file patterns (moo_results_config_*.csv, soo_results_config_*.csv)
+- Handles both old and new CSV formats automatically
+- Creates scatter plots sorted by different score types
+- Generates median-MAD plots with error bars for large datasets
+- Validates score combination consistency
+
+Plot Types Generated:
+Standard Mode:
+- scores_by_total.png (layouts sorted by total score)
+- scores_by_item.png (layouts sorted by item score)  
+- scores_by_pair.png (layouts sorted by item-pair score)
+- 1key_vs_2key.png (correlation plot)
 
 Median-MAD Mode:
-  - 6 median-MAD plots (3 score types × 2 sorting methods):
-    - median_by_total.png & median_by_total_sorted.png
-    - median_by_item.png & median_by_item_sorted.png
-    - median_by_item_pair.png & median_by_item_pair_sorted.png
-Without the --median-mad flag, you get 3 plots:
-    - scores_by_total.png - Scatter plot of all individual layouts sorted by total score
-    - scores_by_item.png  - Scatter plot sorted by item score
-    - scores_by_pair.png  - Scatter plot sorted by pair score
+- median_by_total.png & median_by_total_sorted.png
+- median_by_item.png & median_by_item_sorted.png
+- median_by_item_pair.png & median_by_item_pair_sorted.png
 
-python3 analyze_results.py --median-mad
-python3 analyze_results.py --results-dir output/layouts
-python3 analyze_results.py --file-pattern "moo_results_config_*.csv"
-python3 analyze_results.py --max-files 1000
-python3 analyze_results.py --debug
+Usage:
+    python3 analyze_results.py [options]
 
+Examples:
+    python3 analyze_results.py --median-mad
+    python3 analyze_results.py --results-dir output/layouts
+    python3 analyze_results.py --file-pattern "moo_results_config_*.csv"
+    python3 analyze_results.py --max-files 1000 --debug
 """
 import os
 import pandas as pd

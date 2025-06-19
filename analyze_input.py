@@ -2,11 +2,32 @@
 """
 Compare Raw and Normalized Input Data
 
-This script compares raw input data with its normalized version through visual plots.
-It reads raw file paths from config.yaml and handles cases where raw files may not be available.
+This script compares raw input data with its normalized version through visual
+plots and statistical analysis. It reads raw file paths from config.yaml.
+
+Features:
+- Loads both raw and normalized score data using config infrastructure
+- Creates distribution comparison plots (raw vs normalized)
+- Generates top scores visualizations for normalized data  
+- Handles item scores, item-pair scores, position scores, and position-pair scores
+- Produces summary reports with statistics
+
+Input Files (via config.yaml):
+- Raw data: item frequencies, item-pair frequencies, position scores, position-pair scores
+- Normalized data: corresponding normalized CSV files
+
+Output Files:
+- Distribution comparison plots (*_distribution_comparison.png)
+- Top scores plots (*_normalized_top*.png)  
+- Summary report (normalization_summary.txt)
 
 Usage:
-    python analyze_input.py [--config config.yaml --output-dir output/normalized_input/plots]
+    python analyze_input.py [--config config.yaml] [--output-dir output/normalized_input/plots]
+
+Examples:
+    python analyze_input.py
+    python analyze_input.py --config config.yaml
+    python analyze_input.py --output-dir output/normalized_input/plots
 """
 import os
 import argparse

@@ -1,3 +1,31 @@
+#!/usr/bin/env python3
+"""
+Analyze Letter-Bigram Frequency Relationships
+
+This script analyzes the cumulative bigram frequency contribution of letters,
+ordered from most frequent to least frequent. It calculates how adding each
+letter progressively increases coverage of total bigram frequency and identifies
+which letters contribute least to bigram formation.
+
+Key Features:
+- Loads letter frequencies and bigram frequencies from CSV files
+- Calculates cumulative bigram coverage as letters are added
+- Identifies least contributing letters for bigram formation
+- Generates comprehensive visualizations (9-panel plot)
+- Exports detailed analysis to CSV and summary reports
+
+Input Files Required:
+- input/letter_frequencies_english.csv
+- input/letter_pair_frequencies_english.csv
+
+Output Files:
+- cumulative_bigram_analysis.csv (detailed results)
+- letter_bigram_analysis.png (visualizations)
+
+Usage:
+    python analyze_frequencies.py
+
+"""
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
