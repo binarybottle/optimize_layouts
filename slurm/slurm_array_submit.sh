@@ -2,16 +2,14 @@
 # Quota-aware array job submission for HPC optimization.
 # Calls slurm/slurm_array_processor.sh to process configurations as array tasks.
 
-# Use preset configurations for common scenarios:
-#   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard --moo
-#
-# Custom resource allocation and optimization settings:  
+# Use preset configurations for common scenarios (--rescan to rescan configurations):
 #   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard \
-#       --moo --total-configs 95040 \
-#       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
+#     --moo --total-configs 95040 --rescan
 #
-#   bash slurm/slurm_array_submit.sh --cpus 6 --mem 16GB --time 2:00:00 --moo
+# Check all available options with custom resource allocation:
+#   bash slurm/slurm_array_submit.sh --help
 
+#===================================================================
 # Default configuration (standard preset)
 #===================================================================
 SLURM_CPUS=6
