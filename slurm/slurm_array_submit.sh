@@ -10,20 +10,20 @@
 #       --moo --total-configs 95040 \
 #       --config-prefix "output/configs1/config_" --config-suffix ".yaml" 
 #
-#   bash slurm/slurm_array_submit.sh --cpus 16 --mem 40GB --time 2:00:00 --moo --processes 24
+#   bash slurm/slurm_array_submit.sh --cpus 6 --mem 16GB --time 2:00:00 --moo
 
 # Default configuration (standard preset)
 #===================================================================
-SLURM_CPUS=8
-SLURM_MEM="40GB"
-SLURM_TIME="2:00:00"
-SLURM_PARTITION="RM-shared"  # Default partition
+SLURM_CPUS=6
+SLURM_MEM="16GB"
+SLURM_TIME="1:00:00"
+SLURM_PARTITION="RM"                     # Default partition
 SLURM_ACCOUNT="med250002p"               
 TOTAL_CONFIGS=95040                
 BATCH_SIZE=500                     
 ARRAY_SIZE=500                     
-MAX_CONCURRENT=4                   
-CHUNK_SIZE=2                       
+MAX_CONCURRENT=3                         # --concurrent limit for array jobs               
+CHUNK_SIZE=2                             # Number of batches to submit at once                       
 CONFIG_PREFIX="output/configs1/config_"  # Config file path prefix
 CONFIG_SUFFIX=".yaml"                    # Config file suffix
 
@@ -31,14 +31,15 @@ CONFIG_SUFFIX=".yaml"                    # Config file suffix
 OPT_MODE="--moo"                         # Default to MOO
 OPT_MAX_SOLUTIONS=""
 OPT_N_SOLUTIONS=""
-OPT_TIME_LIMIT=""
-OPT_PROCESSES=""
+OPT_TIME_LIMIT=""                    
+OPT_PROCESSES="2"                        # Default number of processes per task
 
 # Resource presets
 declare -A PRESETS
-PRESETS[standard]="8,2GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
+#PRESETS[standard]="8,2GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
+PRESETS[standard]="6,16GB,2:00:00,RM,3"                # cpus,mem,time,partition,concurrent
 PRESETS[extreme-memory]="24,500GB,4:00:00,EM,8"        # Maximum performance
-PRESETS[debug]="4,20GB,0:30:00,RM-shared,2"            # Quick testing
+PRESETS[debug]="4,2GB,0:30:00,RM-shared,2"             # Quick testing
 
 # Parse command line arguments
 while [[ $# -gt 0 ]]; do

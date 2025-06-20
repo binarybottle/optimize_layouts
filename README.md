@@ -240,45 +240,17 @@ The submission system supports flexible resource allocation and optimization
 parameters without requiring manual script editing:
 
 ##### Available resource presets
-  - debug: 4 CPUs, 20GB, 30min, RM-shared (for testing)
-  - standard: 8 CPUs, 40GB, 2h, RM-shared (moderate workloads)
-  - extreme-memory: 24 CPUs, 500GB, 4h, EM (maximum performance)
+  - standard: 6 CPUs, 16GB, 2h, RM, 3 concurrent (moderate workloads)
+  - extreme-memory: 24 CPUs, 500GB, 4h, EM, 8 concurrent (maximum performance)
+  - debug: 4 CPUs, 2GB, 30min, RM-shared, 2 concurrent (for testing)
 
-##### Basic usage with presets
+##### Basic usage with standard preset
   ```bash
-  # Quick testing (small resources, short time)
-  bash slurm/slurm_array_submit.sh --preset debug --account "your_allocation_id"
+  # Standard workload (delete output/batches if using --rescan)
+  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo --total-configs 95040 --rescan
 
-  # Standard workload (moderate resources)
-  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo
-
-  # High-memory intensive optimization  
-  bash slurm/slurm_array_submit.sh --preset extreme-memory --account "your_allocation_id" \
-      --moo --max-solutions 100
-
-  # Check all available options
+  # Check all available options with custom resource allocation
   bash slurm/slurm_array_submit.sh --help
-  ```
-
-##### Custom resource allocation
-  ```bash
-  # Example: keyboard layout optimization settings (phase 1)
-  # (Delete output/batches if using --rescan)
-  bash slurm/slurm_array_submit.sh \
-      --account "med250002p" \
-      --preset standard \
-      --moo \
-      --total-configs 95040 \
-      --concurrent 4 \
-      --cpus 8 \
-      --mem 2GB \
-      --time 2:00:00 \
-      --batch-size 500 \
-      --array-size 500 \
-      --chunk-size 2 \
-      --config-prefix "output/configs1/config_" \
-      --config-suffix ".yaml" \
-      --rescan
   ```
 
 #### Run scripts
@@ -296,7 +268,7 @@ parameters without requiring manual script editing:
   bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx --rescan
 
   # Or continue from where you left off (uses existing batch files):
-  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs
+  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx
   ```
 
 #### Monitor jobs
