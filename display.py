@@ -142,7 +142,8 @@ def print_soo_results(results: List[Tuple[float, Dict[str, str], Dict]],
         # Build complete item->position mapping
         complete_mapping = {}
         if opt.items_assigned:
-            complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
+            complete_mapping.update(dict(zip(opt.items_assigned, [pos.upper() for pos in opt.positions_assigned])))
+
         complete_mapping.update({k: v.upper() for k, v in mapping.items()})
         
         # Calculate TRUE complete layout score using centralized function
@@ -267,9 +268,15 @@ def save_soo_results_to_csv(results: List[Tuple[float, Dict[str, str], Dict]],
             # Build complete mappings
             complete_mapping = {}
             if opt.items_assigned:
-                complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
+                complete_mapping.update(dict(zip(opt.items_assigned, [pos.upper() for pos in opt.positions_assigned])))
             complete_mapping.update({k: v.upper() for k, v in mapping.items()})
             
+            print(f"DEBUG: Complete mapping construction")
+            print(f"  Pre-assigned items: {list(opt.items_assigned) if opt.items_assigned else 'None'}")
+            print(f"  Pre-assigned positions: {list(opt.positions_assigned) if opt.positions_assigned else 'None'}")
+            print(f"  Optimized mapping: {mapping}")
+            print(f"  Complete mapping: {complete_mapping}")
+
             complete_items = ''.join(complete_mapping.keys())
             complete_positions = ''.join(complete_mapping.values())
             opt_items = ''.join(mapping.keys())
@@ -352,9 +359,15 @@ def save_moo_results_to_csv(pareto_front: List[Dict],
             # Build complete mapping
             complete_mapping = {}
             if opt.items_assigned:
-                complete_mapping.update(dict(zip(opt.items_assigned, opt.positions_assigned.upper())))
+                complete_mapping.update(dict(zip(opt.items_assigned, [pos.upper() for pos in opt.positions_assigned])))
             complete_mapping.update({k: v.upper() for k, v in mapping.items()})
-            
+
+            print(f"DEBUG: Complete mapping construction")
+            print(f"  Pre-assigned items: {list(opt.items_assigned) if opt.items_assigned else 'None'}")
+            print(f"  Pre-assigned positions: {list(opt.positions_assigned) if opt.positions_assigned else 'None'}")
+            print(f"  Optimized mapping: {mapping}")
+            print(f"  Complete mapping: {complete_mapping}")
+
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             
