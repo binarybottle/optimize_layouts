@@ -4,8 +4,7 @@ Layout score calculator that shows complete layout scores.
 
 Example usage:
     python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
-    python score_layout.py --items "abc" --positions "FDJ" --config config.yaml --verbose
-    python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --independent
+    python score_layout.py --items "abc" --positions "FDJ" --config config.yaml --validate --keyboard --details
 """
 
 import argparse
@@ -135,27 +134,10 @@ Examples:
         for item, pos in complete_mapping.items():
             print(f"  {item} → {pos}")
         
-        print(f"\nDEBUG: Detailed scoring (using direct calculation)")
-        print(f"  Mapping length: {len(complete_mapping)}")
-        print(f"  Items: {''.join(complete_mapping.keys())}")
-        print(f"  Positions: {''.join(complete_mapping.values())}")
-        
         # Calculate complete layout score using direct calculation (bypasses optimization scoring)
         total_score, item_score, item_pair_score = calculate_complete_layout_score_direct(
             complete_mapping, normalized_scores
         )
-        
-        print(f"  Direct calculation results:")
-        print(f"    Item component: {item_score:.12f}")
-        print(f"    Pair component: {item_pair_score:.12f}")
-        print(f"    Total score: {total_score:.12f}")
-        
-        # Also calculate using old method for comparison
-        old_total, old_item, old_pair = calculate_complete_layout_score(complete_mapping, normalized_scores)
-        print(f"  Old method results (for comparison):")
-        print(f"    Item component: {old_item:.12f}")
-        print(f"    Pair component: {old_pair:.12f}")
-        print(f"    Total score: {old_total:.12f}")
         
         print(f"\nComplete Layout Results:")
         print(f"  Total score:         {total_score:.12f}")
