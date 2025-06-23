@@ -1,19 +1,16 @@
 #!/bin/bash
-# Quota-aware array job submission for HPC optimization.
-# Calls slurm/slurm_array_processor.sh to process configurations as array tasks.
+# Quota-aware array job submission with proper resume logic.
+# This script creates consistent batch files and lets individual tasks handle completion checking.
 
-# Use preset configurations for common scenarios (--rescan to rescan configurations):
+# Use preset configurations for common scenarios:
 #   bash slurm/slurm_array_submit.sh --account "med250002p" --preset standard \
-#     --moo --total-configs 95040 --rescan
-#
-# Check all available options with custom resource allocation:
-#   bash slurm/slurm_array_submit.sh --help
+#     --moo --total-configs 95040
 
 #===================================================================
 # Default configuration (standard preset)
 #===================================================================
 SLURM_CPUS=6
-SLURM_MEM="16GB"
+SLURM_MEM="32GB"
 SLURM_TIME="1:00:00"
 SLURM_PARTITION="RM"                     # Default partition
 SLURM_ACCOUNT="med250002p"               
@@ -34,12 +31,11 @@ OPT_PROCESSES="2"                        # Default number of processes per task
 
 # Resource presets
 declare -A PRESETS
-#PRESETS[standard]="8,2GB,2:00:00,RM-shared,4"         # cpus,mem,time,partition,concurrent
-PRESETS[standard]="6,16GB,2:00:00,RM,3"                # cpus,mem,time,partition,concurrent
+PRESETS[standard]="6,32GB,2:00:00,RM,3"                # cpus,mem,time,partition,concurrent
 PRESETS[extreme-memory]="24,500GB,4:00:00,EM,8"        # Maximum performance
 PRESETS[debug]="4,2GB,0:30:00,RM-shared,2"             # Quick testing
 
-# Parse command line arguments
+# Parse command line arguments (same as before)
 while [[ $# -gt 0 ]]; do
     case $1 in
         --preset)
@@ -124,26 +120,29 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --rescan)
+            RESCAN=true
             shift
             ;;
         --help)
             echo "Usage: bash slurm/slurm_array_submit.sh [OPTIONS]"
             echo ""
+            echo "This script creates consistent batch files for robust resume capability."
+            echo ""
             echo "Resource Presets:"
-            echo "  --preset standard         8 CPUs,  40GB, 2h,  RM-shared"
-            echo "  --preset extreme-memory  24 CPUs, 500GB, 4h,  EM (default)"
-            echo "  --preset debug            4 CPUs,  20GB, 30m, RM-shared"
+            echo "  --preset standard         6 CPUs,  32GB, 2h,  RM"
+            echo "  --preset extreme-memory  24 CPUs, 500GB, 4h,  EM"
+            echo "  --preset debug            4 CPUs,   2GB, 30m, RM-shared"
             echo ""
             echo "Custom Resources:"
             echo "  --cpus N                CPUs per task"
-            echo "  --mem SIZE              Memory per task (e.g., 40GB, 500GB)"
+            echo "  --mem SIZE              Memory per task (e.g., 32GB, 500GB)"
             echo "  --time TIME             Time limit (e.g., 2:00:00, 6:00:00)"
             echo "  --partition PART        SLURM partition (RM-shared, EM)"
             echo "  --account ID            SLURM account/allocation ID"
             echo "  --concurrent N          Max concurrent array tasks"
             echo ""
             echo "Configuration:"
-            echo "  --total-configs N       Total number of configurations (default: 11880)"
+            echo "  --total-configs N       Total number of configurations (default: 95040)"
             echo "  --config-prefix PATH    Config file prefix (default: output/configs1/config_)"
             echo "  --config-suffix EXT     Config file suffix (default: .yaml)"
             echo ""
@@ -168,15 +167,8 @@ done
 OPT_PROCESSES=${OPT_PROCESSES:-$SLURM_CPUS}
 
 #===================================================================
-
-# Check for --rescan flag in the arguments to determine if we need to rescan
-RESCAN=false
-for arg in "$@"; do
-    if [[ $arg == "--rescan" ]]; then
-        RESCAN=true
-        break
-    fi
-done
+# FIXED: Robust batch file creation
+#===================================================================
 
 # Set up directories
 mkdir -p output/batches output/outputs output/errors output/logs
@@ -185,44 +177,27 @@ mkdir -p output/batches output/outputs output/errors output/logs
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="output/logs/submit_${TIMESTAMP}.log"
 
-# If rescan flag is set, remove existing batch files and rescan
-if [ "$RESCAN" = true ]; then
-    echo "Rescanning configurations and recreating batch files..."
+# Always recreate batch files if --rescan or if they don't exist
+if [[ "${RESCAN:-false}" == "true" ]] || [[ ! -f "output/batches/batch_1.txt" ]]; then
+    echo "Creating consistent batch files (ignoring completion status)..." | tee -a "$LOG_FILE"
     rm -f output/batches/batch_*.txt
-fi
-
-# Scan for pending configurations and create batch files
-echo "Scanning for pending configurations..." | tee -a "$LOG_FILE"
-
-BATCH_NUM=1
-CURRENT_BATCH_SIZE=0
-CURRENT_BATCH_FILE="output/batches/batch_${BATCH_NUM}.txt"
-TOTAL_PENDING=0
-TOTAL_MISSING=0
-
-# Only scan if batch files don't exist or rescan was requested
-if [ ! -f "$CURRENT_BATCH_FILE" ] || [ "$RESCAN" = true ]; then
-    echo "Creating new batch files..." | tee -a "$LOG_FILE"
-    > "$CURRENT_BATCH_FILE"  # Create/clear first batch file
     
-    # Scan all configurations
+    # Create consecutive batch files regardless of completion status
+    BATCH_NUM=1
+    CURRENT_BATCH_SIZE=0
+    CURRENT_BATCH_FILE="output/batches/batch_${BATCH_NUM}.txt"
+    > "$CURRENT_BATCH_FILE"  # Create first batch file
+    
+    # Create batches with consecutive config IDs (no gaps)
     for ((CONFIG_ID=1; CONFIG_ID<=TOTAL_CONFIGS; CONFIG_ID++)); do
-        # Check if the config file exists
+        # Check if the config file exists (skip missing config files)
         if [ ! -f "${CONFIG_PREFIX}${CONFIG_ID}${CONFIG_SUFFIX}" ]; then
-            TOTAL_MISSING=$((TOTAL_MISSING+1))
             continue
         fi
         
-        # Check if output already exists (any file with this config ID)
-        FIND_PATTERN="*config_${CONFIG_ID}_*"
-        if find output/layouts -name "$FIND_PATTERN*.csv" 2>/dev/null | grep -q .; then
-            continue  # Skip if output exists
-        fi
-        
-        # Add to current batch
+        # Add to current batch (regardless of completion status)
         echo "$CONFIG_ID" >> "$CURRENT_BATCH_FILE"
         CURRENT_BATCH_SIZE=$((CURRENT_BATCH_SIZE+1))
-        TOTAL_PENDING=$((TOTAL_PENDING+1))
         
         # Start new batch file if current one is full
         if [ $CURRENT_BATCH_SIZE -ge $BATCH_SIZE ]; then
@@ -238,27 +213,27 @@ if [ ! -f "$CURRENT_BATCH_FILE" ] || [ "$RESCAN" = true ]; then
         rm "$CURRENT_BATCH_FILE"
         BATCH_NUM=$((BATCH_NUM-1))
     fi
+    
+    TOTAL_BATCHES=$BATCH_NUM
+    echo "Created $TOTAL_BATCHES consistent batch files" | tee -a "$LOG_FILE"
 else
     echo "Using existing batch files..." | tee -a "$LOG_FILE"
-    # Count pending configurations from existing batch files
-    for BATCH_FILE in output/batches/batch_*.txt; do
-        if [ -f "$BATCH_FILE" ]; then
-            BATCH_COUNT=$(wc -l < "$BATCH_FILE" 2>/dev/null || echo 0)
-            TOTAL_PENDING=$((TOTAL_PENDING + BATCH_COUNT))
-        fi
-    done
-    BATCH_NUM=$(ls output/batches/batch_*.txt 2>/dev/null | wc -l)
+    TOTAL_BATCHES=$(ls output/batches/batch_*.txt 2>/dev/null | wc -l)
 fi
 
-TOTAL_BATCHES=$BATCH_NUM
+if [ $TOTAL_BATCHES -eq 0 ]; then
+    echo "No batch files found or created. Check your configuration files." | tee -a "$LOG_FILE"
+    exit 1
+fi
 
-if [ $TOTAL_PENDING -eq 0 ]; then
-    echo "No pending configurations found. All work may be complete!" | tee -a "$LOG_FILE"
-    if [ $TOTAL_MISSING -gt 0 ]; then
-        echo "Note: $TOTAL_MISSING configuration files were missing." | tee -a "$LOG_FILE"
+# Count total configs in batch files
+TOTAL_PENDING=0
+for BATCH_FILE in output/batches/batch_*.txt; do
+    if [ -f "$BATCH_FILE" ]; then
+        BATCH_COUNT=$(wc -l < "$BATCH_FILE" 2>/dev/null || echo 0)
+        TOTAL_PENDING=$((TOTAL_PENDING + BATCH_COUNT))
     fi
-    exit 0
-fi
+done
 
 # Determine which batches to submit
 CURRENT_BATCH=1
@@ -274,12 +249,13 @@ echo "Optimization: $OPT_MODE, processes=$OPT_PROCESSES" | tee -a "$LOG_FILE"
 if [ -n "$OPT_MAX_SOLUTIONS" ]; then echo "MOO max solutions: $OPT_MAX_SOLUTIONS" | tee -a "$LOG_FILE"; fi
 if [ -n "$OPT_N_SOLUTIONS" ]; then echo "SOO solutions: $OPT_N_SOLUTIONS" | tee -a "$LOG_FILE"; fi
 if [ -n "$OPT_TIME_LIMIT" ]; then echo "Time limit: ${OPT_TIME_LIMIT}s" | tee -a "$LOG_FILE"; fi
-echo "Total pending configurations: $TOTAL_PENDING" | tee -a "$LOG_FILE"
+echo "Total configurations in batches: $TOTAL_PENDING" | tee -a "$LOG_FILE"
 echo "Total batch files: $TOTAL_BATCHES" | tee -a "$LOG_FILE"
 echo "Submitting batches $CURRENT_BATCH through $END_BATCH" | tee -a "$LOG_FILE"
 echo "Array size: $ARRAY_SIZE" | tee -a "$LOG_FILE"
 echo "Max concurrent tasks: $MAX_CONCURRENT" | tee -a "$LOG_FILE"
 echo "Log file: $LOG_FILE" | tee -a "$LOG_FILE"
+echo "Resume strategy: Individual tasks check for completed work" | tee -a "$LOG_FILE"
 
 # Submit array jobs for each batch
 for ((i=CURRENT_BATCH-1; i<END_BATCH; i++)); do
@@ -296,15 +272,16 @@ for ((i=CURRENT_BATCH-1; i<END_BATCH; i++)); do
         continue
     fi
     
-    # Determine array range (0-indexed)
+    # FIXED: Always use 0-based array range for consistency
     ARRAY_END=$((CONFIG_COUNT-1))
     if [ $ARRAY_END -ge $ARRAY_SIZE ]; then
         ARRAY_END=$((ARRAY_SIZE-1))
     fi
     ARRAY_RANGE="0-$ARRAY_END"
     
-    echo "Submitting HPC batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
+    echo "Submitting batch $((i+1))/$TOTAL_BATCHES with $CONFIG_COUNT configurations as array $ARRAY_RANGE..." | tee -a "$LOG_FILE"
     echo "  Resources: $SLURM_CPUS CPUs × $SLURM_MEM memory on $SLURM_PARTITION" | tee -a "$LOG_FILE"
+    echo "  Resume: Each task will check if work is already completed" | tee -a "$LOG_FILE"
     
     # Build export variables for optimization parameters
     EXPORT_VARS="CONFIG_FILE=$BATCH_FILE,MODE=$OPT_MODE,PROCESSES=$OPT_PROCESSES"

@@ -246,6 +246,11 @@ parameters without requiring manual script editing:
 
 ##### Basic usage with standard preset
   ```bash
+  # Script to automatically manage the queue of batch submissions 
+  # (checks every 5 minutes):
+  bash slurm/auto_batch_submitter.sh
+
+  # The above script calls a slurm array submission script.
   # Standard workload (delete output/batches if using --rescan)
   bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo --total-configs 95040 --rescan
 
@@ -258,13 +263,10 @@ parameters without requiring manual script editing:
   # Use screen to keep session active
   screen -S submission
 
-  # Test with a single config file output/configs1/config_1.yaml
-  # (First make sure you have a config file at that location):
-  ls output/configs1/config_1.yaml  # Check if file exists
-  echo "1" > test_single.txt
-  sbatch --export=CONFIG_FILE=test_single.txt --array=0-0 slurm/slurm_array_processor.sh
+  # Automatically manage submissions
+  bash slurm/auto_batch_submitter.sh
 
-  # Submit jobs with fresh configuration scan
+  # Or submit jobs with fresh configuration scan
   bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx --rescan
 
   # Or continue from where you left off (uses existing batch files):
