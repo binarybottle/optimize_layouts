@@ -56,7 +56,7 @@ submit_individual_job() {
 #!/bin/bash
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=15GB
-#SBATCH --time=1:00:00
+#SBATCH --time=2:00:00
 #SBATCH --partition=RM-shared
 #SBATCH --account=med250002p
 #SBATCH --job-name=cfg_${config_id}
