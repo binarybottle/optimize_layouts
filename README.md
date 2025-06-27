@@ -264,14 +264,12 @@ parameters without requiring manual script editing:
   screen -S submission
 
   # Automatically manage submissions
-  nohup bash auto_batch_submitter.sh > auto_submitter.log 2>&1 &
+  nohup bash auto_job_submitter.sh > auto_job_submitter.log 2>&1 &
+  tail -f auto_job_submitter.log
   ```
 
 #### Monitor jobs
   ```bash
-  # Monitor the log
-  tail -f auto_submitter.log
-
   # Check all running jobs
   squeue -u $USER
 
