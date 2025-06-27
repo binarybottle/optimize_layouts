@@ -264,18 +264,15 @@ parameters without requiring manual script editing:
   screen -S submission
 
   # Automatically manage submissions
-  bash slurm/auto_batch_submitter.sh
-
-  # Or submit jobs with fresh configuration scan
-  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx --rescan
-
-  # Or continue from where you left off (uses existing batch files):
-  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id"  --moo --total-configs xxx
+  nohup bash auto_batch_submitter.sh > auto_submitter.log 2>&1 &
   ```
 
 #### Monitor jobs
   ```bash
-  # Check all your running jobs
+  # Monitor the log
+  tail -f auto_submitter.log
+
+  # Check all running jobs
   squeue -u $USER
 
   # Watch jobs in real-time
