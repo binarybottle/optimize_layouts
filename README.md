@@ -248,7 +248,7 @@ parameters without requiring manual script editing:
   ```bash
   # Script to automatically manage the queue of batch submissions 
   # (checks every 5 minutes):
-  bash slurm/auto_batch_submitter.sh
+  bash slurm/auto_job_submitter.sh
 
   # The above script calls a slurm array submission script.
   # Standard workload (delete output/batches if using --rescan)
