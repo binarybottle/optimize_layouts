@@ -652,7 +652,7 @@ def main():
             return
         
         # Memory-efficient median-MAD analysis
-        if args.median_mad_only:
+        if args.median_mad:
             print("Running memory-efficient median-MAD analysis...")
             for score_type in ['total', 'item', 'item_pair']:
                 plot_median_mad_generic(args.results_dir, score_type, False, args.max_files, args.file_pattern)
