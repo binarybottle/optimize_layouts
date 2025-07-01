@@ -44,8 +44,8 @@ For the following, we:
        The result is 95,040 Pareto fronts, each with 20-30 solutions.
     3. Select the global Pareto front of MOO solutions from the 16-letter/key layouts.
 2. Optimally arrange the remaining letters.
-    1. Remove 2 letters from the 2 least comfortable of the 16 keys 
-       in the selected layouts (to explore a broader solution space).
+    1. For each selected 16-letter/key layout, remove 2 letters from the 
+       2 least comfortable keys (to explore a broader solution space).
     2. For each resulting 14-letter/key layout, optimally arrange the 10 
        (out of 24) remaining letters in the 10 remaining keys, again using MOO.
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
@@ -107,7 +107,7 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
-  **1.3. Select the global Pareto front from the 16-letter/key layouts.**
+  **1.3. Select the global Pareto front of 16-letter/key layouts.**
 
   ```bash
     python3 select_global_moo_solutions.py
@@ -115,9 +115,8 @@ For the following, we:
   ```
 
 ### Step 2. Optimally arrange the remaining letters.
-The following steps act on each of Step 1's output files. 
 
-  **2.1. Remove 2 letters from the 2 least comfortable of the 16 keys.**
+  **2.1. For each 16-item layout, remove 2 letters from the 2 least comfortable keys.**
 
   Command for generating the second set of configuration files:
 
@@ -156,7 +155,7 @@ The following steps act on each of Step 1's output files.
   ```
 
   **2.3. Select the global Pareto front from the 24-letter/key layouts.**
-  
+
   Rerun the commands in 1.3 above (after renaming the output files):
   ```bash
     python3 select_global_moo_solutions.py
