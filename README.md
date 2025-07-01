@@ -198,11 +198,23 @@ Automatically saved timestamped files:
   - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
 
-## Optional: Running parallel processes on SLURM
-The example commands below to parallelize layout optimization
-were used as part of a keyboard layout optimization study supported 
+## Optional: Running parallel processes locally or on SLURM
+Two commands were used to parallelize layout optimization
+as part of a keyboard layout optimization study supported 
 by NSF and Pittsburgh Supercomputing Center computing resources 
-(see **README_keyboards**).
+(see **README_keyboards**):
+
+### Run parallel jobs locally
+You can generate configuration files in output/configs1/
+by creating your own generate_configs.py script,
+following the example in keyboards/generate_configs1.py,
+then modify the run_optimizer_macos.py script for your needs:
+```python
+  python3 generate_configs.py
+  run_optimizer_macos.py
+```
+
+### Run parallel jobs on a linux cluster (slurm)
 
 #### Connect and set up the code environment
   ```bash
@@ -225,45 +237,20 @@ by NSF and Pittsburgh Supercomputing Center computing resources
   python3 --version
   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
 
-  # Run all setup tests to make sure everything is working
+  # Optional: run all setup tests to make sure everything is working
   python3 slurm/slurm_setup_run_all_tests.sh
-  ```
 
-#### Generate config files and prepare to submit jobs
-You can generate configuration files in output/configs1/
-by creating your own generate_configs.py script,
-following the example in generate_keyboard_configs1.py:
-```python3 generate_configs.py```
+  # Generate config files as described in the local parallel job submission example
+  python3 generate_configs.py
+
+  ```
 
 #### Configure and submit jobs
-The submission system supports flexible resource allocation and optimization 
-parameters without requiring manual script editing:
-
-##### Available resource presets
-  - standard: 6 CPUs, 16GB, 2h, RM, 3 concurrent (moderate workloads)
-  - extreme-memory: 24 CPUs, 500GB, 4h, EM, 8 concurrent (maximum performance)
-  - debug: 4 CPUs, 2GB, 30min, RM-shared, 2 concurrent (for testing)
-
-##### Basic usage with standard preset
-  ```bash
-  # Script to automatically manage the queue of batch submissions 
-  # (checks every 5 minutes):
-  bash slurm/auto_job_submitter.sh
-
-  # The above script calls a slurm array submission script.
-  # Standard workload (delete output/batches if using --rescan)
-  bash slurm/slurm_array_submit.sh --preset standard --account "your_allocation_id" --moo --total-configs 95040 --rescan
-
-  # Check all available options with custom resource allocation
-  bash slurm/slurm_array_submit.sh --help
-  ```
-
-#### Run scripts
   ```bash
   # Use screen to keep session active
   screen -S submission
 
-  # Automatically manage submissions
+  # Automatically manage submissions (checks every 5 minutes)
   nohup bash auto_job_submitter.sh > auto_job_submitter.log 2>&1 &
   tail -f auto_job_submitter.log
   ```

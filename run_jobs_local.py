@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Adaptive MacBook Optimizer - Auto-Scaling Parallelism
-Automatically finds optimal number of parallel processes based on system resources
+Automatically find optimal number of parallel processes based on local system resources
 """
 
 import os
@@ -272,7 +271,7 @@ class AdaptiveOptimizer:
         print()
 
 def main():
-    parser = argparse.ArgumentParser(description="Adaptive MacBook Optimizer")
+    parser = argparse.ArgumentParser(description="Automatically find optimal number of parallel processes based on local system resources")
     parser.add_argument("--start-config", type=int, default=1,
                        help="Starting config ID (default: 1)")
     parser.add_argument("--end-config", type=int, default=TOTAL_CONFIGS,
@@ -298,7 +297,7 @@ def main():
     output_dir = Path(OUTPUT_DIR)
     output_dir.mkdir(exist_ok=True)
     
-    print("=== Adaptive MacBook Optimizer ===")
+    print("=== Automatically find optimal number of parallel processes based on local system resources ===")
     
     # Show system info
     cpu_count = psutil.cpu_count()
