@@ -160,13 +160,13 @@ where direction (sequence of a given pair) matters.
 
 ### Scoring Modes
 
-#### SOO
+#### MOO (Multi-Objective Optimization)
+  - multi_objective: Separate objectives for MOO
+
+#### SOO (Single-Objective Optimization)
   - item_only: Only individual item-position matches
   - pair_only: Only pair interactions (internal + cross)
   - combined: Multiplicative combination (item × total_pairs)
-
-#### MOO
-  - multi_objective: Separate objectives for MOO
 
 ### Score Calculation Formula
 item_component = Σ(item_score_i × position_score_i) / N_items
@@ -199,30 +199,27 @@ Automatically saved timestamped files:
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
 
 ## Optional: Running parallel processes locally or on SLURM
-Two commands were used to parallelize layout optimization
-as part of a keyboard layout optimization study supported 
-by NSF and Pittsburgh Supercomputing Center computing resources 
-(see **README_keyboards**):
+Two commands can be modified to parallelize layout optimization:
 
 ### Run parallel jobs locally
 You can generate configuration files in output/configs1/
 by creating your own generate_configs.py script,
 following the example in keyboards/generate_configs1.py,
-then modify the run_optimizer_macos.py script for your needs:
-```python
+then modify the run_jobs_local.py script for your needs:
+```bash
   python3 generate_configs.py
-  run_optimizer_macos.py
+  python3 run_jobs_local.py
 ```
 
 ### Run parallel jobs on a linux cluster (slurm)
 
-#### Connect and set up the code environment
+Connect and set up the code environment: 
   ```bash
-  # Log in
+  # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
   ssh username@bridges2.psc.edu
 
   # Create directory for the project
-  mkdir -p keyboard_optimizer; cd keyboard_optimizer
+  mkdir -p optimizer; cd optimizer
 
   # Clone repository and make scripts executable
   git clone https://github.com/binarybottle/optimize_layouts.git
@@ -237,26 +234,18 @@ then modify the run_optimizer_macos.py script for your needs:
   python3 --version
   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
 
-  # Optional: run all setup tests to make sure everything is working
-  python3 slurm/slurm_setup_run_all_tests.sh
-
   # Generate config files as described in the local parallel job submission example
   python3 generate_configs.py
-
   ```
 
-#### Configure and submit jobs
+Configure, submit, monitor, and cancel jobs:
   ```bash
   # Use screen to keep session active
   screen -S submission
 
   # Automatically manage submissions (checks every 5 minutes)
-  nohup bash auto_job_submitter.sh > auto_job_submitter.log 2>&1 &
-  tail -f auto_job_submitter.log
-  ```
+  nohup bash run_job_slurm.sh
 
-#### Monitor jobs
-  ```bash
   # Check all running jobs
   squeue -u $USER
 
@@ -269,23 +258,7 @@ then modify the run_optimizer_macos.py script for your needs:
   # Check number of output files
   sh count_files.sh output/layouts
 
-  # Check recent log files
-  ls -lt output/outputs/ | head -10
-  tail output/outputs/layout_*.out
-
-  # View submission logs
-  ls -lt output/logs/submit_*.log | head -5
-  tail output/logs/submit_*.log
-  ```
-  
-#### Cancel jobs
-  ```bash
-  # Cancel all your jobs at once
+  # Cancel all your jobs at once, or for a specific job ID
   scancel -u $USER
-
-  # Cancel a specific job ID, such as:
   scancel <job_array_id>
-
-  # Cancel all array jobs for a specific job ID:
-  scancel <job_array_id>_{1..1000}
   ```
