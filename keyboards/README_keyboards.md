@@ -47,13 +47,13 @@ For the following, we:
     1. Remove 2 letters from the 2 least comfortable of the 16 keys 
        in the selected layouts (to explore a broader solution space).
     2. For each resulting 14-letter/key layout, optimally arrange the 10 
-       (out of 24) remaining letters in the 10 remaining keys.
+       (out of 24) remaining letters in the 10 remaining keys, again using MOO.
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
 3. Select the final layout.
     1. For each MOO objective, replace scores with their rankings.
     2. Sum the rankings for each layout.
     3. Sort layouts by these sums.
-    4. Select layout with the highest sum. 
+    4. Select layout(s) with the lowest sum (lowest is best).
 4. Arrange periphery of the 12-letter/key home blocks.
     1. Assign the two least frequent letters (q & z in English) 
        to the two upper-right corner keys.

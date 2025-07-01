@@ -16,17 +16,11 @@ python analyze_input.py       # Analyze and plot raw/normalized data
 # Single-objective optimization (default)
 python optimize_layout.py --config config.yaml
 
-# Single-objective with custom parameters  
-python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
+# Multi-objective optimization (Pareto front of candidate solutions)
+python optimize_layout.py --config config.yaml --moo
 
-# Multi-objective optimization (Pareto front)
-python optimize_layout.py --config config.yaml --moo --max-solutions 50
-
-# Detailed MOO analysis with custom parameters
-python optimize_layout.py --analyze-moo --detailed --test-size 8 --sample-size 500
-
-# With comprehensive validation
-python optimize_layout.py --config config.yaml --validate --verbose
+# Detailed MOO analysis with comprehensive validation
+python optimize_layout.py --moo --max-solutions 50 --detailed --validate --verbose
 
 # Analyze results
 python analyze_results.py
@@ -66,33 +60,33 @@ The system is built with a modular, maintainable architecture:
 
 ## Optimization Modes
 
-### Single-Objective Optimization (SOO)
-  - Algorithm: Branch-and-bound with tight upper bounds
-  - Goal: Find top N highest-scoring layouts
-  - Scoring: Combined item × pair score or individual components
-  - Output: Ranked list of best solutions with detailed breakdowns
+  ### Single-Objective Optimization (SOO)
+    - Algorithm: Branch-and-bound with tight upper bounds
+    - Goal: Find top N highest-scoring layouts
+    - Scoring: Combined item × pair score or individual components
+    - Output: Ranked list of best solutions with detailed breakdowns
 
-```bash
-# Find top 5 layouts (default)
-python optimize_layout.py --config config.yaml
+  ```bash
+  # Find top 5 layouts (default)
+  python optimize_layout.py --config config.yaml
 
-# Find top 10 layouts with detailed scoring
-python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
-```
+  # Find top 10 layouts with detailed scoring
+  python optimize_layout.py --config config.yaml --n-solutions 10 --verbose
+  ```
 
-### Multi-Objective Optimization (MOO)
-  - Algorithm: Pareto-optimal search
-  - Goal: Find non-dominated solutions across multiple objectives
-  - Objectives: Item scores, internal pair scores, cross-interaction scores
-  - Output: Pareto front with trade-off analysis
+  ### Multi-Objective Optimization (MOO)
+    - Algorithm: Pareto-optimal search
+    - Goal: Find non-dominated solutions across multiple objectives
+    - Objectives: Item scores, internal pair scores, cross-interaction scores
+    - Output: Pareto front with trade-off analysis
 
-```bash
-# Discover Pareto front
-python optimize_layout.py --config config.yaml --moo
+  ```bash
+  # Discover Pareto front
+  python optimize_layout.py --config config.yaml --moo
 
-# Limit solutions and time
-python optimize_layout.py --config config.yaml --moo --max-solutions 100 --time-limit 300
-```
+  # Limit solutions and time
+  python optimize_layout.py --config config.yaml --moo --max-solutions 100 --time-limit 300
+  ```
 
 ## Inputs
 The system accepts normalized score files in CSV format.
@@ -154,24 +148,15 @@ Layouts are scored based on normalized item and item-pair scores
 and corresponding normalized position and position-pair scores, 
 where direction (sequence of a given pair) matters.
 
-### Score Components
-  - Item Component: sum(item_score × position_score) / num_items
-  - Pair Component: sum(item_pair_score × position_pair_score) / num_pairs
+  1. item_score = Σ(item_score_i × position_score_i) / N_items
+  2. pair_score = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
 
-### Scoring Modes
-
-#### MOO (Multi-Objective Optimization)
+  **MOO (Multi-Objective Optimization) scoring**
   - multi_objective: Separate objectives for MOO
-
-#### SOO (Single-Objective Optimization)
+  **SOO (Single-Objective Optimization) scoring**
   - item_only: Only individual item-position matches
   - pair_only: Only pair interactions (internal + cross)
   - combined: Multiplicative combination (item × total_pairs)
-
-### Score Calculation Formula
-item_component = Σ(item_score_i × position_score_i) / N_items
-
-pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
 
 ## Branch-and-bound optimization
   - Calculates exact scores for placed letters
@@ -185,7 +170,7 @@ pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
 
 ## Output
 
-### Console Output
+  **Console Output**
   - Configuration summary and search space analysis
   - Real-time progress with pruning statistics
   - Top item-to-position solutions
@@ -193,27 +178,26 @@ pair_component = Σ(item_pair_score_ij × position_pair_score_ij) / N_pairs
   - Performance metrics and timing
   - Optional ASCII art visualization of keyboard layouts
 
-### CSV Results
-Automatically saved timestamped files:
+  **CSV Results**
+  Automatically saved timestamped files:
   - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
 
 ## Optional: Running parallel processes locally or on SLURM
 Two commands can be modified to parallelize layout optimization:
 
-### Run parallel jobs locally
-You can generate configuration files in output/configs1/
-by creating your own generate_configs.py script,
-following the example in keyboards/generate_configs1.py,
-then modify the run_jobs_local.py script for your needs:
-```bash
+  ### Run parallel jobs locally
+  You can generate configuration files in output/configs1/
+  by creating your own generate_configs.py script,
+  following the example in keyboards/generate_configs1.py,
+  then modify the run_jobs_local.py script for your needs:
+  ```bash
   python3 generate_configs.py
   python3 run_jobs_local.py
-```
+  ```
 
-### Run parallel jobs on a linux cluster (slurm)
-
-Connect and set up the code environment: 
+  ### Run parallel jobs on a linux cluster (slurm)
+  Connect and set up the code environment: 
   ```bash
   # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
   ssh username@bridges2.psc.edu
@@ -238,7 +222,7 @@ Connect and set up the code environment:
   python3 generate_configs.py
   ```
 
-Configure, submit, monitor, and cancel jobs:
+  Configure, submit, monitor, and cancel jobs:
   ```bash
   # Use screen to keep session active
   screen -S submission
