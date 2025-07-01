@@ -64,6 +64,7 @@ For the following, we:
 ### Step 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
 
   **1.1. Fix 5 letters in every possible arrangement within 12 keys.**
+
   There are 95,040 permutations of 5 letters in 12 keys.
   Command for generating the 95,040 configuration files:
 
@@ -86,6 +87,7 @@ For the following, we:
   ```
 
   **1.2. Optimally arrange 12 letters in the 12 available of the top 16 keys.**
+
   Command for optimizing layouts, with constraints specified per configuration file:
 
   ```bash
@@ -106,6 +108,7 @@ For the following, we:
   ```
 
   **1.3. Select the global Pareto front from the 16-letter/key layouts.**
+
   ```bash
     python3 select_global_moo_solutions.py
     python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv
@@ -115,6 +118,7 @@ For the following, we:
 The following steps act on each of Step 1's output files. 
 
   **2.1. Remove 2 letters from the 2 least comfortable of the 16 keys.**
+
   Command for generating the second set of configuration files:
 
   ```bash
@@ -133,6 +137,7 @@ The following steps act on each of Step 1's output files.
   ```
 
   **2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.**
+
   There are 3,628,800 permutations of 10 letters in 10 keys.
 
   Rerun the command in 1.2 above (after renaming the output folders): 
@@ -151,6 +156,7 @@ The following steps act on each of Step 1's output files.
   ```
 
   **2.3. Select the global Pareto front from the 24-letter/key layouts.**
+  
   Rerun the commands in 1.3 above (after renaming the output files):
   ```bash
     python3 select_global_moo_solutions.py
