@@ -30,7 +30,7 @@ For the following, we:
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
-## Overview of Steps
+## Overview of steps
 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
   (The remaining 8 letters have negligible interaction with the top 16 letters,
   and the remaining 8 keys have much lower comfort scores than the top 16 keys.)
@@ -41,47 +41,29 @@ For the following, we:
        within the 12 most comfortable keys (half of our 24 keys in the home blocks).
     2. For each of the 95,040 possible arrangements of 5 letters, 
        use MOO to optimally arrange 12 letters in the 12 available of 16 keys. 
-       The result is 95,040 Pareto fronts of possible solutions.
-
-
-
-OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-
-    3. Select the highest-scoring 16-letter/key layouts.
-        1. For each MOO objective, replace scores with their rankings.
-        2. Sum the rankings for each layout.
-        3. Sort layouts by these sums.
-        4. Select layouts whose sums are less than ?????? 
-
+       The result is 95,040 Pareto fronts, each with 20-30 solutions.
+    3. Select the global Pareto front of MOO solutions from the 16-letter/key layouts.
 2. Optimally arrange the remaining letters.
     1. Remove 2 letters from the 2 least comfortable of the 16 keys 
        in the selected layouts (to explore a broader solution space).
     2. For each resulting 14-letter/key layout, optimally arrange the 10 
        (out of 24) remaining letters in the 10 remaining keys.
-
-
-
-
-OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
-
-
-
-    3. Select the highest-scoring 24-letter/key layouts.
-        1. Repeat Step 2 for 24-letter/key layouts.
-        2. Select the final layout by ?????? 
-
-3. Arrange periphery of the 12-letter/key home blocks.
+    3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
+3. Select the final layout.
+    1. For each MOO objective, replace scores with their rankings.
+    2. Sum the rankings for each layout.
+    3. Sort layouts by these sums.
+    4. Select layout with the highest sum. 
+4. Arrange periphery of the 12-letter/key home blocks.
     1. Assign the two least frequent letters (q & z in English) 
        to the two upper-right corner keys.
     2. Assign punctuation to the two middle columns between the home blocks. 
 
+## Commands and visuals for steps 1 and 2.
 
 ### Step 1. Optimally arrange the 16 most frequent letters in the 16 most comfortable keys.
 
-  ##### 1.1. Fix 4 of the letters in every possible arrangement within 12 keys.
+  **1.1. Fix 5 letters in every possible arrangement within 12 keys.**
   There are 95,040 permutations of 5 letters in 12 keys.
   Command for generating the 95,040 configuration files:
 
@@ -103,19 +85,15 @@ OOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
-##### 1.2. Optimally arrange 12 letters in the 12 available of the top 16 keys.
-
-Command for optimizing layouts with constraints specified in a configuration file:
+  **1.2. Optimally arrange 12 letters in the 12 available of the top 16 keys.**
+  Command for optimizing layouts, with constraints specified per configuration file:
 
   ```bash
-    python optimize_layout.py
-
-    # Script to parallelize across the 95,040 configuration files:
-    bash slurm/slurm_array_submit.sh --moo --rescan
+    bash run_jobs_local.sh
   ```
 
-  12 letters are then optimally arranged in 12 available keys (479,001,600 permutations) 
-  for each of the 95,040 configurations above:
+  This optimally arranges 12 letters in 12 available keys 
+  (479,001,600 permutations) for each of the 95,040 configurations above:
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮
@@ -127,11 +105,16 @@ Command for optimizing layouts with constraints specified in a configuration fil
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
+  **1.3. Select the global Pareto front from the 16-letter/key layouts.**
+  ```bash
+    python3 select_global_moo_solutions.py
+    python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv
+  ```
+
 ### Step 2. Optimally arrange the remaining letters.
 The following steps act on each of Step 1's output files. 
 
-  ##### 2.1. Remove 2 letters from the 2 least comfortable of the 16 keys.
-
+  **2.1. Remove 2 letters from the 2 least comfortable of the 16 keys.**
   Command for generating the second set of configuration files:
 
   ```bash
@@ -148,12 +131,13 @@ The following steps act on each of Step 1's output files.
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
-  ##### 2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.
+  **2.2. Optimally arrange the 10 remaining letters in the 10 remaining keys.**
   There are 3,628,800 permutations of 10 letters in 10 keys.
 
-  Run the same command as above (after renaming Step 1 output folders): 
-  `python optimize_layout.py` or 
-  `bash slurm/slurm_array_submit.sh --moo --rescan`
+  Rerun the command in 1.2 above (after renaming the output folders): 
+  ```bash
+  bash run_jobs_local.sh
+  ```
 
   ```
     ╭───────────────────────╮    ╭───────────────────────╮
@@ -165,32 +149,9 @@ The following steps act on each of Step 1's output files.
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
   ```
 
-### Step 3. Arrange periphery of the 12-letter/key home blocks.
-We assign the two least frequent letters (q & z in English) 
-to the two upper-right corner keys:
-
+  **2.3. Select the global Pareto front from the 24-letter/key layouts.**
+  Rerun the commands in 1.3 above (after renaming the output files):
+  ```bash
+    python3 select_global_moo_solutions.py
+    python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv
   ```
-    ╭───────────────────────╮    ╭─────────────────────────────╮
-    │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │  z  │
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┼─────┤
-    │  c  │  i  │  e  │  a  │    │  h  │  t  │  s  │  n  │  q  │
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤─────╯
-    │  k  │  x  │  j  │  p  │    │  r  │  m  │  f  │  p  │
-    ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
-  ```
-
-Finally, we assign punctuation to the two middle columns between the home blocks. 
-
-
-## Acknowledgments
-NSF and the Pittsburgh Supercomputing Center (PSC) generously provided 
-computing resources for a keyboard layout optimization study. 
-The study used Bridges-2 at PSC through allocation MED250010 from the 
-Advanced Cyberinfrastructure Coordination Ecosystem: Services & Support 
-(ACCESS) program, which is supported by National Science Foundation grants 
-#2138259, #2138286, #2138307, #2137603, and #2138296. Citation:
-
-  Brown, ST, Buitrago, P, Hanna, E, Sanielevici, S, Scibek, R, 
-  Nystrom, NA (2021). Bridges-2: A Platform for Rapidly-Evolving 
-  and Data Intensive Research. In Practice and Experience in 
-  Advanced Research Computing (pp 1-4). doi:10.1145/3437359.3465593

@@ -31,8 +31,8 @@ CONFIG_FILE = '../config.yaml'
 # Example with 24 items/positions: 
 #    etaoinsrhldcumfpgwybvkxj FDESVRWACQZX JKILMUO;,P/.
 # Optimize arrangements of 16 items by running fixed items in parallel:  
-# 11 items:         79,833,600 permutations (with 5 fixed items): 11,880 files
-# 12 items:        479,001,600 permutations (with 4 fixed items): 95,040 files
+# 11 items:         79,833,600 permutations (with 5 fixed items): 95,040 files
+# 12 items:        479,001,600 permutations (with 4 fixed items): 11,880 files
 # 13 items:      6,227,020,800 permutations (with 3 fixed items)
 # 14 items:     87,178,291,200 permutations (with 2 fixed items)
 # 16 items: 20,922,789,888,000 permutations
