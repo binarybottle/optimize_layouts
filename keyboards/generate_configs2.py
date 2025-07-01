@@ -1,37 +1,85 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate configuration files to run keyboard layout optimizations in parallel 
-with specific letter-to-key constraints specified in each file.
+Generate configuration files from global Pareto optimal keyboard layouts.
 
-This is Step 2 in a process to optimally arrange the 24 most frequent letters 
-in the 24 keys of the home block of a keyboard. 
+This script takes the output from select_global_moo_solutions.py and generates
+configuration files for the next round of optimization with specific 
+letter-to-key constraints. If --remove-positions is specified, it will remove 
+positions from the global Pareto set, and remove redundant layouts.
 
-There are two versions of this script:
-  - generate_configs1.py generates an initial set of sparse keyboard layouts as config files.
-  - optimize_layout.py generates optimal keyboard layouts for a given config file.
-  - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
+This is Step 2 in the process, but now using globally optimal solutions
+instead of processing thousands of individual result files.
 
-Usage (input files assumed to be in output/layouts1/):
-
-    All unique layouts from all config files (default), with optional removal of letters in specified positions:
-    ``python generate_configs2.py --remove-positions "A;" --file-pattern "moo_results_config_*.csv"``
-
-    Top layouts per config (number of top-scoring layouts per config file):
-    ``python generate_configs2.py --remove-positions "A;" --layouts-per-config 10``
-
-    Top layouts across all configs (number of top-scoring layouts across all config files):
-    ``python generate_configs2.py --remove-positions "A;" --top-across-all 1000``
+Usage:
+    # Use all global Pareto solutions
+    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
+    
+    # Use top N solutions from global Pareto set
+    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 20 --remove-positions "A;"
+    
+    # Use solutions with specific ranking criteria
+    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by global_rank
 
 See **README_keyboards.md** for a full description.
-
-See **README.md** for instructions to run batches of config files in parallel.
 """
 import os
-import glob
-import csv
+import pandas as pd
 import argparse
 from pathlib import Path
+
+
+def parse_global_pareto_csv(filepath: str) -> pd.DataFrame:
+    """Parse the global Pareto results CSV, handling metadata headers."""
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        
+        # Find where the actual data starts (after metadata)
+        data_start_idx = -1
+        for i, line in enumerate(lines):
+            line = line.strip()
+            # Look for the actual column headers (not metadata)
+            if ('config_id' in line or 'items' in line or 'positions' in line or 
+                'item_score' in line or 'Complete Item' in line) and ',' in line:
+                data_start_idx = i
+                break
+        
+        if data_start_idx == -1:
+            # Try alternative approach - skip first several lines and look for CSV data
+            print("Could not find header, trying to skip metadata lines...")
+            for i in range(10):  # Check first 10 lines
+                if i >= len(lines):
+                    break
+                line = lines[i].strip()
+                if line and ',' in line and not line.startswith('"'):
+                    data_start_idx = i
+                    break
+        
+        if data_start_idx == -1:
+            raise ValueError("Could not find data header in file")
+        
+        print(f"Found data starting at line {data_start_idx + 1}")
+        
+        # Read just the data portion
+        data_lines = ''.join(lines[data_start_idx:])
+        from io import StringIO
+        return pd.read_csv(StringIO(data_lines))
+        
+    except Exception as e:
+        print(f"Error parsing CSV: {e}")
+        print("Attempting fallback parsing...")
+        
+        # Fallback: try to read the file directly, skipping problematic rows
+        try:
+            # Skip first several rows that might be metadata
+            df = pd.read_csv(filepath, skiprows=6, on_bad_lines='skip')
+            print(f"Fallback parsing successful, loaded {len(df)} rows")
+            return df
+        except Exception as e2:
+            print(f"Fallback parsing also failed: {e2}")
+            raise e
+
 
 def remove_specified_positions(positions, items, positions_to_remove):
     """
@@ -55,8 +103,6 @@ def remove_specified_positions(positions, items, positions_to_remove):
         print(f"Warning: Position/item length mismatch: {len(pos_list)} vs {len(item_list)}")
         return positions, items, ""
     
-    #print(f"Removing positions: {positions_to_remove}")
-    
     # Find indices of positions to remove
     remove_indices = set()
     removed_positions = []
@@ -67,8 +113,6 @@ def remove_specified_positions(positions, items, positions_to_remove):
             remove_indices.add(i)
             removed_positions.append(pos)
             removed_items.append(item_list[i])
-    
-    #print(f"Found and removing: {removed_positions} (items: {removed_items})")
     
     # Check if we found all requested positions
     missing_positions = [pos for pos in positions_to_remove if pos not in pos_list]
@@ -91,80 +135,13 @@ def remove_specified_positions(positions, items, positions_to_remove):
     
     return remaining_positions_str, remaining_items_str, removed_positions_str
 
-def parse_layout_results(results_path, top_n=None):
-    """
-    Parse layout results files to extract layouts from Step 1.
-    
-    Args:
-        results_path: Path to CSV file with layout results
-        top_n: Number of top layouts to extract (None = all)
-        
-    Returns:
-        List of dictionaries with layout information
-    """
-    layouts = []
-    
-    try:
-        with open(results_path, 'r') as f:
-            reader = csv.reader(f)
-            
-            # Skip first 4 lines: title, items info, positions info, empty line
-            for i in range(4):
-                next(reader, None)
-            
-            # Read header row (line 5)
-            header = next(reader, None)
-            if not header:
-                print(f"Warning: Could not find header row in {results_path}")
-                return layouts
-            
-            # Read data rows (starting from line 6)
-            count = 0
-            for row_num, row in enumerate(reader):
-                if not row or len(row) < 3:  # Need at least rank, items, positions
-                    continue
-                
-                if top_n is not None and count >= top_n:
-                    break
-                
-                try:
-                    # CSV format: Rank, Items, Positions, Opt Item Score, Opt Item-Pair Score, Opt Combined, ...
-                    rank = int(row[0])
-                    items = row[1]
-                    positions = row[2]
-                    
-                    # Use "Opt Combined" score (column 5) as the main score
-                    score = float(row[5]) if len(row) > 5 else 0.0
-                    
-                    # Clean up positions
-                    positions = positions.replace('[semicolon]', ';')
-                    
-                    layout = {
-                        'items': items,
-                        'positions': positions,
-                        'score': score,
-                        'rank': rank
-                    }
-                    
-                    layouts.append(layout)
-                    count += 1
-                    
-                except Exception as row_error:
-                    print(f"Warning: Error processing row {row_num+6}: {row_error}")
-                    continue
-                
-        return layouts
-        
-    except Exception as e:
-        print(f"Error parsing {results_path}: {e}")
-        return layouts
 
 def generate_config_content(items_assigned, positions_assigned, items_to_assign, positions_to_assign):
     """Generate YAML configuration content for Step 2."""
     
     config_template = f"""# optimize_layouts/config.yaml
 # Configuration file for item-to-position layout optimization - Step 2
-# Generated from Step 1 results
+# Generated from global Pareto optimal solutions
 
 #-----------------------------------------------------------------------
 # Paths
@@ -203,8 +180,9 @@ visualization:
 """
     return config_template
 
+
 def main():
-    """Main function to process layouts and generate Step 2 configurations."""
+    """Main function to process global Pareto layouts and generate Step 2 configurations."""
     args = parse_arguments()
     
     if args.remove_positions:
@@ -214,59 +192,88 @@ def main():
         positions_to_remove = []
         print("No positions specified for removal - using original layouts")
 
-    # Find all Step 1 result files and sort them to ensure consistent order
-    results_pattern = os.path.join(args.results_path, args.file_pattern)
-    result_files = sorted(glob.glob(results_pattern))  # Sort for consistent order
-    
-    if not result_files:
-        print(f"No result files found matching: {results_pattern}")
+    # Load global Pareto solutions
+    print(f"Loading global Pareto solutions from: {args.input_file}")
+    try:
+        df = parse_global_pareto_csv(args.input_file)
+        print(f"Loaded {len(df)} global Pareto solutions")
+    except Exception as e:
+        print(f"Error loading file: {e}")
         return
     
-    print(f"Found {len(result_files)} CSV files (processing in order)")
-    
-    # Parse all layouts while preserving file order and row order
-    all_layouts = []
-    
-    for file_idx, file_path in enumerate(result_files):
-        print(f"Processing file {file_idx + 1}: {os.path.basename(file_path)}")
-        if args.layouts_per_config:
-            layouts = parse_layout_results(file_path, top_n=args.layouts_per_config)
-        else:
-            layouts = parse_layout_results(file_path)
-        
-        # Add file source information to each layout
-        for layout in layouts:
-            layout['source_file'] = os.path.basename(file_path)
-            layout['file_index'] = file_idx
-            
-        all_layouts.extend(layouts)
-        print(f"  Extracted {len(layouts)} layouts")
-    
-    if not all_layouts:
-        print("No layouts extracted from result files")
+    # Validate required columns
+    required_cols = ['items', 'positions']
+    missing_cols = [col for col in required_cols if col not in df.columns]
+    if missing_cols:
+        print(f"Error: Missing required columns: {missing_cols}")
+        print(f"Available columns: {list(df.columns)}")
         return
     
-    # Apply selection strategy
-    if args.top_across_all:
-        print(f"Selecting top {args.top_across_all} layouts across all configs")
-        print(f"WARNING: This will change the order - config files will NOT correspond to original rows!")
-        all_layouts.sort(key=lambda x: x['score'], reverse=True)
-        selected_layouts = all_layouts[:args.top_across_all]
-        print(f"Selected {len(selected_layouts)} layouts using top-across-all approach")
+    # Add score column for sorting if needed
+    score_col = None
+    possible_score_cols = ['global_rank', 'item_score', 'item_pair_score', 'total_score']
+    for col in possible_score_cols:
+        if col in df.columns:
+            score_col = col
+            break
+    
+    if score_col is None:
+        print("Warning: No score column found, using original order")
+        df['score'] = range(len(df))  # Use index as score
+        score_col = 'score'
+    
+    # Sort by specified column
+    if args.sort_by and args.sort_by in df.columns:
+        sort_col = args.sort_by
+        # For global_rank, lower is better; for scores, higher is better
+        ascending = (sort_col == 'global_rank')
+        df = df.sort_values(sort_col, ascending=ascending)
+        print(f"Sorted by {sort_col} ({'ascending' if ascending else 'descending'})")
+    elif score_col == 'global_rank':
+        # Default: sort by global_rank if available (lower is better)
+        df = df.sort_values('global_rank', ascending=True)
+        print("Sorted by global_rank (ascending)")
     else:
-        selected_layouts = all_layouts
-        print(f"Extracted {len(selected_layouts)} layouts preserving original file/row order")
+        # Default: sort by score (higher is better)
+        ascending = (score_col == 'global_rank')
+        df = df.sort_values(score_col, ascending=ascending)
+        print(f"Sorted by {score_col}")
+    
+    # Select top N if specified
+    if args.top_n:
+        df = df.head(args.top_n)
+        print(f"Selected top {len(df)} solutions")
+    
+    # Convert to list of dictionaries for processing
+    layouts = []
+    for idx, row in df.iterrows():
+        layout = {
+            'items': row['items'],
+            'positions': row['positions'],
+            'score': row.get(score_col, 0),
+            'rank': idx + 1,
+            'source_info': f"Global Pareto #{idx+1}"
+        }
+        
+        # Add additional info if available
+        if 'source_file' in row:
+            layout['source_file'] = row['source_file']
+        if 'global_rank' in row:
+            layout['global_rank'] = row['global_rank']
+            
+        layouts.append(layout)
+    
+    print(f"Processing {len(layouts)} layouts to generate Step 2 configurations...")
     
     # Generate Step 2 configurations
     os.makedirs(args.output_path, exist_ok=True)
     
-    print(f"Processing {len(selected_layouts)} layouts to generate Step 2 configurations...")
-    print(f"Removing positions: {positions_to_remove}")
-    
     configs_generated = 0
     error_count = 0
+    skipped_duplicates = 0
+    unique_layouts = {}  # Track unique layouts to avoid duplicates
     
-    for i, layout in enumerate(selected_layouts):
+    for i, layout in enumerate(layouts):
         try:
             config_num = f"{i+1}"
             items = layout['items']
@@ -278,12 +285,11 @@ def main():
                 error_count += 1
                 continue
             
-            # Filter out non-16 item layouts (outliers)
+            # Check for expected layout size (should be 16 for optimal layouts)
             if len(items) != 16 or len(positions) != 16:
                 if len(items) != 16:  # Only warn if it's not the expected size
-                    print(f"Info: Skipping config {config_num} with {len(items)} items (expected 16)")
-                error_count += 1
-                continue
+                    print(f"Info: Layout {config_num} has {len(items)} items (expected 16)")
+                # Continue processing - global Pareto might have different sizes
             
             # Remove specified positions (if any)
             if positions_to_remove:
@@ -309,11 +315,28 @@ def main():
             
             unassigned_positions = ''.join([c for c in all_positions if c not in remaining_positions])
             
+            # Check for duplicate layouts after position removal
+            layout_key = (items_assigned_ordered, remaining_positions, items_to_assign_ordered, unassigned_positions)
+            
+            if layout_key in unique_layouts:
+                print(f"Duplicate layout found for config {config_num}, skipping (same as config {unique_layouts[layout_key]['config_num']})")
+                skipped_duplicates += 1
+                continue
+            
+            # Store this unique layout
+            unique_layouts[layout_key] = {
+                'config_num': config_num,
+                'layout': layout
+            }
+            
             # Debug: ensure we have the right counts
-            if len(items_assigned_ordered) + len(items_to_assign_ordered) != 24:
-                print(f"Warning: Item count mismatch. Assigned: {len(items_assigned_ordered)}, Unassigned: {len(items_to_assign_ordered)}, Total: {len(items_assigned_ordered) + len(items_to_assign_ordered)}")
-            if len(remaining_positions) + len(unassigned_positions) != 24:
-                print(f"Warning: Position count mismatch. Assigned: {len(remaining_positions)}, Unassigned: {len(unassigned_positions)}, Total: {len(remaining_positions) + len(unassigned_positions)}")
+            total_items = len(items_assigned_ordered) + len(items_to_assign_ordered)
+            total_positions = len(remaining_positions) + len(unassigned_positions)
+            
+            if total_items != 24:
+                print(f"Warning: Item count mismatch in config {config_num}. Assigned: {len(items_assigned_ordered)}, Unassigned: {len(items_to_assign_ordered)}, Total: {total_items}")
+            if total_positions != 24:
+                print(f"Warning: Position count mismatch in config {config_num}. Assigned: {len(remaining_positions)}, Unassigned: {len(unassigned_positions)}, Total: {total_positions}")
             
             # Generate config content using properly ordered items
             config_content = generate_config_content(
@@ -331,9 +354,12 @@ def main():
             # Show mapping for first few configs
             if configs_generated <= 3:
                 print(f"\nConfig #{configs_generated}:")
-                print(f"  Source: {layout.get('source_file', 'unknown')} row {layout.get('rank', '?')}")
+                print(f"  Source: {layout.get('source_info', 'unknown')}")
+                if 'global_rank' in layout:
+                    print(f"  Global rank: {layout['global_rank']}")
                 print(f"  Original layout: {items} -> {positions}")
-                print(f"  After removing {removed_positions}: {remaining_items} -> {remaining_positions}")
+                if removed_positions:
+                    print(f"  After removing {removed_positions}: {remaining_items} -> {remaining_positions}")
                 print(f"  Items assigned (freq order): {items_assigned_ordered}")
                 print(f"  Items to assign (freq order): {items_to_assign_ordered}")
                 print(f"  Config file: {os.path.basename(config_file)}")
@@ -347,25 +373,51 @@ def main():
     print(f"Generated {configs_generated} configuration files in '{args.output_path}'")
     if error_count > 0:
         print(f"Skipped {error_count} layouts due to errors")
+    if skipped_duplicates > 0:
+        print(f"Skipped {skipped_duplicates} duplicate layouts after position removal")
+    
+    # Summary statistics
+    if configs_generated > 0:
+        print(f"\nSummary:")
+        print(f"- Input: {len(layouts)} global Pareto optimal solutions")
+        print(f"- Duplicates after position removal: {skipped_duplicates}")
+        print(f"- Unique configurations generated: {configs_generated}")
+        print(f"- Deduplication efficiency: {skipped_duplicates/(len(layouts))*100:.1f}% reduction")
+        print(f"- Next step: Run optimization on these {configs_generated} unique configs")
+
 
 def parse_arguments():
     """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description='Generate Step 2 configurations from Step 1 results')
+    parser = argparse.ArgumentParser(
+        description='Generate Step 2 configurations from global Pareto optimal solutions',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use all global Pareto solutions
+  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
+  
+  # Use top 20 solutions by global rank
+  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 20 --remove-positions "A;"
+  
+  # Sort by item score and take top 50
+  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by item_score
+        """
+    )
     
-    parser.add_argument('--results-path', type=str, default='../output/layouts1',
-                       help='Path to Step 1 results directory')
+    parser.add_argument('--input-file', type=str, required=True,
+                       help='Path to global Pareto solutions CSV file')
     parser.add_argument('--output-path', type=str, default='../output/configs2',
                        help='Path to output Step 2 configurations')
-    parser.add_argument('--file-pattern', type=str, default='moo_results_config_*.csv',
-                       help='File pattern to match (default: "moo_results_config_*.csv")')
     parser.add_argument('--remove-positions', type=str, required=False,
                        help='Positions to remove (e.g., "A;" for A and semicolon)')
-    parser.add_argument('--layouts-per-config', type=int, default=None,
-                       help='Number of top layouts to take from each config file')
-    parser.add_argument('--top-across-all', type=int, default=None,
-                       help='Take top N layouts across all configs (overrides per-config)')
+    parser.add_argument('--top-n', type=int, default=None,
+                       help='Number of top solutions to use (None = all)')
+    parser.add_argument('--sort-by', type=str, default=None,
+                       choices=['global_rank', 'item_score', 'item_pair_score', 'total_score'],
+                       help='Column to sort by before selecting top-n')
     
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     main()

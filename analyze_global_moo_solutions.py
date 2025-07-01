@@ -4,6 +4,7 @@ Quick analysis and visualization of global Pareto results.
 
 Usage: ``python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv``
 """
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -62,10 +63,23 @@ def detect_objective_columns(df):
 
 
 def add_ranking_columns(df, item_col, pair_col):
-    """Add ranking columns to the dataframe."""
-    # Rank by each objective (higher scores get better ranks, i.e., rank 1 = highest score)
-    df['item_rank'] = df[item_col].rank(ascending=False, method='min').astype(int)
-    df['pair_rank'] = df[pair_col].rank(ascending=False, method='min').astype(int)
+    """
+    Add ranking columns to the dataframe.
+    
+    - source_rank: Original rank from source files (renamed from 'rank')
+    - item_rank: New 1-to-N ranking based on item scores in global dataset (1 = highest score)
+    - pair_rank: New 1-to-N ranking based on pair scores in global dataset (1 = highest score)  
+    - global_rank: Sum of item_rank + pair_rank (lower = better overall)
+    """
+    # Rename existing 'rank' column to 'source_rank' if it exists
+    if 'rank' in df.columns:
+        df = df.rename(columns={'rank': 'source_rank'})
+        print("Renamed 'rank' column to 'source_rank'")
+    
+    # Create new 1-to-N ranks based on scores within the global dataset
+    # Use method='first' to ensure consecutive 1-to-N ranking (breaks ties by order)
+    df['item_rank'] = df[item_col].rank(ascending=False, method='first').astype(int)
+    df['pair_rank'] = df[pair_col].rank(ascending=False, method='first').astype(int)
     df['global_rank'] = df['item_rank'] + df['pair_rank']
     
     # Sort by global rank (lower is better since it's sum of ranks)
@@ -183,6 +197,8 @@ def print_statistics(df, item_col, pair_col, file_counts, correlation):
     if 'pair_rank' in df.columns:
         display_cols.append('pair_rank')
     display_cols.extend([item_col, pair_col])
+    if 'source_rank' in df.columns:
+        display_cols.append('source_rank')
     if 'positions' in df.columns:
         display_cols.append('positions')
     
@@ -218,7 +234,7 @@ def main():
     parser = argparse.ArgumentParser(description='Analyze global Pareto results')
     parser.add_argument('pareto_file', help='Path to global Pareto CSV file')
     parser.add_argument('--output-dir', default='output', 
-                       help='Directory for output plots')
+                       help='Directory for output plots and files')
     
     args = parser.parse_args()
     
@@ -251,7 +267,13 @@ def main():
     top_solutions = print_statistics(df, item_col, pair_col, file_counts, correlation)
     save_results(df, file_counts, correlation, top_solutions, output_dir)
     
-    print(f"\nAnalysis complete! Plots and summary saved to {output_dir}/")
+    print(f"\nAnalysis complete! Plots and files saved to {output_dir}/")
+    print(f"Key outputs:")
+    print(f"  - global_moo_solutions_with_ranks.csv: Complete results with rankings")
+    print(f"  - pareto_front_2d.png: Pareto front visualization")
+    print(f"  - source_distribution.png: Source file distribution") 
+    print(f"  - objective_correlation.png: Correlation analysis")
+    print(f"  - analysis_summary.txt: Text summary")
 
 
 if __name__ == '__main__':

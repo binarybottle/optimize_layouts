@@ -68,7 +68,7 @@ For the following, we:
   Command for generating the 95,040 configuration files:
 
   ```bash
-    cd keyboards; python generate_configs1.py
+    cd keyboards; python3 generate_configs1.py
   ```
 
   In the example below, the 5 most frequent letters (etaoi in English)
@@ -118,7 +118,8 @@ The following steps act on each of Step 1's output files.
   Command for generating the second set of configuration files:
 
   ```bash
-    cd keyboards; python generate_configs2.py
+    cd keyboards
+    python3 generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
   ```
 
   ```
