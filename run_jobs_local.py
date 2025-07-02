@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """
 Automatically find optimal number of parallel processes based on local system resources
+
+Usage:
+``python3 run_jobs_local.py --start-config 1 --end-config 1000``    # ascending
+``python3 run_jobs_local.py --start-config 1000 --end-config 500``    # descending
 """
 
 import os
@@ -276,10 +280,6 @@ def main():
                        help="Starting config ID (default: 1)")
     parser.add_argument("--end-config", type=int, default=TOTAL_CONFIGS,
                        help="Ending config ID (default: highest)")
-    #parser.add_argument("--start-config", type=int, default=TOTAL_CONFIGS,
-    #                   help="Starting config ID (default: highest)")
-    #parser.add_argument("--end-config", type=int, default=1,
-    #                   help="Ending config ID (default: 1)")
     parser.add_argument("--max-workers", type=int, default=None,
                        help="Maximum workers (default: CPU count - 1)")
     parser.add_argument("--show-output", action="store_true",
@@ -306,8 +306,17 @@ def main():
     
     print(f"System: {cpu_count} CPUs, {memory.total / (1024**3):.1f}GB RAM")
     print(f"Max workers: {max_workers}")
-    print(f"Config range: {args.start_config} to {args.end_config} (ascending order)")
-    #print(f"Config range: {args.start_config} down to {args.end_config} (reverse order)")
+    
+    # Determine if we're going ascending or descending and generate config list accordingly
+    if args.start_config <= args.end_config:
+        # Ascending order
+        config_ids = list(range(args.start_config, args.end_config + 1))
+        print(f"Config range: {args.start_config} to {args.end_config} (ascending order)")
+    else:
+        # Descending order
+        config_ids = list(range(args.start_config, args.end_config - 1, -1))
+        print(f"Config range: {args.start_config} down to {args.end_config} (descending order)")
+    
     print(f"Output directory: {output_dir}")
     print()
     
@@ -315,11 +324,6 @@ def main():
     if not os.path.exists(SCRIPT_PATH):
         print(f"❌ Error: {SCRIPT_PATH} not found in current directory")
         sys.exit(1)
-    
-    # Generate config list in order
-    config_ids = list(range(args.start_config, args.end_config + 1))
-    #Reverse order
-    #config_ids = list(range(args.start_config, args.end_config - 1, -1))
     
     if args.dry_run:
         print("DRY RUN - Would process configs:")
