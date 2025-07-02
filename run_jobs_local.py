@@ -5,6 +5,7 @@ Automatically find optimal number of parallel processes based on local system re
 Usage:
 ``python3 run_jobs_local.py --start-config 1 --end-config 1000``    # ascending
 ``python3 run_jobs_local.py --start-config 1000 --end-config 500``    # descending
+``python3 run_jobs_local.py --reserve-cpus 2``    # reserve 2 CPUs for system
 """
 
 import os
@@ -36,19 +37,24 @@ TARGET_CPU_PERCENT = 90     # Ideal CPU usage target
 SCALE_UP_THRESHOLD = 2    # Scale up after 2 successful completions
 SCALE_DOWN_IMMEDIATE = True  # Scale down immediately on overload
 MIN_WORKERS = 1
-MAX_WORKERS = None  # Will be set to CPU count
+MAX_WORKERS = None  # Will be set based on available CPUs
 
 class AdaptiveOptimizer:
-    def __init__(self, config_ids, show_output=False):
+    def __init__(self, config_ids, reserved_cpus=1, max_workers_override=None, show_output=False):
         self.config_ids = deque(config_ids)
+        self.reserved_cpus = reserved_cpus
         self.show_output = show_output
         
         self.active_processes = {}  # pid -> (config_id, process, start_time)
         self.results_queue = queue.Queue()
         
+        # Calculate max workers based on reserved CPUs
+        total_cpus = psutil.cpu_count()
+        available_cpus = max(1, total_cpus - self.reserved_cpus)
+        
         # Adaptive scaling state
-        self.current_workers = 4  # Start with more workers for powerful systems
-        self.max_workers = MAX_WORKERS or (psutil.cpu_count() - 1)
+        self.current_workers = min(4, available_cpus)  # Start with up to 4 workers, but respect available CPUs
+        self.max_workers = max_workers_override or available_cpus
         self.successful_completions = 0
         self.last_scale_time = time.time()
         self.recent_completion_times = deque(maxlen=10)
@@ -61,6 +67,8 @@ class AdaptiveOptimizer:
         
         print(f"🚀 Starting adaptive optimizer")
         print(f"   Workers: {self.current_workers} (will auto-scale up to {self.max_workers})")
+        print(f"   Reserved CPUs: {self.reserved_cpus} (out of {total_cpus} total)")
+        print(f"   Available CPUs for processing: {available_cpus}")
         print(f"   Configs to process: {len(self.config_ids)}")
         print()
     
@@ -86,6 +94,11 @@ class AdaptiveOptimizer:
         
         if resources['cpu_percent'] > MAX_CPU_PERCENT:
             return True, f"CPU high: {resources['cpu_percent']:.1f}%"
+        
+        # Scale down if we have too many workers compared to available cores
+        available_cores = max(1, psutil.cpu_count() - self.reserved_cpus)
+        if len(self.active_processes) > available_cores:
+            return True, f"Too many workers for available cores: {len(self.active_processes)} > {available_cores}"
         
         return False, None
     
@@ -261,9 +274,12 @@ class AdaptiveOptimizer:
     def show_status(self):
         """Show current status and system resources"""
         resources = self.get_system_resources()
+        total_cpus = psutil.cpu_count()
+        available_cpus = total_cpus - self.reserved_cpus
         
         print(f"\n📊 Status Report:")
-        print(f"   Workers: {len(self.active_processes)}/{self.current_workers} active")
+        print(f"   Workers: {len(self.active_processes)}/{self.current_workers} active (max: {self.max_workers})")
+        print(f"   CPUs: {available_cpus} available, {self.reserved_cpus} reserved, {total_cpus} total")
         print(f"   Progress: ✅{self.success_count} ⏭️{self.skip_count} ❌{self.error_count}")
         print(f"   Remaining: {len(self.config_ids)} configs")
         print(f"   Resources: {resources['memory_percent']:.1f}% RAM, {resources['cpu_percent']:.1f}% CPU")
@@ -281,7 +297,9 @@ def main():
     parser.add_argument("--end-config", type=int, default=TOTAL_CONFIGS,
                        help="Ending config ID (default: highest)")
     parser.add_argument("--max-workers", type=int, default=None,
-                       help="Maximum workers (default: CPU count - 1)")
+                       help="Maximum workers (default: CPU count - reserve-cpus)")
+    parser.add_argument("--reserve-cpus", type=int, default=1,
+                       help="Number of CPU cores to keep free (default: 1)")
     parser.add_argument("--show-output", action="store_true",
                        help="Show optimize_layout.py output in real-time")
     parser.add_argument("--dry-run", action="store_true",
@@ -289,7 +307,18 @@ def main():
     
     args = parser.parse_args()
     
-    # Set global max workers
+    # Validate reserve-cpus argument
+    cpu_count = psutil.cpu_count()
+    if args.reserve_cpus >= cpu_count:
+        print(f"❌ Error: Cannot reserve {args.reserve_cpus} CPUs when system only has {cpu_count}")
+        print(f"   Please use --reserve-cpus with a value less than {cpu_count}")
+        sys.exit(1)
+    
+    if args.reserve_cpus < 0:
+        print(f"❌ Error: --reserve-cpus must be 0 or greater")
+        sys.exit(1)
+    
+    # Set global max workers (if specified)
     global MAX_WORKERS
     MAX_WORKERS = args.max_workers
     
@@ -300,11 +329,13 @@ def main():
     print("=== Automatically find optimal number of parallel processes based on local system resources ===")
     
     # Show system info
-    cpu_count = psutil.cpu_count()
     memory = psutil.virtual_memory()
-    max_workers = MAX_WORKERS or (cpu_count - 1)
+    available_cpus = max(1, cpu_count - args.reserve_cpus)
+    max_workers = args.max_workers or available_cpus
     
     print(f"System: {cpu_count} CPUs, {memory.total / (1024**3):.1f}GB RAM")
+    print(f"Reserved CPUs: {args.reserve_cpus}")
+    print(f"Available CPUs: {available_cpus}")
     print(f"Max workers: {max_workers}")
     
     # Determine if we're going ascending or descending and generate config list accordingly
@@ -336,7 +367,12 @@ def main():
         return
     
     # Run the adaptive optimizer
-    optimizer = AdaptiveOptimizer(config_ids, args.show_output)
+    optimizer = AdaptiveOptimizer(
+        config_ids, 
+        reserved_cpus=args.reserve_cpus,
+        max_workers_override=args.max_workers,
+        show_output=args.show_output
+    )
     optimizer.run()
     
     # Final summary
