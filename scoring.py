@@ -641,7 +641,6 @@ def calculate_complete_layout_score(complete_mapping: Dict[str, str],
 def calculate_complete_layout_score_direct(complete_mapping: dict, normalized_scores: tuple) -> tuple:
     """
     Calculate complete layout score directly from the mapping without going through optimization scoring.
-    This ensures the score matches what SLURM calculates.
     
     Args:
         complete_mapping: Dictionary mapping items to positions (e.g., {'e': 'F', 't': 'D', ...})

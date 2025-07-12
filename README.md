@@ -7,7 +7,6 @@ Optimize layouts of items and item-pairs with advanced single- and multi-objecti
 **License**: MIT License (see LICENSE)
 
 ## Usage
-
 ```bash
 # Prepare input data
 python normalize_input.py     # Normalize raw input data
@@ -29,8 +28,17 @@ python analyze_results.py
 python score_layout.py --items "etaoi" --positions "FJDSV"
 ```
 
-For running parallel processes, 
-see **Running parallel processes** below.
+## Running many configurations
+You can generate configuration files in output/configs1/
+by creating your own generate_configs.py script,
+following the example in keyboards/generate_configs1.py,
+then modify the run_jobs_local.py script for your needs
+(see run_jobs_slurm.sh for running jobs on a linux cluster):
+
+```bash
+python3 generate_configs.py
+python3 run_jobs_local.py
+```
 
 ## Overview
 This code optimizes a layout, an arrangement of items,
@@ -182,67 +190,3 @@ where direction (sequence of a given pair) matters.
   Automatically saved timestamped files:
   - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
-
-## Optional: Running parallel processes locally or on SLURM
-Two commands can be modified to parallelize layout optimization:
-
-  ### Run parallel jobs locally
-  You can generate configuration files in output/configs1/
-  by creating your own generate_configs.py script,
-  following the example in keyboards/generate_configs1.py,
-  then modify the run_jobs_local.py script for your needs:
-  ```bash
-  python3 generate_configs.py
-  python3 run_jobs_local.py
-  ```
-
-  ### Run parallel jobs on a linux cluster (slurm)
-  Connect and set up the code environment: 
-  ```bash
-  # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
-  ssh username@bridges2.psc.edu
-
-  # Create directory for the project
-  mkdir -p optimizer; cd optimizer
-
-  # Clone repository and make scripts executable
-  git clone https://github.com/binarybottle/optimize_layouts.git
-  cd optimize_layouts
-  chmod +x *.py *.sh
-
-  # Make output directories
-  mkdir -p output/layouts output/outputs output/errors output/configs1
-
-  # Test that anaconda3 module works (no virtual environment needed)
-  module load anaconda3
-  python3 --version
-  python3 -c "import numpy, pandas, yaml; print('Required packages available')"
-
-  # Generate config files as described in the local parallel job submission example
-  python3 generate_configs.py
-  ```
-
-  Configure, submit, monitor, and cancel jobs:
-  ```bash
-  # Use screen to keep session active
-  screen -S submission
-
-  # Automatically manage submissions (checks every 5 minutes)
-  nohup bash run_job_slurm.sh
-
-  # Check all running jobs
-  squeue -u $USER
-
-  # Watch jobs in real-time
-  watch squeue -u $USER
-
-  # See how many jobs are running vs. pending
-  squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
-
-  # Check number of output files
-  sh count_files.sh output/layouts
-
-  # Cancel all your jobs at once, or for a specific job ID
-  scancel -u $USER
-  scancel <job_array_id>
-  ```

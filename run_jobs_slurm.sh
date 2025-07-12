@@ -1,6 +1,60 @@
 #!/bin/bash
-# Auto submitter using individual jobs (no arrays)
-# Properly tracks submitted configs
+"""
+Run individual jobs (no arrays) on a linux cluster (slurm)
+Properly tracks submitted configs
+
+Connect and set up the code environment: 
+
+  ```bash
+  # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
+  ssh username@bridges2.psc.edu
+
+  # Create directory for the project
+  mkdir -p optimizer; cd optimizer
+
+  # Clone repository and make scripts executable
+  git clone https://github.com/binarybottle/optimize_layouts.git
+  cd optimize_layouts
+  chmod +x *.py *.sh
+
+  # Make output directories
+  mkdir -p output/layouts output/outputs output/errors output/configs1
+
+  # Test that anaconda3 module works (no virtual environment needed)
+  module load anaconda3
+  python3 --version
+  python3 -c "import numpy, pandas, yaml; print('Required packages available')"
+
+  # Generate config files as described in the local parallel job submission example
+  python3 generate_configs.py
+  ```
+
+Configure, submit, monitor, and cancel jobs:
+
+  ```bash
+  # Use screen to keep session active
+  screen -S submission
+
+  # Automatically manage submissions (checks every 5 minutes)
+  nohup bash run_job_slurm.sh
+
+  # Check all running jobs
+  squeue -u $USER
+
+  # Watch jobs in real-time
+  watch squeue -u $USER
+
+  # See how many jobs are running vs. pending
+  squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
+
+  # Check number of output files
+  sh count_files.sh output/layouts
+
+  # Cancel all your jobs at once, or for a specific job ID
+  scancel -u $USER
+  scancel <job_array_id>
+  ```
+"""
 
 MAX_JOBS=16
 CHECK_INTERVAL=300

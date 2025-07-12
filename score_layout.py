@@ -128,8 +128,7 @@ Examples:
             all_positions = ''.join(complete_mapping.values())
             print(f"Complete layout: {all_items} → {all_positions}")
         
-        # Debug output to match SLURM format
-        print(f"\nDEBUG: Scoring breakdown")
+        # Debug output
         print("Complete mapping:")
         for item, pos in complete_mapping.items():
             print(f"  {item} → {pos}")

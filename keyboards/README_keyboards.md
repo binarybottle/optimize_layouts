@@ -39,17 +39,23 @@ For the following, we:
     1. To parallelize the branch-and-bound, depth-first search, 
        fix the 5 most frequent letters in every possible arrangement (95,040) 
        within the 12 most comfortable keys (half of our 24 keys in the home blocks).
+       ``generate_configs1.py``
     2. For each of the 95,040 possible arrangements of 5 letters, 
        use MOO to optimally arrange 12 letters in the 12 available of 16 keys. 
        The result is 95,040 Pareto fronts, each with 20-30 solutions.
+       ``run_jobs_local.py``
     3. Select the global Pareto front of MOO solutions from the 16-letter/key layouts.
+       ``select_global_moo_solutions.py``
 2. Optimally arrange the remaining letters.
     1. For each selected 16-letter/key layout, remove 2 letters from the 
        2 least comfortable keys (to explore a broader solution space).
+       ``generate_configs2.py``
     2. For each resulting 14-letter/key layout, optimally arrange the 10 
        (out of 24) remaining letters in the 10 remaining keys, again using MOO.
+       ``run_jobs_local.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
-3. Select the final layout.
+       ``select_global_moo_solutions.py``
+3. Select the final layout: ``analyze_global_moo_solutions.py``
     1. For each MOO objective, replace scores with their rankings.
     2. Sum the rankings for each layout.
     3. Sort layouts by these sums.
@@ -111,7 +117,6 @@ For the following, we:
 
   ```bash
     python3 select_global_moo_solutions.py
-    python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv
   ```
 
 ### Step 2. Optimally arrange the remaining letters.
