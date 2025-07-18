@@ -36,7 +36,7 @@ Configure, submit, monitor, and cancel jobs:
   screen -S submission
 
   # Automatically manage submissions (checks every 5 minutes)
-  nohup bash run_jobs_slurm.sh
+  nohup bash run_jobs_slurm.sh &
 
   # Check all running jobs
   squeue -u $USER
@@ -48,7 +48,7 @@ Configure, submit, monitor, and cancel jobs:
   squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 
   # Check number of output files
-  sh count_files.sh output/layouts
+  sh count_files.sh output/layouts2
 
   # Cancel all your jobs at once, or for a specific job ID
   scancel -u $USER
@@ -113,8 +113,8 @@ submit_individual_job() {
 #SBATCH --partition=EM
 #SBATCH --account=med250002p
 #SBATCH --job-name=cfg_${config_id}
-#SBATCH --output=output/outputs/cfg_${config_id}.out
-#SBATCH --error=output/errors/cfg_${config_id}.err
+#SBATCH --output=output/outputs2/cfg_${config_id}.out
+#SBATCH --error=output/errors2/cfg_${config_id}.err
 
 module purge
 module load anaconda3
@@ -126,7 +126,7 @@ export NUMBA_NUM_THREADS=1
 cd \$HOME/keyboard_optimizer/optimize_layouts
 
 # Double-check not completed (race condition)
-if find output/layouts -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q .; then
+if find output/layouts2 -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q .; then
     echo "Already completed, exiting"
     exit 0
 fi
