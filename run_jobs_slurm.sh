@@ -18,15 +18,15 @@ Connect and set up the code environment:
   chmod +x *.py *.sh
 
   # Make output directories
-  mkdir -p output/layouts output/outputs output/errors output/configs1
+  mkdir -p output/layouts2 output/outputs2 output/errors2 output/configs2
 
   # Test that anaconda3 module works (no virtual environment needed)
   module load anaconda3
   python3 --version
   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
 
-  # Generate config files as described in the local parallel job submission example
-  python3 generate_configs.py
+  # Generate config files as described in either of the config generation scripts
+  python3 generate_configs2.py
   ```
 
 Configure, submit, monitor, and cancel jobs:
@@ -58,15 +58,14 @@ Configure, submit, monitor, and cancel jobs:
 
 MAX_JOBS=16
 CHECK_INTERVAL=300
-CONFIG_PREFIX="output/configs1/config_"
+CONFIG_PREFIX="output/configs2/config_"
 CONFIG_SUFFIX=".yaml"
-OUTPUT_DIR="output/layouts"
+OUTPUT_DIR="output/layouts2"
 TOTAL_CONFIGS=95040
 
 echo "=== Auto Individual Job Submitter ==="
 echo "Max jobs: $MAX_JOBS"
 echo "Check interval: ${CHECK_INTERVAL}s"
-echo "Avoids all array limits!"
 echo ""
 
 # Create temp file to track submitted configs this session
@@ -108,10 +107,10 @@ submit_individual_job() {
     local job_script=$(mktemp)
     cat > "$job_script" << JOBEOF
 #!/bin/bash
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=15GB
-#SBATCH --time=2:00:00
-#SBATCH --partition=RM-shared
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=500GB
+#SBATCH --time=8:00:00
+#SBATCH --partition=EM
 #SBATCH --account=med250002p
 #SBATCH --job-name=cfg_${config_id}
 #SBATCH --output=output/outputs/cfg_${config_id}.out
@@ -132,11 +131,11 @@ if find output/layouts -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q 
     exit 0
 fi
 
-echo "Processing config ${config_id} with 8 processes..."
+echo "Processing config ${config_id} with ${cpus-per-task} processes..."
 python3 optimize_layout.py \\
     --config ${CONFIG_PREFIX}${config_id}${CONFIG_SUFFIX} \\
     --moo \\
-    --processes 8
+    --processes ${cpus-per-task}
 
 echo "Completed config ${config_id}"
 JOBEOF
