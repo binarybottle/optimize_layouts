@@ -1,60 +1,56 @@
 #!/bin/bash
-"""
-Run individual jobs (no arrays) on a (slurm) linux cluster.
-Properly tracks submitted configs.
-
-Connect and set up the code environment: 
-
-  ```bash
-  # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
-  ssh username@bridges2.psc.edu
-
-  # Create directory for the project
-  mkdir -p optimizer; cd optimizer
-
-  # Clone repository and make scripts executable
-  git clone https://github.com/binarybottle/optimize_layouts.git
-  cd optimize_layouts
-  chmod +x *.py *.sh
-
-  # Make output directories
-  mkdir -p output/layouts2 output/outputs2 output/errors2 output/configs2
-
-  # Test that anaconda3 module works (no virtual environment needed)
-  module load anaconda3
-  python3 --version
-  python3 -c "import numpy, pandas, yaml; print('Required packages available')"
-
-  # Generate config files as described in either of the config generation scripts
-  python3 generate_configs2.py
-  ```
-
-Configure, submit, monitor, and cancel jobs:
-
-  ```bash
-  # Use screen to keep session active
-  screen -S submission
-
-  # Automatically manage submissions (checks every 5 minutes)
-  nohup bash run_jobs_slurm.sh &
-
-  # Check all running jobs
-  squeue -u $USER
-
-  # Watch jobs in real-time
-  watch squeue -u $USER
-
-  # See how many jobs are running vs. pending
-  squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
-
-  # Check number of output files
-  sh count_files.sh output/layouts2
-
-  # Cancel all your jobs at once, or for a specific job ID
-  scancel -u $USER
-  scancel <job_array_id>
-  ```
-"""
+#
+# Run individual jobs (no arrays) on a (slurm) linux cluster.
+# Properly tracks submitted configs.
+#
+# Connect and set up the code environment: 
+#
+#   # Log in (example: Pittsburgh Supercomputing Center's Bridge-2 cluster)
+#   ssh username@bridges2.psc.edu
+#
+#   # Create directory for the project
+#   mkdir -p optimizer; cd optimizer
+#
+#   # Clone repository and make scripts executable
+#   git clone https://github.com/binarybottle/optimize_layouts.git
+#   cd optimize_layouts
+#   chmod +x *.py *.sh
+#
+#   # Make output directories
+#   mkdir -p output/layouts2 output/outputs2 output/errors2 output/configs2
+#
+#   # Test that anaconda3 module works (no virtual environment needed)
+#   module load anaconda3
+#   python3 --version
+#   python3 -c "import numpy, pandas, yaml; print('Required packages available')"
+#
+#   # Generate config files as described in either of the config generation scripts
+#   python3 generate_configs2.py
+#
+# Configure, submit, monitor, and cancel jobs:
+#   
+#   # Use screen to keep session active
+#   screen -S submission
+#   
+#   # Automatically manage submissions (checks every 5 minutes)
+#   nohup bash run_jobs_slurm.sh > submission.log 2>&1 &
+#   echo $! > run_jobs.pid # If necessary, kill using the saved PID: kill $(cat run_jobs.pid)
+#   
+#   # Check all running jobs
+#   squeue -u $USER
+#   
+#   # Watch jobs in real-time
+#   watch squeue -u $USER
+#   
+#   # See how many jobs are running vs. pending
+#   squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
+#   
+#   # Check number of output files
+#   sh count_files.sh output/layouts2
+# 
+#   # Cancel all your jobs at once, or for a specific job ID
+#   scancel -u $USER
+#   scancel <job_array_id>
 
 MAX_JOBS=16
 CHECK_INTERVAL=300
@@ -123,7 +119,7 @@ export OMP_NUM_THREADS=1
 export PYTHONHASHSEED=0
 export NUMBA_NUM_THREADS=1
 
-cd \$HOME/keyboard_optimizer/optimize_layouts
+cd \$HOME/optimizer/optimize_layouts
 
 # Double-check not completed (race condition)
 if find output/layouts2 -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q .; then
@@ -131,11 +127,11 @@ if find output/layouts2 -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q
     exit 0
 fi
 
-echo "Processing config ${config_id} with ${cpus-per-task} processes..."
+echo "Processing config ${config_id} with \$SLURM_CPUS_PER_TASK processes..."
 python3 optimize_layout.py \\
     --config ${CONFIG_PREFIX}${config_id}${CONFIG_SUFFIX} \\
     --moo \\
-    --processes ${cpus-per-task}
+    --processes \$SLURM_CPUS_PER_TASK
 
 echo "Completed config ${config_id}"
 JOBEOF
