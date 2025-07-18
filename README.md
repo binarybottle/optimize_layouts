@@ -1,4 +1,4 @@
-# Layout Optimization System
+# Software for optimizing item-to-position layouts
 
 Optimize layouts of items and item-pairs with advanced single- and multi-objective algorithms.
 

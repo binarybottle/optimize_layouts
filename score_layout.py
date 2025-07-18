@@ -1,6 +1,6 @@
 # score_layout.py
 """
-Layout score calculator that shows complete layout scores.
+Layout score calculator that calculates complete layout scores.
 
 Example usage:
     python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details

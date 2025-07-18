@@ -1,7 +1,6 @@
 # scoring.py  
 """
-Unified, maintainable scoring system for layout optimization 
-in both parallel and non-parallel modes.
+Unified scoring system for layout optimization.
 
 The system uses a centralized combination strategy defined by 
 DEFAULT_COMBINATION_STRATEGY and implemented in apply_default_combination(). 

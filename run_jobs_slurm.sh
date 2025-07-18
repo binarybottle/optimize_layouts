@@ -1,7 +1,7 @@
 #!/bin/bash
 """
-Run individual jobs (no arrays) on a linux cluster (slurm)
-Properly tracks submitted configs
+Run individual jobs (no arrays) on a (slurm) linux cluster.
+Properly tracks submitted configs.
 
 Connect and set up the code environment: 
 
