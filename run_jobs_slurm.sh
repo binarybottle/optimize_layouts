@@ -57,7 +57,7 @@ CHECK_INTERVAL=300
 CONFIG_PREFIX="output/configs2/config_"
 CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts2"
-TOTAL_CONFIGS=95040
+TOTAL_CONFIGS=1
 
 echo "=== Auto Individual Job Submitter ==="
 echo "Max jobs: $MAX_JOBS"
@@ -70,7 +70,7 @@ SUBMITTED_FILE="/tmp/submitted_configs_$$"
 
 # Find next config to process
 find_next_config() {
-    for ((i=4001; i<=TOTAL_CONFIGS; i++)); do
+    for ((i=1; i<=TOTAL_CONFIGS; i++)); do
         CONFIG_FILE="${CONFIG_PREFIX}${i}${CONFIG_SUFFIX}"
         
         # Check if config exists
