@@ -1,6 +1,6 @@
 # optimize_layout.py
 """
-Layout optimization software.
+Layout optimization software
 
 This script consolidates all optimization logic to support both 
 Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
