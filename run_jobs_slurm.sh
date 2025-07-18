@@ -36,7 +36,7 @@ Configure, submit, monitor, and cancel jobs:
   screen -S submission
 
   # Automatically manage submissions (checks every 5 minutes)
-  nohup bash run_job_slurm.sh
+  nohup bash run_jobs_slurm.sh
 
   # Check all running jobs
   squeue -u $USER
