@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 """
-Compare Raw and Normalized Input Data
+Compare raw and normalized input data; analyze item and position participation in pairs.
 
 This script compares raw input data with its normalized version through visual
-plots and statistical analysis. It reads raw file paths from config.yaml.
+plots and statistical analysis, and analyzes item and position participation in pairs. 
+It reads raw file paths from config.yaml.
 
 Features:
 - Loads both raw and normalized score data using config infrastructure
@@ -11,6 +12,7 @@ Features:
 - Generates top scores visualizations for normalized data  
 - Handles item scores, item-pair scores, position scores, and position-pair scores
 - Produces summary reports with statistics
+- Analyzes item and position participation in pairs
 
 Input Files (via config.yaml):
 - Raw data: item frequencies, item-pair frequencies, position scores, position-pair scores
@@ -20,6 +22,8 @@ Output Files:
 - Distribution comparison plots (*_distribution_comparison.png)
 - Top scores plots (*_normalized_top*.png)  
 - Summary report (normalization_summary.txt)
+- Item pair participation analysis (item_pair_participation.csv)
+- Position pair participation analysis (position_pair_participation.csv)
 
 Usage:
     python analyze_input.py [--config config.yaml] [--output-dir output/normalized_input/plots]
@@ -96,6 +100,125 @@ def load_raw_scores(config: Config):
         raw_data['position_pair_scores'] = load_pair_score_dict(config.paths.raw_position_pair_scores_file, 'position_pair')
     
     return raw_data
+
+#-----------------------------------------------------------------------------
+# Pair participation analysis functions
+#-----------------------------------------------------------------------------
+def analyze_items_in_pairs(item_pair_scores):
+    """Analyze item participation in item pairs."""
+    if not item_pair_scores:
+        return pd.DataFrame()
+    
+    # Get all unique items
+    all_items = set()
+    for pair in item_pair_scores.keys():
+        all_items.add(pair[0])
+        all_items.add(pair[1])
+    
+    # Get sorted scores for ranking (highest score = rank 1)
+    all_scores = sorted(set(item_pair_scores.values()), reverse=True)
+    score_to_rank = {score: rank + 1 for rank, score in enumerate(all_scores)}
+    
+    results = []
+    total_pairs = len(item_pair_scores)
+    
+    for item in sorted(all_items):
+        # Find all pairs containing this item
+        item_pair_scores_list = []
+        for pair, score in item_pair_scores.items():
+            if item in pair:
+                item_pair_scores_list.append(score)
+        
+        if item_pair_scores_list:
+            count = len(item_pair_scores_list)
+            percent = (count / total_pairs) * 100
+            highest_score = max(item_pair_scores_list)
+            lowest_score = min(item_pair_scores_list)
+            highest_rank = score_to_rank[highest_score]
+            lowest_rank = score_to_rank[lowest_score]
+            
+            results.append({
+                'item': item,
+                'pair_count': count,
+                'pair_percent': round(percent, 2),
+                'highest_pair_score': highest_score,
+                'highest_pair_rank': highest_rank,
+                'lowest_pair_score': lowest_score,
+                'lowest_pair_rank': lowest_rank
+            })
+    
+    return pd.DataFrame(results)
+
+def analyze_positions_in_pairs(position_pair_scores):
+    """Analyze position participation in position pairs."""
+    if not position_pair_scores:
+        return pd.DataFrame()
+    
+    # Get all unique positions
+    all_positions = set()
+    for pair in position_pair_scores.keys():
+        all_positions.add(pair[0])
+        all_positions.add(pair[1])
+    
+    # Get sorted scores for ranking (highest score = rank 1)
+    all_scores = sorted(set(position_pair_scores.values()), reverse=True)
+    score_to_rank = {score: rank + 1 for rank, score in enumerate(all_scores)}
+    
+    results = []
+    total_pairs = len(position_pair_scores)
+    
+    for position in sorted(all_positions):
+        # Find all pairs containing this position
+        position_pair_scores_list = []
+        for pair, score in position_pair_scores.items():
+            if position in pair:
+                position_pair_scores_list.append(score)
+        
+        if position_pair_scores_list:
+            count = len(position_pair_scores_list)
+            percent = (count / total_pairs) * 100
+            highest_score = max(position_pair_scores_list)
+            lowest_score = min(position_pair_scores_list)
+            highest_rank = score_to_rank[highest_score]
+            lowest_rank = score_to_rank[lowest_score]
+            
+            results.append({
+                'position': position.upper(),  # Convert to uppercase for consistency
+                'pair_count': count,
+                'pair_percent': round(percent, 2),
+                'highest_pair_score': highest_score,
+                'highest_pair_rank': highest_rank,
+                'lowest_pair_score': lowest_score,
+                'lowest_pair_rank': lowest_rank
+            })
+    
+    return pd.DataFrame(results)
+
+def analyze_pair_participation(raw_data, output_dir):
+    """Analyze how items and positions participate in pairs and save to CSV files."""
+    print("Analyzing pair participation...")
+    
+    # Analyze items
+    if 'item_pair_scores' in raw_data and raw_data['item_pair_scores']:
+        print("  Analyzing item pair participation...")
+        item_analysis = analyze_items_in_pairs(raw_data['item_pair_scores'])
+        if not item_analysis.empty:
+            item_output_path = os.path.join(output_dir, "item_pair_participation.csv")
+            item_analysis.to_csv(item_output_path, index=False)
+            print(f"  Saved: {item_output_path}")
+        else:
+            print("  No item pair data to analyze")
+    
+    # Analyze positions  
+    if 'position_pair_scores' in raw_data and raw_data['position_pair_scores']:
+        print("  Analyzing position pair participation...")
+        position_analysis = analyze_positions_in_pairs(raw_data['position_pair_scores'])
+        if not position_analysis.empty:
+            position_output_path = os.path.join(output_dir, "position_pair_participation.csv")
+            position_analysis.to_csv(position_output_path, index=False)
+            print(f"  Saved: {position_output_path}")
+        else:
+            print("  No position pair data to analyze")
 
 #-----------------------------------------------------------------------------
 # Plotting functions
@@ -249,6 +372,9 @@ def main():
         
         print("Creating summary report...")
         create_summary_report(raw_data, normalized_scores, config, args.output_dir)
+        
+        # New: Analyze pair participation
+        analyze_pair_participation(raw_data, args.output_dir)
         
         print(f"\nAnalysis complete! Output saved to: {args.output_dir}")
         

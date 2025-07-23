@@ -47,12 +47,12 @@ For the following, we:
     3. Select the global Pareto front of MOO solutions from the 16-letter/key layouts.
        ``select_global_moo_solutions.py``
 2. Optimally arrange the remaining letters.
-    1. For each selected 16-letter/key layout, remove 2 letters from the 
-       2 least comfortable keys (to explore a broader solution space).
+    1. For each selected 16-letter/key layout, remove 4 letters from the 
+       4 least comfortable keys (to explore a broader solution space).
        ``generate_configs2.py``
-    2. For each resulting 14-letter/key layout, optimally arrange the 10 
-       (out of 24) remaining letters in the 10 remaining keys, again using MOO.
-       ``run_jobs_local.py``
+    2. For each resulting unique 12-letter/key layout, optimally arrange the 12 
+       (out of 24) remaining letters in the 12 remaining keys, again using MOO.
+       ``run_jobs_local.py`` or ``run_jobs_slurm.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
        ``select_global_moo_solutions.py``
 3. Select the final layout: ``analyze_global_moo_solutions.py``
