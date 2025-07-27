@@ -25,7 +25,7 @@ python optimize_layout.py --moo --max-solutions 50 --detailed --validate --verbo
 python analyze_results.py
 
 # Score a specific layout
-python score_layout.py --items "etaoi" --positions "FJDSV"
+python score_complete_layout.py --items "etaoi" --positions "FJDSV"
 ```
 
 ## Running many configurations

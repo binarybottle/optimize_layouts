@@ -817,7 +817,7 @@ def validate_specific_layout(items: str, positions: str, config: Config) -> Vali
         ValidationResult with layout validation outcome
     """
     try:
-        # This would be used by score_layout.py for validation
+        # This would be used by score_complete_layout.py for validation
         # Implementation would validate the specific layout
         passed = True
         message = f"Layout {items} -> {positions} validated successfully"

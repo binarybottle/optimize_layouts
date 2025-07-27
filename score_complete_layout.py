@@ -1,10 +1,10 @@
-# score_layout.py
+# score_complete_layout.py
 """
 Layout score calculator that calculates complete layout scores.
 
 Example usage:
-    python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
-    python score_layout.py --items "abc" --positions "FDJ" --config config.yaml --validate --keyboard --details
+    python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
+    python score_complete_layout.py --items "abc" --positions "FDJ" --config config.yaml --validate --keyboard --details
 """
 
 import argparse
@@ -14,7 +14,7 @@ import numpy as np
 from config import load_config, Config
 from display import visualize_keyboard_layout
 from validation import validate_specific_layout
-from optimize_layout import load_normalized_scores  # Use existing function
+from optimize_layout import load_normalized_scores
 from scoring import (
     calculate_complete_layout_score,
     calculate_complete_layout_score_direct,
@@ -69,16 +69,16 @@ def main():
         epilog="""
 Examples:
   # Basic complete scoring
-  python score_layout.py --items "abc" --positions "FDJ"
+  python score_complete_layout.py --items "abc" --positions "FDJ"
   
   # Score full layout
-  python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW"
+  python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW"
   
   # With detailed breakdown
-  python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
+  python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
   
   # With validation and keyboard display
-  python score_layout.py --items "abc" --positions "FDJ" --validate --keyboard
+  python score_complete_layout.py --items "abc" --positions "FDJ" --validate --keyboard
         """
     )
     
