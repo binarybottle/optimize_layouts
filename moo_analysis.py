@@ -104,7 +104,7 @@ def analyze_moo_problem_quality(config: Config,
         print(f"   Sample size: {sample_size}")
         print(f"   Total permutations: {math.factorial(len(items)):,}")
     
-    # Load data and create scorer (REUSES existing functions - no duplication)
+    # Load data and create scorer
     normalized_scores = load_normalized_scores(config)
     arrays = prepare_scoring_arrays(
         items_to_assign=items,

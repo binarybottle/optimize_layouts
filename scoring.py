@@ -13,6 +13,12 @@ This ensures consistency across:
 
 To change the combination strategy, modify only the DEFAULT_COMBINATION_STRATEGY 
 constant and the apply_default_combination() function.
+
+Note: Since the scoring accepts any characters,
+there could be a problem if there is missing data 
+in the item and item-pair frequencies files.
+Missing items and item-pairs get default scores.
+
 """
 
 import numpy as np
