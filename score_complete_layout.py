@@ -2,6 +2,13 @@
 """
 Layout score calculator that calculates complete layout scores.
 
+Note: The --all-characters argument allows non-letter characters in --items 
+(the default is to accept only letters for --items and any character for --positions).
+  - Default (letters only) filters both items and positions, to "pyaoeuiqjkx" → "rtyuiopasdklzxcvbnm":
+    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "qwertyuiopasdfg"
+  - The argument --all-characters uses all characters: "',.pyaoeui;qjkx":
+    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --all-characters
+
 Example usage:
     python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
     python score_complete_layout.py --items "abc" --positions "FDJ" --config config.yaml --validate --keyboard --details
@@ -31,6 +38,28 @@ def create_complete_layout_mapping(items_str: str, positions_str: str, config: C
     mapping = dict(zip(items_str.lower(), positions_str.upper()))
     return mapping
 
+def filter_letter_pairs(items_str: str, positions_str: str, allow_all: bool) -> tuple[str, str]:
+    """Filter to letter-position pairs only unless allow_all is True."""
+    if allow_all:
+        return items_str, positions_str  # Current behavior
+    else:
+        # Filter to letter pairs only
+        filtered_items = []
+        filtered_positions = []
+        removed_pairs = []
+        
+        for item, pos in zip(items_str, positions_str):
+            if item.isalpha():
+                filtered_items.append(item)
+                filtered_positions.append(pos)
+            else:
+                removed_pairs.append(f"{item}→{pos}")
+        
+        if removed_pairs:
+            print(f"Note: Removed non-letter pairs: {removed_pairs}")
+        
+        return ''.join(filtered_items), ''.join(filtered_positions)
+        
 def print_detailed_breakdown(complete_mapping: dict, normalized_scores: tuple):
     """Print detailed item-by-item scoring breakdown."""
     print(f"\nDetailed Item Breakdown:")
@@ -90,6 +119,8 @@ Examples:
                        help="Path to config file (default: config.yaml)")
     parser.add_argument("--details", action="store_true",
                        help="Show detailed scoring breakdown")
+    parser.add_argument("--all-characters", action="store_true",
+                   help="Allow non-letter characters in --items (default: letters only)")
     parser.add_argument("--validate", action="store_true", 
                        help="Run validation on this specific layout")
     parser.add_argument("--keyboard", action="store_true",
@@ -104,15 +135,22 @@ Examples:
         print("Complete Layout Score Calculator")
         print("=" * 50)
         
-        # Validate inputs
+        # Validate inputs - must have equal length first
         if len(args.items) != len(args.positions):
             print(f"Error: Item count ({len(args.items)}) != Position count ({len(args.positions)})")
+            return
+
+        # Filter to letter pairs
+        valid_items, valid_positions = filter_letter_pairs(args.items, args.positions, args.all_characters)
+
+        if len(valid_items) == 0:
+            print("Error: No letters found in items string")
             return
         
         # Run validation if requested
         if args.validate:
             print("\nRunning layout validation...")
-            validation_result = validate_specific_layout(args.items, args.positions, config)
+            validation_result = validate_specific_layout(valid_items, valid_positions, config)
             print(f"  {validation_result}")
             print()
         
@@ -121,9 +159,9 @@ Examples:
         normalized_scores = load_normalized_scores(config)
         
         # Create complete layout mapping
-        complete_mapping = create_complete_layout_mapping(args.items, args.positions, config)
+        complete_mapping = create_complete_layout_mapping(valid_items, valid_positions, config)
         
-        if len(args.items) > 0:
+        if len(valid_items) > 0:
             all_items = ''.join(complete_mapping.keys())
             all_positions = ''.join(complete_mapping.values())
             print(f"Complete layout: {all_items} → {all_positions}")
