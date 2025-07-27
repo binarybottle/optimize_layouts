@@ -13,7 +13,7 @@ instead of processing thousands of individual result files.
 
 Usage:
     # Use all global Pareto solutions
-    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
+    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;OW"
     
     # Use top N solutions from global Pareto set
     python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 20 --remove-positions "A;"

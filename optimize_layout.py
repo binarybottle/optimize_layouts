@@ -325,7 +325,7 @@ def main():
             config=config,
             max_solutions=args.max_solutions,
             time_limit=args.time_limit,
-            processes=args.processes,  # ADD THIS LINE
+            processes=args.processes,
             enable_pruning=getattr(args, 'enable_pruning', False)  # Default to False if not set
         )
     else:

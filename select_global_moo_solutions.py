@@ -9,7 +9,7 @@ CSV file with the globally optimal solutions.
 Leverages parsing functions from analyze_results.py for robust file handling.
 
 # Basic usage with your format and objectives
-python select_global_moo_solutions.py --verbose
+python select_global_moo_solutions.py
 
 # Test with limited files first
 python select_global_moo_solutions.py --max-files 100 --verbose

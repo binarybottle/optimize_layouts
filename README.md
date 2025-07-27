@@ -166,10 +166,10 @@ where direction (sequence of a given pair) matters.
   - pair_only: Only pair interactions (internal + cross)
   - combined: Multiplicative combination (item × total_pairs)
 
-Note: Since the scoring accepts any characters,
-there could be a problem if there is missing data 
-in the item and item-pair frequencies files.
-Missing items and item-pairs get default scores.
+Note: Since the scoring accepts any characters and any positions,
+there could be a problem if item or position files are incomplete.
+Layouts with items or positions that are missing in these files 
+will be assigned default scores.
 
 ## Branch-and-bound optimization
   - Calculates exact scores for placed letters

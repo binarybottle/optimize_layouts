@@ -19,6 +19,11 @@ there could be a problem if there is missing data
 in the item and item-pair frequencies files.
 Missing items and item-pairs get default scores.
 
+Note: Since the scoring accepts any characters and any positions,
+there could be a problem if item or position files are incomplete.
+Layouts with items or positions that are missing in these files 
+will be assigned default scores.
+
 """
 
 import numpy as np

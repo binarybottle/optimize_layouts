@@ -17,7 +17,7 @@
 #   chmod +x *.py *.sh
 #
 #   # Make output directories
-#   mkdir -p output/layouts2 output/outputs2 output/errors2 output/configs2
+#   mkdir -p output/layouts output/outputs output/errors output/configs
 #
 #   # Test that anaconda3 module works (no virtual environment needed)
 #   module load anaconda3
@@ -46,7 +46,7 @@
 #   squeue -j <job_array_id> | awk '{print $5}' | sort | uniq -c
 #   
 #   # Check number of output files
-#   sh count_files.sh output/layouts2
+#   sh count_files.sh output/layouts
 # 
 #   # Cancel all your jobs at once, or for a specific job ID
 #   scancel -u $USER
@@ -56,7 +56,7 @@ MAX_JOBS=16
 CHECK_INTERVAL=300
 CONFIG_PREFIX="output/configs2/config_"
 CONFIG_SUFFIX=".yaml"
-OUTPUT_DIR="output/layouts2"
+OUTPUT_DIR="output/layouts"
 TOTAL_CONFIGS=1
 
 echo "=== Auto Individual Job Submitter ==="
@@ -109,8 +109,8 @@ submit_individual_job() {
 #SBATCH --partition=EM
 #SBATCH --account=med250002p
 #SBATCH --job-name=cfg_${config_id}
-#SBATCH --output=output/outputs2/cfg_${config_id}.out
-#SBATCH --error=output/errors2/cfg_${config_id}.err
+#SBATCH --output=output/outputs/cfg_${config_id}.out
+#SBATCH --error=output/errors/cfg_${config_id}.err
 
 module purge
 module load anaconda3
@@ -122,7 +122,7 @@ export NUMBA_NUM_THREADS=1
 cd \$HOME/optimizer/optimize_layouts
 
 # Double-check not completed (race condition)
-if find output/layouts2 -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q .; then
+if find output/layouts -name "*config_${config_id}_*.csv" 2>/dev/null | grep -q .; then
     echo "Already completed, exiting"
     exit 0
 fi
