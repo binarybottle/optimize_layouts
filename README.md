@@ -28,18 +28,6 @@ python analyze_results.py
 python score_complete_layout.py --items "etaoi" --positions "FJDSV"
 ```
 
-## Running many configurations
-You can generate configuration files in output/configs1/
-by creating your own generate_configs.py script,
-following the example in keyboards/generate_configs1.py,
-then modify the run_jobs_local.py script for your needs
-(see run_jobs_slurm.sh for running jobs on a linux cluster):
-
-```bash
-python3 generate_configs.py
-python3 run_jobs_local.py
-```
-
 ## Overview
 This code optimizes a layout, an arrangement of items,
 and takes into account scores for individual items, 
@@ -195,3 +183,25 @@ will be assigned default scores.
   Automatically saved timestamped files:
   - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
+
+## Running many configurations
+You can generate configuration files in output/configs1/
+by creating your own generate_configs.py script,
+following the example in keyboards/generate_configs1.py,
+then modify the run_jobs_local.py script for your needs
+(see run_jobs_slurm.sh for running jobs on a linux cluster):
+
+```bash
+python3 generate_configs.py
+python3 run_jobs_local.py
+```
+
+Example for 16 of 24 items: etaoinsrhldcumfpgwybvkxj
+arranged in 16 of 24 positions: FDESVRWACQZXJKILMUO;,P/.
+We can optimize arrangements of 16 items by running 
+parallel jobs with 5 fixed items in each config file: 
+items (fixed)     config files               permutations 
+   10 (6)     12!/6! = 665,280            3,628,800 (10!)
+   11 (5)     12!/7! =  95,040           79,833,600 (11!) 
+   12 (4)     12!/8! =  11,880          479,001,600 (12!)
+   16 (0)                    1   20,922,789,888,000 (16!)

@@ -2,8 +2,11 @@
 """
 Layout score calculator that calculates complete layout scores.
 
-Note: The --all-characters argument allows non-letter characters in --items 
-(the default is to accept only letters for --items and any character for --positions).
+Note: Since the scoring accepts any characters and any positions,
+there could be a problem if item or position files are incomplete.
+Layouts with items or positions that are missing in these files 
+will be assigned default scores. To mitigate any issues, we default to
+using only letters for items for this script.
   - Default (letters only) filters both items and positions, to "pyaoeuiqjkx" → "rtyuiopasdklzxcvbnm":
     python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "qwertyuiopasdfg"
   - The argument --all-characters uses all characters: "',.pyaoeui;qjkx":
@@ -23,7 +26,6 @@ from display import visualize_keyboard_layout
 from validation import validate_specific_layout
 from optimize_layout import load_normalized_scores
 from scoring import (
-    calculate_complete_layout_score,
     calculate_complete_layout_score_direct,
     create_complete_layout_scorer,
     apply_default_combination
