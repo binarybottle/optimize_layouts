@@ -62,7 +62,7 @@ CHECK_INTERVAL=300
 CONFIG_PREFIX="output/configs2/config_"
 CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
-TOTAL_CONFIGS=$(ls ${CONFIG_PREFIX}*${CONFIG_SUFFIX} 2>/dev/null | wc -l)
+TOTAL_CONFIGS=84 #$(ls ${CONFIG_PREFIX}*${CONFIG_SUFFIX} 2>/dev/null | wc -l)
 #--------------------------------------------------------------
 
 echo "=== Auto Individual Job Submitter ==="

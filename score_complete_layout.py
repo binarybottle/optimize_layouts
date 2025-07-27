@@ -2,15 +2,15 @@
 """
 Layout score calculator that calculates complete layout scores.
 
-Note: Since the scoring accepts any characters and any positions,
+Note: Since the scoring accepts any characters for items and any positions,
 there could be a problem if item or position files are incomplete.
 Layouts with items or positions that are missing in these files 
-will be assigned default scores. To mitigate any issues, we default to
-using only letters for items for this script.
-  - Default (letters only) filters both items and positions, to "pyaoeuiqjkx" → "rtyuiopasdklzxcvbnm":
+will be assigned default scores. To mitigate issues, we default 
+to using only letters for items for this script (positions can use any character).
+  - Default (letters only) filters both items and corresponding positions, to "pyaoeuiqjkx" → "rtyuiopasdklzxcvbnm":
     python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "qwertyuiopasdfg"
-  - The argument --all-characters uses all characters: "',.pyaoeui;qjkx":
-    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --all-characters
+  - The argument --nonletter-items uses any characters for items: "',.pyaoeui;qjkx":
+    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --nonletter-items
 
 Example usage:
     python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
@@ -121,8 +121,10 @@ Examples:
                        help="Path to config file (default: config.yaml)")
     parser.add_argument("--details", action="store_true",
                        help="Show detailed scoring breakdown")
-    parser.add_argument("--all-characters", action="store_true",
+    parser.add_argument("--nonletter-items", action="store_true",
                    help="Allow non-letter characters in --items (default: letters only)")
+    parser.add_argument("--extended-positions", action="store_true",
+                       help="Use extended position pair file for additional keyboard coverage")
     parser.add_argument("--validate", action="store_true", 
                        help="Run validation on this specific layout")
     parser.add_argument("--keyboard", action="store_true",
