@@ -57,7 +57,7 @@ CHECK_INTERVAL=300
 CONFIG_PREFIX="output/configs2/config_"
 CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
-TOTAL_CONFIGS=1
+TOTAL_CONFIGS=$(ls ${CONFIG_PREFIX}*${CONFIG_SUFFIX} 2>/dev/null | wc -l)
 
 echo "=== Auto Individual Job Submitter ==="
 echo "Max jobs: $MAX_JOBS"
