@@ -184,7 +184,6 @@ will be assigned default scores.
 
   **Console Output**
   - Configuration summary and search space analysis
-  - Real-time progress with pruning statistics
   - Top item-to-position solutions
   - Detailed score breakdowns (with --verbose)
   - Performance metrics and timing

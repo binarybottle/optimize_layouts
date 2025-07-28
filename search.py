@@ -25,7 +25,7 @@ from scoring import LayoutScorer, apply_default_combination
 # Upper bound calculations
 #-----------------------------------------------------------------------------
 class UpperBoundCalculator:
-    """Calculate tight upper bounds for branch-and-bound pruning."""
+    """Calculate tight upper bounds for branch-and-bound."""
     
     def __init__(self, scorer: LayoutScorer):
         self.scorer = scorer
@@ -450,7 +450,6 @@ def process_moo_chunk(arrays, chunk_data: List[Tuple], params: Dict):
         constrained_positions = params['constrained_positions']
         max_solutions = params.get('max_solutions')
         time_limit = params.get('time_limit')
-        enable_moo_pruning_ALPHA = params.get('enable_moo_pruning_ALPHA', False)
         
         n_items = len(items_list)
         n_positions = len(positions_list)
@@ -561,8 +560,7 @@ def single_threaded_moo_search(config: Config, scorer: LayoutScorer,
                               items_list: List[str], positions_list: List[str],
                               constrained_items: np.ndarray, constrained_positions: np.ndarray,
                               initial_mapping: np.ndarray, initial_used: np.ndarray,
-                              max_solutions: int = None, time_limit: float = None,
-                              pruner = None, enable_moo_pruning_ALPHA: bool = False) -> Tuple[List[Dict], int, int]:
+                              max_solutions: int = None, time_limit: float = None) -> Tuple[List[Dict], int, int]:
     """Single-threaded multi-objective search."""
     
     n_items = len(items_list)
@@ -582,11 +580,6 @@ def single_threaded_moo_search(config: Config, scorer: LayoutScorer,
         nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
         
         nodes_processed += 1
-        
-        # Pruning check
-        if enable_moo_pruning_ALPHA and depth > 0 and pruner and pruner.can_prune_branch(mapping, used, pareto_objectives):
-            nodes_pruned += 1
-            return
         
         # Check termination conditions
         if time_limit and (time.time() - start_time) > time_limit:
@@ -665,7 +658,6 @@ def distributed_moo_search(config: Config, scorer: LayoutScorer,
                           constrained_items: np.ndarray, constrained_positions: np.ndarray,
                           initial_mapping: np.ndarray, initial_used: np.ndarray,
                           max_solutions: int = None, time_limit: float = None,
-                          pruner = None, enable_moo_pruning_ALPHA: bool = False,
                           processes: int = None) -> Tuple[List[Dict], int, int]:
     """Distributed multi-objective search using multiprocessing."""
     
@@ -684,8 +676,7 @@ def distributed_moo_search(config: Config, scorer: LayoutScorer,
             config, scorer, items_list, positions_list,
             constrained_items, constrained_positions,
             initial_mapping, initial_used,
-            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
-        )
+            max_solutions, time_limit)
     
     print(f"Created {len(chunks)} work chunks for {processes} processes")
     
@@ -701,8 +692,7 @@ def distributed_moo_search(config: Config, scorer: LayoutScorer,
                 'constrained_items': constrained_items,
                 'constrained_positions': constrained_positions,
                 'max_solutions': max_solutions,
-                'time_limit': time_limit,
-                'enable_moo_pruning_ALPHA': enable_moo_pruning_ALPHA
+                'time_limit': time_limit
             }
         )
         worker_args.append(args)
@@ -719,7 +709,7 @@ def distributed_moo_search(config: Config, scorer: LayoutScorer,
             config, scorer, items_list, positions_list,
             constrained_items, constrained_positions,
             initial_mapping, initial_used,
-            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
+            max_solutions, time_limit
         )
     
     # Combine results from all chunks
@@ -741,7 +731,6 @@ def distributed_moo_search(config: Config, scorer: LayoutScorer,
 
 def multi_objective_search(config: Config, scorer: LayoutScorer, 
                           max_solutions: int = None, time_limit: float = None,
-                          pruner = None, enable_moo_pruning_ALPHA: bool = False, 
                           processes: int = None) -> Tuple[List[Dict], int, int]:
     """
     Multi-objective search finding Pareto-optimal solutions with optional multiprocessing.
@@ -751,8 +740,6 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
         scorer: Layout scorer (should be in multi_objective mode)
         max_solutions: Maximum solutions to find (None for unlimited)
         time_limit: Time limit in seconds (None for unlimited)
-        pruner: MOO pruner object (optional)
-        enable_moo_pruning_ALPHA: Whether to enable pruning
         processes: Number of parallel processes (None for auto-detect, 1 for single-threaded)
         
     Returns:
@@ -803,7 +790,7 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
             config, scorer, items_list, positions_list,
             constrained_items, constrained_positions,
             initial_mapping, initial_used,
-            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA
+            max_solutions, time_limit
         )
     else:
         print(f"Running distributed MOO search with {processes} processes...")
@@ -811,7 +798,7 @@ def multi_objective_search(config: Config, scorer: LayoutScorer,
             config, scorer, items_list, positions_list,
             constrained_items, constrained_positions,
             initial_mapping, initial_used,
-            max_solutions, time_limit, pruner, enable_moo_pruning_ALPHA, processes
+            max_solutions, time_limit, processes
         )
 
 def get_valid_positions(item_idx: int, available_positions: List[int], 

@@ -20,7 +20,6 @@ from display import (print_optimization_header, print_search_space_info,
                     print_soo_results, print_moo_results, visualize_keyboard_layout,
                     save_soo_results_to_csv, save_moo_results_to_csv)
 from validation import run_validation_suite
-from moo_pruning import MOOPruner, create_moo_pruner
 from moo_analysis import analyze_moo_problem_quality, quick_moo_check
 
 #-----------------------------------------------------------------------------
@@ -100,8 +99,7 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     print(f"  Total time: {elapsed_time:.2f}s")
 
 def run_multi_objective_optimization(config: Config, max_solutions: int = None, 
-                                   time_limit: float = None, processes: int=None, 
-                                   enable_pruning: bool = False) -> None:
+                                   time_limit: float = None, processes: int=None) -> None:
     """
     Multi-objective search with configurable process count.
     
@@ -110,8 +108,6 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
         scorer: LayoutScorer in multi_objective mode
         max_solutions: Maximum solutions to find
         time_limit: Time limit in seconds  
-        pruner: MOO pruner object (optional)
-        enable_pruning: Whether to enable pruning
         processes: Number of parallel processes (None = auto-detect)
     """
     import multiprocessing as mp
@@ -155,19 +151,9 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     scorer = LayoutScorer(arrays, mode='multi_objective')
     print(f"Multi-objective scorer initialized")
-    
-    # Create pruner if enabled
-    pruner = None
-    if enable_pruning:
-        items_list = list(config.optimization.items_to_assign)
-        positions_list = list(config.optimization.positions_to_assign)
-        pruner = create_moo_pruner(normalized_scores, items_list, positions_list)
-        print(f"🚀 MOO Pruning enabled!")
-        print(f"   Max item score: {max(pruner.max_item_scores.values()):.6f}")
-        print(f"   Max pair score: {pruner.max_item_pair_score:.6f}")
-    
+        
     # Run MOO search
-    print(f"\nSearching for {'pruned ' if enable_pruning else ''}Pareto-optimal solutions...")
+    print(f"\nSearching for Pareto-optimal solutions...")
     if max_solutions:
         print(f"  Maximum solutions: {max_solutions}")
     if time_limit:
@@ -175,9 +161,9 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     start_time = time.time()
     
-    # Pass pruner to multi_objective_search
+    # multi_objective_search
     pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, scorer, max_solutions, time_limit, pruner, enable_pruning, processes
+        config, scorer, max_solutions, time_limit, processes
     )
 
     elapsed_time = time.time() - start_time
@@ -197,12 +183,6 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     print(f"\nMulti-Objective Summary:")
     print(f"  Pareto solutions: {len(pareto_front)}")
     print(f"  Nodes processed: {nodes_processed:,}")
-    if enable_pruning and nodes_pruned > 0:
-        print(f"  Nodes pruned: {nodes_pruned:,}")
-        prune_rate = 100 * nodes_pruned / (nodes_processed + nodes_pruned)
-        print(f"  Pruning efficiency: {prune_rate:.1f}%")
-        speedup_estimate = (nodes_processed + nodes_pruned) / nodes_processed
-        print(f"  Estimated speedup: {speedup_estimate:.1f}x")
     print(f"  Total time: {elapsed_time:.2f}s")
     if nodes_processed > 0:
         print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
@@ -325,9 +305,7 @@ def main():
             config=config,
             max_solutions=args.max_solutions,
             time_limit=args.time_limit,
-            processes=args.processes,
-            enable_pruning=getattr(args, 'enable_pruning', False)  # Default to False if not set
-        )
+            processes=args.processes)
     else:
         run_single_objective_optimization(config, args.n_solutions, args.verbose)
         

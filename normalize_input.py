@@ -10,6 +10,7 @@ Usage:
     python normalize_inputs.py --config config.yaml --output-dir output/normalized_input
 """
 
+from logging import config
 import os
 import sys
 import argparse
@@ -113,7 +114,7 @@ def normalize_and_save_data(config: Config, output_dir: str) -> None:
     
     # Print header information
     print(f"Normalization Log - {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Config file: {config.get('config_file_path', 'Not specified')}")
+    print(f"Config file: {config._config_path}")
     print(f"Output directory: {output_dir}")
     print("-" * 80)
     
