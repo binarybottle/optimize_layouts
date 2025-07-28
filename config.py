@@ -54,13 +54,25 @@ class PathConfig:
     raw_item_pair_scores_file: str
     raw_position_scores_file: str
     raw_position_pair_scores_file: str
-    item_scores_file: str
-    item_pair_scores_file: str
-    position_scores_file: str
-    position_pair_scores_file: str
     
     # Output paths
     layout_results_folder: str
+
+    # Auto-generated normalized paths (populated in __post_init__)
+    item_scores_file: str = None
+    item_pair_scores_file: str = None
+    position_scores_file: str = None
+    position_pair_scores_file: str = None
+    
+    def __post_init__(self):
+        """Auto-generate normalized file paths."""
+        normalized_dir = "output/normalized_input"
+        
+        # Auto-generate normalized paths with standard names
+        self.item_scores_file = f"{normalized_dir}/normalized_item_scores.csv" 
+        self.item_pair_scores_file = f"{normalized_dir}/normalized_item_pair_scores.csv"
+        self.position_scores_file = f"{normalized_dir}/normalized_position_scores.csv"
+        self.position_pair_scores_file = f"{normalized_dir}/normalized_position_pair_scores.csv"
 
 @dataclass
 class VisualizationConfig:
@@ -86,10 +98,6 @@ def load_config(config_path: str = "config.yaml") -> Config:
         
     Returns:
         Validated Config object
-        
-    Raises:
-        FileNotFoundError: If config file doesn't exist
-        ValueError: If configuration is invalid
     """
     if not os.path.exists(config_path):
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
@@ -97,13 +105,17 @@ def load_config(config_path: str = "config.yaml") -> Config:
     with open(config_path, 'r') as f:
         raw_config = yaml.safe_load(f)
     
-    # Create output directories
-    output_dirs = [raw_config['paths']['output']['layout_results_folder']]
+    # Create output directories (including normalized input dir)
+    normalized_dir = "output/normalized_input"
+    output_dirs = [raw_config['paths']['output']['layout_results_folder'], normalized_dir]
     for directory in output_dirs:
         os.makedirs(directory, exist_ok=True)
     
-    # Parse and normalize configuration
-    paths = PathConfig(**raw_config['paths']['input'], **raw_config['paths']['output'])
+    # Parse paths - only pass the raw input paths and output paths
+    paths = PathConfig(
+        **raw_config['paths']['input'], 
+        **raw_config['paths']['output']
+    )
     
     # Normalize optimization strings to proper case
     opt_raw = raw_config['optimization']

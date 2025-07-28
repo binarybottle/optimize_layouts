@@ -8,9 +8,9 @@ Optimize layouts of items and item-pairs with advanced single- and multi-objecti
 
 ## Usage
 ```bash
-# Prepare input data
-python normalize_input.py     # Normalize raw input data
-python analyze_input.py       # Analyze and plot raw/normalized data
+# Prepare input data (normalize raw files to standard format)
+python normalize_input.py     # Reads raw_* files, outputs to output/normalized_input/
+python analyze_input.py       # Analyze and plot raw vs normalized data
 
 # Single-objective optimization (default)
 python optimize_layout.py --config config.yaml
@@ -126,12 +126,23 @@ and each position-pair is represented by two position characters.
     ZY, 0.5
     ```
 
-A configuration file (config.yaml) specifies input filenames
-(raw and normalized) as well as text strings for the variables:
-  - Required:
+A configuration file (config.yaml) specifies raw input filenames. 
+The system automatically generates normalized versions in 
+`output/normalized_input/` with standardized names:
+
+  ```yaml
+  paths:
+    input:
+      raw_item_scores_file: "data/sources/letter-counts.csv"
+      raw_item_pair_scores_file: "data/sources/bigram-counts.csv" 
+      raw_position_scores_file: "data/comfort/key_comfort_estimates.csv"
+      raw_position_pair_scores_file: "data/comfort/key_pair_comfort_estimates.csv"
+  ```
+
+Required optimization variables:
     - items_to_assign: items to arrange in positions_to_assign
     - positions_to_assign: available positions
-  - Optional:
+Optional:
     - items_assigned: items already assigned to positions
     - positions_assigned: positions that are already filled 
     - items_to_constrain: subset of items_to_assign 

@@ -101,11 +101,10 @@ def load_raw_scores(config: Config):
     
     # Use config paths instead of manual path construction
     raw_data = {}
-    if hasattr(config.paths, 'raw_item_scores_file'):
-        raw_data['item_scores'] = load_score_dict(config.paths.raw_item_scores_file, 'item')
-        raw_data['item_pair_scores'] = load_pair_score_dict(config.paths.raw_item_pair_scores_file, 'item_pair')
-        raw_data['position_scores'] = load_score_dict(config.paths.raw_position_scores_file, 'position')
-        raw_data['position_pair_scores'] = load_pair_score_dict(config.paths.raw_position_pair_scores_file, 'position_pair')
+    raw_data['item_scores'] = load_score_dict(config.paths.raw_item_scores_file, 'item')
+    raw_data['item_pair_scores'] = load_pair_score_dict(config.paths.raw_item_pair_scores_file, 'item_pair')
+    raw_data['position_scores'] = load_score_dict(config.paths.raw_position_scores_file, 'position')
+    raw_data['position_pair_scores'] = load_pair_score_dict(config.paths.raw_position_pair_scores_file, 'position_pair')
     
     return raw_data
 

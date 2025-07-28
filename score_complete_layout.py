@@ -12,13 +12,31 @@ to using only letters for items for this script (positions can use any character
   - The argument --nonletter-items uses any characters for items: "',.pyaoeui;qjkx":
     python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --nonletter-items
 
-Example usage:
-    python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
-    python score_complete_layout.py --items "abc" --positions "FDJ" --config config.yaml --validate --keyboard --details
+Usage:
+# Standard usage (uses position-pair file from config.yaml):
+>> python score_complete_layout.py --items "pyaoeuiqjkxlrcgfsnthdzvwmb" --positions "wrtyuiopasdfghjklzxcvbnm"
+
+# Custom position-pair file:
+>> python score_complete_layout.py --items "pyaoeuiqjkxlrcgfsnthdzvwmb" --positions "wrtyuiopasdfghjklzxcvbnm" --position-pair-file "input/estimated_bigram_scores_extended.csv"
+
+# With all other options:
+>> python score_complete_layout.py \
+    --items "pyaoeuiqjkxlrcgfsnthdzvwmb" \
+    --positions "wrtyuiopasdfghjklzxcvbnm" \
+    --position-pair-file "input/estimated_bigram_scores_extended.csv" \
+    --details --keyboard --validate
+
+# Your custom file should have format:
+# position_pair,score
+# qw,0.85
+# we,0.72
+# ty,0.65
+    
 """
 
 import argparse
 import numpy as np
+from typing import Tuple
 
 # Import consolidated modules
 from config import load_config, Config
@@ -61,7 +79,81 @@ def filter_letter_pairs(items_str: str, positions_str: str, allow_all: bool) -> 
             print(f"Note: Removed non-letter pairs: {removed_pairs}")
         
         return ''.join(filtered_items), ''.join(filtered_positions)
+
+def load_scores_with_custom_position_pairs(config: Config, custom_position_pair_file: str = None) -> Tuple:
+    """
+    Load normalized scores, optionally using a custom position-pair file.
+    
+    Args:
+        config: Configuration object
+        custom_position_pair_file: Path to custom position-pair file (raw, will be normalized)
         
+    Returns:
+        Tuple of (item_scores, item_pair_scores, position_scores, position_pair_scores)
+    """
+    # Load standard scores (item, item_pair, position)
+    from scoring import load_normalized_scores
+    item_scores, item_pair_scores, position_scores, position_pair_scores = load_normalized_scores(config)
+    
+    if not custom_position_pair_file:
+        # Use standard position pair scores from config
+        print("Using standard position-pair file from config")
+        return item_scores, item_pair_scores, position_scores, position_pair_scores
+    
+    # Load and normalize custom position-pair file
+    try:
+        import pandas as pd
+        import numpy as np
+        
+        print(f"Loading custom position-pair file: {custom_position_pair_file}")
+        
+        # Load raw custom file
+        df = pd.read_csv(custom_position_pair_file, dtype={'position_pair': str})
+        
+        if 'score' not in df.columns:
+            raise ValueError(f"Custom position-pair file must have 'score' column")
+        if 'position_pair' not in df.columns:
+            raise ValueError(f"Custom position-pair file must have 'position_pair' column")
+        
+        # Normalize scores using same method as normalize_input.py
+        scores = df['score'].values
+        
+        # Simple min-max normalization to [0,1]
+        if len(scores) > 0 and not np.all(scores == scores[0]):
+            min_score = np.min(scores)
+            max_score = np.max(scores)
+            if max_score != min_score:
+                normalized_scores = (scores - min_score) / (max_score - min_score)
+            else:
+                normalized_scores = np.ones_like(scores) * 0.5  # All same value -> 0.5
+        else:
+            normalized_scores = np.zeros_like(scores)  # Empty or constant -> 0
+        
+        print(f"  Original range: [{np.min(scores):.6f}, {np.max(scores):.6f}]")
+        print(f"  Normalized range: [{np.min(normalized_scores):.6f}, {np.max(normalized_scores):.6f}]")
+        
+        # Convert to dictionary format expected by scoring system
+        custom_position_pair_scores = {}
+        for i, row in df.iterrows():
+            pair_str = str(row['position_pair'])
+            if len(pair_str) == 2:
+                key = (pair_str[0].lower(), pair_str[1].lower())
+                custom_position_pair_scores[key] = float(normalized_scores[i])
+        
+        print(f"  Loaded {len(custom_position_pair_scores)} position-pair scores")
+        
+        # Return with custom position-pair scores
+        return item_scores, item_pair_scores, position_scores, custom_position_pair_scores
+        
+    except FileNotFoundError:
+        print(f"Error: Custom position-pair file not found: {custom_position_pair_file}")
+        print("Using standard position-pair file from config")
+        return item_scores, item_pair_scores, position_scores, position_pair_scores
+    except Exception as e:
+        print(f"Error loading custom position-pair file: {e}")
+        print("Using standard position-pair file from config")
+        return item_scores, item_pair_scores, position_scores, position_pair_scores
+
 def print_detailed_breakdown(complete_mapping: dict, normalized_scores: tuple):
     """Print detailed item-by-item scoring breakdown."""
     print(f"\nDetailed Item Breakdown:")
@@ -122,10 +214,10 @@ Examples:
     parser.add_argument("--details", action="store_true",
                        help="Show detailed scoring breakdown")
     parser.add_argument("--nonletter-items", action="store_true",
-                   help="Allow non-letter characters in --items (default: letters only)")
-    parser.add_argument("--extended-positions", action="store_true",
-                       help="Use extended position pair file for additional keyboard coverage")
-    parser.add_argument("--validate", action="store_true", 
+                       help="Allow non-letter characters in --items (default: letters only)")
+    parser.add_argument("--position-pair-file", default="input/estimated_bigram_scores_extended.csv",
+                       help="Path to position-pair file (default overrides optimize_layout's default)")
+    parser.add_argument("--validate", action="store_true",
                        help="Run validation on this specific layout")
     parser.add_argument("--keyboard", action="store_true",
                        help="Show keyboard visualization")
@@ -145,7 +237,7 @@ Examples:
             return
 
         # Filter to letter pairs
-        valid_items, valid_positions = filter_letter_pairs(args.items, args.positions, args.all_characters)
+        valid_items, valid_positions = filter_letter_pairs(args.items, args.positions, args.nonletter_items)
 
         if len(valid_items) == 0:
             print("Error: No letters found in items string")
@@ -158,9 +250,12 @@ Examples:
             print(f"  {validation_result}")
             print()
         
-        # Load normalized scores
+        # MODIFIED: Load normalized scores with optional custom position-pair file
         print("Loading normalized scores...")
-        normalized_scores = load_normalized_scores(config)
+        if args.position_pair_file:
+            print(f"Using custom position-pair file: {args.position_pair_file}")
+        
+        normalized_scores = load_scores_with_custom_position_pairs(config, args.position_pair_file)
         
         # Create complete layout mapping
         complete_mapping = create_complete_layout_mapping(valid_items, valid_positions, config)
@@ -175,7 +270,7 @@ Examples:
         for item, pos in complete_mapping.items():
             print(f"  {item} → {pos}")
         
-        # Calculate complete layout score using direct calculation (bypasses optimization scoring)
+        # Calculate complete layout score using direct calculation
         total_score, item_score, item_pair_score = calculate_complete_layout_score_direct(
             complete_mapping, normalized_scores
         )

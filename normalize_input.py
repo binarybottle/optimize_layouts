@@ -17,8 +17,8 @@ import numpy as np
 import pandas as pd
 import yaml
 import datetime
-from typing import Dict, Tuple, List, Set, Any
 from io import StringIO
+from config import Config, load_config
 
 class TeeLogger:
     """
@@ -94,13 +94,7 @@ def detect_and_normalize_distribution(scores: np.ndarray, name: str = '') -> np.
         scaled = (scores - q1) / (q99 - q1)
         return np.clip(scaled, 0, 1)
 
-def load_config(config_path: str = "config.yaml") -> dict:
-    """Load configuration from yaml file."""
-    with open(config_path, 'r') as f:
-        config = yaml.safe_load(f)
-    return config
-
-def normalize_and_save_data(config: dict, output_dir: str) -> None:
+def normalize_and_save_data(config: Config, output_dir: str) -> None:
     """
     Normalize all data files and save normalized versions.
     
@@ -125,7 +119,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     
     # Normalize item scores
     print("\nNormalizing item scores...")
-    item_df = pd.read_csv(config['paths']['input']['raw_item_scores_file'], dtype={'item': str})
+    item_df = pd.read_csv(config.paths.raw_item_scores_file, dtype={'item': str})
     scores = item_df['score'].values
     norm_scores = detect_and_normalize_distribution(scores, 'Item scores')
     print("  - original:", min(scores), "to", max(scores))
@@ -140,7 +134,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
 
     # Normalize position scores
     print("\nNormalizing position scores...")
-    position_df = pd.read_csv(config['paths']['input']['raw_position_scores_file'], dtype={'position': str})
+    position_df = pd.read_csv(config.paths.raw_position_scores_file, dtype={'position': str})
     scores = position_df['score'].values
     norm_scores = detect_and_normalize_distribution(scores, 'Position scores')
     print("  - original:", min(scores), "to", max(scores))
@@ -154,7 +148,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     
     # Normalize item pair scores
     print("\nNormalizing item pair scores...")
-    item_pair_df = pd.read_csv(config['paths']['input']['raw_item_pair_scores_file'], dtype={'item_pair': str})
+    item_pair_df = pd.read_csv(config.paths.raw_item_pair_scores_file, dtype={'item_pair': str})
     scores = item_pair_df['score'].values
     norm_scores = detect_and_normalize_distribution(scores, 'Item pair scores')
     print("  - original:", min(scores), "to", max(scores))
@@ -168,7 +162,7 @@ def normalize_and_save_data(config: dict, output_dir: str) -> None:
     
     # Normalize position pair scores
     print("\nNormalizing position pair scores...")
-    position_pair_df = pd.read_csv(config['paths']['input']['raw_position_pair_scores_file'], dtype={'position_pair': str})
+    position_pair_df = pd.read_csv(config.paths.raw_position_pair_scores_file, dtype={'position_pair': str})
     scores = position_pair_df['score'].values
     norm_scores = detect_and_normalize_distribution(scores, 'Position pair scores')
     print("  - original:", min(scores), "to", max(scores))
@@ -207,12 +201,9 @@ def main():
     parser = argparse.ArgumentParser(description='Normalize keyboard layout data.')
     parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
     parser.add_argument('--output-dir', type=str, default='output/normalized_input', help='Directory to save normalized data')
-    
     args = parser.parse_args()
+
     config = load_config(args.config)
-    
-    # Add the config file path to the config dict for logging
-    config['config_file_path'] = args.config
     
     normalize_and_save_data(config, args.output_dir)
 
