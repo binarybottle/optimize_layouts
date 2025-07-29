@@ -6,8 +6,8 @@
 #-----------------------------------------------------------------------
 paths:
   input:
-    raw_item_scores_file:          "input/frequency/english-letter-counts-google-ngrams.csv"
-    raw_item_pair_scores_file:     "input/frequency/english-letter-pair-counts-google-ngrams.csv"
+    raw_item_scores_file:          "input/frequency/spanish-letter-counts-leipzig.csv"
+    raw_item_pair_scores_file:     "input/frequency/spanish-letter-pair-counts-leipzig.csv"
     raw_position_scores_file:      "input/comfort/key-comfort-scores.csv"
     raw_position_pair_scores_file: "input/comfort/key-pair-comfort-scores.csv"
   output:
@@ -16,16 +16,16 @@ paths:
 #-----------------------------------------------------------------------
 # Optimization settings
 #-----------------------------------------------------------------------
-# Example for 13 of 24 items: etaoinsrhldcumfpgwybvkxj
-# arranged in 13 of 24 positions: FDESVRWACQZXJKILMUO;,P/.
+# Example for 12 of 24 items: etaoinsrhldcu mfpgwybvkxj
+# arranged in 12 of 24 positions: FDESVRJKILMU WACQZXO;,P/.
 optimization:   
-  items_assigned:       "etao"        # Items already assigned to positions
-  positions_assigned:   "FJDE"        # Positions that are already filled 
-  items_to_assign:      "insrhldcu"   # items to arrange in positions
-  positions_to_assign:  "SVRWAKILMU"  # available positions
+  items_assigned:       ""      # Items already assigned to positions
+  positions_assigned:   ""      # Positions that are already filled 
+  items_to_assign:      "eaonisrldctu" # items to arrange in positions
+  positions_to_assign:  "FDESVRJKILMU" # available positions
 
-  # Subset of items_to_assign to arrange within positions_to_constrain, and
-  # subset of positions_to_assign to constrain arrangement of items_to_constrain
+  # Subset of items_to_assign to arrange within positions_to_constrain
+  # and subset of positions_to_assign to constrain items_to_constrain
   items_to_constrain:      ""   
   positions_to_constrain:  ""  
 

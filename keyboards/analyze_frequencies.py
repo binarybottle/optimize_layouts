@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Analyze Letter-Bigram Frequency Relationships
+Analyze letter-bigram frequency relationships
 
 This script analyzes the cumulative bigram frequency contribution of letters,
 ordered from most frequent to least frequent. It calculates how adding each
@@ -14,34 +14,41 @@ Key Features:
 - Generates comprehensive visualizations (9-panel plot)
 - Exports detailed analysis to CSV and summary reports
 
-Input Files Required:
-- input/letter_frequencies_english.csv
-- input/letter_pair_frequencies_english.csv
-
-Output Files:
-- cumulative_bigram_analysis.csv (detailed results)
-- letter_bigram_analysis.png (visualizations)
-
 Usage:
     python analyze_frequencies.py
+    python analyze_frequencies.py --letter-file path/to/letters.csv --bigram-file path/to/bigrams.csv
+    python analyze_frequencies.py --letter-file letters.csv  # uses default bigram file
 
 """
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import numpy as np
+import argparse
 from collections import defaultdict
 
-def analyze_letter_bigram_frequencies():
+def analyze_letter_bigram_frequencies(letter_file: str, bigram_file: str):
     """
     Analyze the cumulative bigram frequency contribution of letters,
     starting from most frequent to least frequent letters.
+    
+    Args:
+        letter_file: Path to CSV file with letter frequencies
+        bigram_file: Path to CSV file with bigram frequencies
     """
     
     # Read the CSV files
     print("Loading data...")
-    letter_freq = pd.read_csv('input/letter_frequencies_english.csv')
-    bigram_freq = pd.read_csv('input/letter_pair_frequencies_english.csv')
+    print(f"Letter file: {letter_file}")
+    print(f"Bigram file: {bigram_file}")
+    
+    try:
+        letter_freq = pd.read_csv(letter_file)
+        bigram_freq = pd.read_csv(bigram_file)
+    except FileNotFoundError as e:
+        print(f"Error: Could not find input file: {e}")
+        print("Please check that the file paths are correct.")
+        raise
     
     # Sort letters from most frequent to least frequent
     letter_freq_sorted = letter_freq.sort_values('score', ascending=False).reset_index(drop=True)
@@ -56,8 +63,14 @@ def analyze_letter_bigram_frequencies():
     print(letter_freq_sorted[['item', 'score']].head(10))
     
     # Create a mapping of bigrams to their frequencies
-    bigram_dict = dict(zip(bigram_freq['item_pair'], bigram_freq['score']))
-    
+    bigram_dict = dict(zip(bigram_freq['item_pair'].astype(str), bigram_freq['score']))
+
+    # Filter out invalid bigrams (like 'nan')
+    valid_bigram_dict = {k: v for k, v in bigram_dict.items() if k != 'nan' and len(k) == 2}
+    bigram_dict = valid_bigram_dict
+
+    print(f"Filtered out invalid bigrams. Using {len(bigram_dict)} valid bigrams.")
+
     # For each letter, find all bigrams that contain it
     def get_bigrams_containing_letter(letter, bigram_dict):
         """Return all bigrams and their frequencies that contain the given letter"""
@@ -93,9 +106,9 @@ def analyze_letter_bigram_frequencies():
         # Calculate total frequency of all bigrams containing this letter
         total_letter_bigram_freq = sum(letter_bigrams.values())
         
-        cumulative_percentage = (cumulative_freq / total_bigram_freq) * 100
+        cumulative_percentage = (cumulative_freq / sum(bigram_dict.values())) * 100
         letter_percentage = (letter_freq_val / total_letter_freq) * 100
-        bigram_contribution_percentage = (total_letter_bigram_freq / total_bigram_freq) * 100
+        bigram_contribution_percentage = (total_letter_bigram_freq / sum(bigram_dict.values())) * 100
         
         results.append({
             'letter': letter,
@@ -104,7 +117,7 @@ def analyze_letter_bigram_frequencies():
             'letters_included_so_far': idx + 1,
             'new_bigrams_added': len(new_bigrams),
             'new_bigram_frequency': new_bigram_freq,
-            'new_bigram_frequency_percentage': (new_bigram_freq / total_bigram_freq) * 100,
+            'new_bigram_frequency_percentage': (new_bigram_freq / sum(bigram_dict.values())) * 100,
             'total_bigrams_so_far': len(cumulative_bigrams),
             'cumulative_bigram_frequency': cumulative_freq,
             'cumulative_percentage': cumulative_percentage,
@@ -116,7 +129,22 @@ def analyze_letter_bigram_frequencies():
         print(f"'{letter}': +{len(new_bigrams):2d} new bigrams (+{new_bigram_freq:>12,}, "
               f"+{new_bigram_freq/total_bigram_freq*100:4.1f}%), "
               f"cumulative: {cumulative_freq:>15,} ({cumulative_percentage:5.1f}%)")
-    
+
+    # Debug: Check which bigrams are missing
+    print(f"\nDEBUGGING:")
+    print(f"Total bigrams in input: {len(bigram_dict)}")
+    print(f"Total bigrams found: {len(cumulative_bigrams)}")
+    print(f"Missing bigrams: {len(bigram_dict) - len(cumulative_bigrams)}")
+
+    if len(cumulative_bigrams) < len(bigram_dict):
+        missing_bigrams = set(bigram_dict.keys()) - cumulative_bigrams
+        print(f"First 10 missing bigrams: {list(missing_bigrams)[:10]}")
+        
+        # Check the frequency of missing bigrams
+        missing_freq = sum(bigram_dict[bg] for bg in missing_bigrams)
+        print(f"Total frequency of missing bigrams: {missing_freq:,}")
+        print(f"This explains the difference: {total_bigram_freq - cumulative_freq:,}")
+
     # Create DataFrame with results
     results_df = pd.DataFrame(results)
     
@@ -376,22 +404,65 @@ def create_summary_table(results_df):
     print(f"First 10 letters cover: {results_df.iloc[9]['cumulative_percentage']:.1f}% "
           f"({results_df.iloc[9]['cumulative_bigram_frequency']:,})")
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description='Analyze letter-bigram frequency relationships.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Use default files
+  python analyze_frequencies.py
+  
+  # Specify custom files
+  python analyze_frequencies.py --letter-file path/to/letters.csv --bigram-file path/to/bigrams.csv
+  
+  # Use custom letter file with default bigram file
+  python analyze_frequencies.py --letter-file custom_letters.csv
+        """
+    )
+    
+    parser.add_argument(
+        '--letter-file', 
+        type=str, 
+        default='../input/frequency/spanish-letter-counts-leipzig.csv',
+        help='Path to CSV file with letter frequencies (default: ../input/frequency/spanish-letter-counts-leipzig.csv)'
+    )
+    
+    parser.add_argument(
+        '--bigram-file', 
+        type=str, 
+        default='../input/frequency/spanish-letter-pair-counts-leipzig.csv',
+        help='Path to CSV file with bigram frequencies (default: ../input/frequency/spanish-letter-pair-counts-leipzig.csv)'
+    )
+    
+    return parser.parse_args()
+
 if __name__ == "__main__":
     print("Letter-Bigram Frequency Analysis")
     print("Analyzing from Most Frequent to Least Frequent Letters")
     print("=" * 70)
     
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    print(f"Input files:")
+    print(f"  Letter frequencies: {args.letter_file}")
+    print(f"  Bigram frequencies: {args.bigram_file}")
+    print()
+    
     try:
-        results_df = analyze_letter_bigram_frequencies()
+        results_df = analyze_letter_bigram_frequencies(args.letter_file, args.bigram_file)
         
         print(f"\nAnalysis complete!")
         print(f"Results saved to 'cumulative_bigram_analysis.csv'")
         print(f"Visualizations saved to 'letter_bigram_analysis.png'")
         
     except FileNotFoundError as e:
-        print(f"Error: Could not find required CSV files. Please ensure both files are in the current directory:")
-        print(f"- letter_frequencies_english.csv")
-        print(f"- letter_pair_frequencies_english.csv")
+        print(f"Error: Could not find required CSV files.")
+        print(f"Please ensure both files exist:")
+        print(f"- {args.letter_file}")
+        print(f"- {args.bigram_file}")
         print(f"Error details: {e}")
     except Exception as e:
         print(f"An error occurred during analysis: {e}")
