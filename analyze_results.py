@@ -3,7 +3,7 @@
 Analyze Layout Optimization Results and Create Visualizations
 
 This script analyzes keyboard layout optimization results and creates scatter plots
-of scores with support for both edian-MAD analysis and full dataset analysis. 
+of scores with support for both median-MAD analysis and full dataset analysis. 
 Supports both MOO (Multi-Objective Optimization) and 
 SOO (Single-Objective Optimization) result formats.
 
