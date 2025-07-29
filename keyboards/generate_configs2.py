@@ -148,14 +148,10 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 #-----------------------------------------------------------------------
 paths:
   input:
-    raw_item_scores_file:          "input/letter_frequencies_english.csv"
-    raw_item_pair_scores_file:     "input/letter_pair_frequencies_english.csv"
-    raw_position_scores_file:      "input/key_comfort_estimates.csv"
-    raw_position_pair_scores_file: "input/key_pair_comfort_estimates.csv"    
-    item_scores_file:              "output/normalized_input/normalized_item_scores.csv"
-    item_pair_scores_file:         "output/normalized_input/normalized_item_pair_scores.csv"
-    position_scores_file:          "output/normalized_input/normalized_position_scores.csv"
-    position_pair_scores_file:     "output/normalized_input/normalized_position_pair_scores.csv"
+    raw_item_scores_file:          "input/frequency/spanish-letter-counts-leipzig.csv"
+    raw_item_pair_scores_file:     "input/frequency/spanish-letter-pair-counts-leipzig.csv"
+    raw_position_scores_file:      "input/comfort/key-comfort-scores.csv"
+    raw_position_pair_scores_file: "input/comfort/key-pair-comfort-scores.csv"
   output:
     layout_results_folder:         "output/layouts"
 
