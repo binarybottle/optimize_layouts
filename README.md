@@ -138,6 +138,11 @@ The system automatically generates normalized versions in
       raw_position_scores_file: "data/comfort/key_comfort_estimates.csv"
       raw_position_pair_scores_file: "data/comfort/key_pair_comfort_estimates.csv"
   ```
+The script detects different distribution types and applies appropriate methods.
+For example, in a keyboard layout optimization problem:
+  - Item & position scores: Robust scaling (1st-99th percentile clipping)
+  - Item-pair scores: Heavy-tailed distribution → square root transformation
+  - Position-pair scores: Symmetric distribution → standard min-max scaling
 
 Required optimization variables:
     - items_to_assign: items to arrange in positions_to_assign
