@@ -33,4 +33,4 @@ optimization:
 # Visualization settings
 #-----------------------------------------------------------------------
 visualization: 
-  print_keyboard: True
+  print_keyboard: False
