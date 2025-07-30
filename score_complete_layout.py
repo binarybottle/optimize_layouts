@@ -388,9 +388,8 @@ Examples:
         # Load configuration
         config = load_config(args.config)
 
-        if not args.csv:
-            print("Complete Layout Score Calculator")
-            print("=" * 50)
+        print("Complete Layout Score Calculator")
+        print("=" * 50)
 
         # Validate inputs - must have equal length first
         if len(args.items) != len(args.positions):
@@ -405,21 +404,19 @@ Examples:
             return
         
         # Run validation if requested
-        if args.validate and not args.csv:
+        if args.validate:
             print("\nRunning layout validation...")
             validation_result = validate_specific_layout(valid_items, valid_positions, config)
             print(f"  {validation_result}")
             print()
         
         # Load normalized scores with optional custom position-pair file
-        if not args.csv:
-            print("Loading normalized scores...")
+        print("Loading normalized scores...")
         normalized_scores = load_scores_with_custom_position_pairs(config, args.position_pair_file)
         item_scores, item_pair_scores, position_scores, position_pair_scores = normalized_scores
         
         # Validate that all positions are available in position-pair file
-        if not args.csv:
-            print("Validating positions against position-pair file...")
+        print("Validating positions against position-pair file...")
         try:
             validate_positions_in_pair_file(valid_positions, position_pair_scores, args.ignore_keyboard_sides)
         except ValueError as e:
@@ -433,13 +430,12 @@ Examples:
         # Create complete layout mapping
         complete_mapping = create_complete_layout_mapping(valid_items, valid_positions, config)
 
-        if not args.csv:
-            if len(valid_items) > 0:
-                all_items = ''.join(complete_mapping.keys())
-                all_positions = ''.join(complete_mapping.values())
-                print(f"Complete layout: {all_items} → {all_positions}")
+        if len(valid_items) > 0:
+            all_items = ''.join(complete_mapping.keys())
+            all_positions = ''.join(complete_mapping.values())
+            print(f"Complete layout: {all_items} → {all_positions}")
         
-        if args.details and not args.csv:
+        if args.details:
             print("Complete mapping:")
             for item, pos in complete_mapping.items():
                 print(f"  {item} → {pos}")
@@ -461,7 +457,7 @@ Examples:
             print(f"  Item-Pair component: {item_pair_score:.12f}")
         
         # Show filtering information if applicable
-        if args.ignore_keyboard_sides and not args.csv:
+        if args.ignore_keyboard_sides:
             pairs_filtered = filtered_info['cross_hand_pairs_filtered']
             pairs_used = filtered_info['pairs_used']
             total_possible = len(complete_mapping) * (len(complete_mapping) - 1)
@@ -474,23 +470,22 @@ Examples:
             print(f"  Filtering ratio:           {pairs_filtered/total_possible*100:.1f}% filtered")
         
         # Show detailed breakdown if requested
-        if args.details and not args.csv:
+        if args.details:
             print_detailed_breakdown(complete_mapping, normalized_scores, args.ignore_keyboard_sides)
 
         # Visualize keyboard layout if requested
-        if not args.csv:
-            if args.keyboard:
-                visualize_keyboard_layout(
-                    mapping=complete_mapping,
-                    title="Complete keyboard layout",
-                    config=config
-                )
-            elif hasattr(config, 'visualization') and config.visualization.print_keyboard:
-                visualize_keyboard_layout(
-                    mapping=complete_mapping,
-                    title="Complete keyboard layout",
-                    config=config
-                )
+        if args.keyboard:
+            visualize_keyboard_layout(
+                mapping=complete_mapping,
+                title="Complete keyboard layout",
+                config=config
+            )
+        elif hasattr(config, 'visualization') and config.visualization.print_keyboard:
+            visualize_keyboard_layout(
+                mapping=complete_mapping,
+                title="Complete keyboard layout",
+                config=config
+            )
                     
     except FileNotFoundError as e:
         print(f"Error: {e}")
