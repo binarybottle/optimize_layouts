@@ -50,6 +50,7 @@ dvorak_layout = "',.pyfgcrlaoeuidhtns;qjkxbmwvz"
 """
 
 import argparse
+from email import parser
 import pandas as pd
 import numpy as np
 from typing import Tuple
@@ -368,6 +369,8 @@ Examples:
                        help="Path to config file (default: config.yaml)")
     parser.add_argument("--details", action="store_true",
                        help="Show detailed scoring breakdown")
+    parser.add_argument("--csv", action="store_true",
+                       help="Output in CSV format (total_score,item_score,item_pair_score)")    
     parser.add_argument("--nonletter-items", action="store_true",
                        help="Allow non-letter characters in --items (default: letters only)")
     parser.add_argument("--position-pair-file", default="input/normalized_key_pair_comfort_scores_extended.csv",
@@ -384,10 +387,11 @@ Examples:
     try:
         # Load configuration
         config = load_config(args.config)
-        
-        print("Complete Layout Score Calculator")
-        print("=" * 50)
-        
+
+        if not args.csv:
+            print("Complete Layout Score Calculator")
+            print("=" * 50)
+
         # Validate inputs - must have equal length first
         if len(args.items) != len(args.positions):
             print(f"Error: Item count ({len(args.items)}) != Position count ({len(args.positions)})")
@@ -401,23 +405,25 @@ Examples:
             return
         
         # Run validation if requested
-        if args.validate:
+        if args.validate and not args.csv:
             print("\nRunning layout validation...")
             validation_result = validate_specific_layout(valid_items, valid_positions, config)
             print(f"  {validation_result}")
             print()
         
         # Load normalized scores with optional custom position-pair file
-        print("Loading normalized scores...")
+        if not args.csv:
+            print("Loading normalized scores...")
         normalized_scores = load_scores_with_custom_position_pairs(config, args.position_pair_file)
         item_scores, item_pair_scores, position_scores, position_pair_scores = normalized_scores
         
         # Validate that all positions are available in position-pair file
-        print("Validating positions against position-pair file...")
+        if not args.csv:
+            print("Validating positions against position-pair file...")
         try:
             validate_positions_in_pair_file(valid_positions, position_pair_scores, args.ignore_keyboard_sides)
         except ValueError as e:
-            print(f"\nValidation Error: {e}")
+            print(f"\nValidation error: {e}")
             print("\nSuggestions:")
             print("  1. Use a position-pair file that includes all your positions")
             print("  2. Remove positions from --positions that aren't in your file") 
@@ -427,12 +433,13 @@ Examples:
         # Create complete layout mapping
         complete_mapping = create_complete_layout_mapping(valid_items, valid_positions, config)
 
-        if len(valid_items) > 0:
-            all_items = ''.join(complete_mapping.keys())
-            all_positions = ''.join(complete_mapping.values())
-            print(f"Complete layout: {all_items} → {all_positions}")
+        if not args.csv:
+            if len(valid_items) > 0:
+                all_items = ''.join(complete_mapping.keys())
+                all_positions = ''.join(complete_mapping.values())
+                print(f"Complete layout: {all_items} → {all_positions}")
         
-        if args.details:
+        if args.details and not args.csv:
             print("Complete mapping:")
             for item, pos in complete_mapping.items():
                 print(f"  {item} → {pos}")
@@ -441,41 +448,49 @@ Examples:
         total_score, item_score, item_pair_score, filtered_info = calculate_complete_layout_score_with_filtering(
             complete_mapping, normalized_scores, args.ignore_keyboard_sides
         )
-        
-        print(f"\nComplete Layout Results:")
-        print(f"  Total score:         {total_score:.12f}")
-        print(f"  Item component:      {item_score:.12f}")
-        print(f"  Item-Pair component: {item_pair_score:.12f}")
+
+        if args.csv:
+            # CSV output only - this is the exact format compare_layouts.py expects
+            print("total_score,item_score,item_pair_score")
+            print(f"{total_score:.12f},{item_score:.12f},{item_pair_score:.12f}")
+        else:
+            # Human-readable output (existing code)
+            print(f"\nComplete Layout Results:")
+            print(f"  Total score:         {total_score:.12f}")
+            print(f"  Item component:      {item_score:.12f}")
+            print(f"  Item-Pair component: {item_pair_score:.12f}")
         
         # Show filtering information if applicable
-        if args.ignore_keyboard_sides:
+        if args.ignore_keyboard_sides and not args.csv:
             pairs_filtered = filtered_info['cross_hand_pairs_filtered']
             pairs_used = filtered_info['pairs_used']
             total_possible = len(complete_mapping) * (len(complete_mapping) - 1)
-            
-            print(f"\nSame-Hand Filtering (--ignore-keyboard-sides):")
+            print(f"  Total pairs considered:  {total_possible}")
+            print(f"  Filtering ratio:           {pairs_filtered/total_possible*100:.1f}% filtered")
+            print(f"\nSame-hand filtering (--ignore-keyboard-sides):")
             print(f"  Cross-hand pairs filtered: {pairs_filtered}")
             print(f"  Same-hand pairs used:      {pairs_used}")
             print(f"  Total possible pairs:      {total_possible}")
             print(f"  Filtering ratio:           {pairs_filtered/total_possible*100:.1f}% filtered")
         
         # Show detailed breakdown if requested
-        if args.details:
+        if args.details and not args.csv:
             print_detailed_breakdown(complete_mapping, normalized_scores, args.ignore_keyboard_sides)
 
         # Visualize keyboard layout if requested
-        if args.keyboard:
-            visualize_keyboard_layout(
-                mapping=complete_mapping,
-                title="Complete keyboard layout",
-                config=config
-            )
-        elif hasattr(config, 'visualization') and config.visualization.print_keyboard:
-            visualize_keyboard_layout(
-                mapping=complete_mapping,
-                title="Complete keyboard layout",
-                config=config
-            )
+        if not args.csv:
+            if args.keyboard:
+                visualize_keyboard_layout(
+                    mapping=complete_mapping,
+                    title="Complete keyboard layout",
+                    config=config
+                )
+            elif hasattr(config, 'visualization') and config.visualization.print_keyboard:
+                visualize_keyboard_layout(
+                    mapping=complete_mapping,
+                    title="Complete keyboard layout",
+                    config=config
+                )
                     
     except FileNotFoundError as e:
         print(f"Error: {e}")
