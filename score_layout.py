@@ -1,4 +1,4 @@
-# score_complete_layout.py
+# score_layout.py
 """
 Layout score calculator that calculates complete layout scores.
 
@@ -8,34 +8,36 @@ Layouts with items or positions that are missing in these files
 will be assigned default scores (see below). To mitigate issues, we default 
 to using only letters for items for this script (positions can use any character).
   - Default (letters only) filters both items and corresponding positions, to "pyaoeuiqjkx" → "rtyuiopasdklzxcvbnm":
-    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "qwertyuiopasdfg"
+    python score_layout.py --items "',.pyaoeui;qjkx" --positions "qwertyuiopasdfg"
   - The argument --nonletter-items uses any characters for items: "',.pyaoeui;qjkx":
-    python score_complete_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --nonletter-items
+    python score_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --nonletter-items
 Also, scores are only calculated for position-pairs that are present in the position-pair file.
-In the case of --position-pair-file "input/normalized_key_pair_comfort_scores_extended.csv",
+In the case of --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv",
 scores are calculated only for within-hand bigrams:
   - prepare_scoring_arrays() will assign default scores of 1.0 for any missing pairs:
     - missing_item_pair_score: float = 1.0,      # ← DEFAULT SCORE FOR MISSING ITEM PAIRS
     - missing_position_pair_score: float = 1.0   # ← DEFAULT SCORE FOR MISSING POSITION PAIRS
 The --ignore-keyboard-sides flag can be used to filter out cross-hand bigrams.
+For an expanded, standalone "engram" scorer intended for keyboard layouts, 
+see https://github.com/binarybottle/keyboard_layout_scorers.
 
 Usage:
 
 # Standard usage (uses position-pair file from config.yaml):
->> python score_complete_layout.py --items "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
+>> python score_layout.py --items "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
     --positions "qwertyuiopasdfghjkl;zxcvbnm,./"
 
 # With all options:
->> python score_complete_layout.py \
+>> python score_layout.py \
     --items     "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
     --positions "qwertyuiopasdfghjkl;zxcvbnm,./" \
-    --position-pair-file "input/normalized_key_pair_comfort_scores_extended.csv" \
+    --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv" \
     --details --validate
 
 # For keyboard applications, filter out same-hand bigrams and visualize a keyboard:
->> python score_complete_layout.py --items "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
+>> python score_layout.py --items "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
     --positions "qwertyuiopasdfghjkl;zxcvbnm,./" --keyboard --ignore-keyboard-sides \
-    --position-pair-file "input/normalized_key_pair_comfort_scores_extended.csv"
+    --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv"
 
 # Your custom file should have format:
 # position_pair,score
@@ -348,16 +350,16 @@ def main():
         epilog="""
 Examples:
   # Basic complete scoring
-  python score_complete_layout.py --items "abc" --positions "FDJ"
+  python score_layout.py --items "abc" --positions "FDJ"
   
   # Score full layout
-  python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW"
+  python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW"
   
   # With detailed breakdown
-  python score_complete_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
+  python score_layout.py --items "etaoinsrhldcumfp" --positions "FDESRJKUMIVLA;OW" --details
   
   # With validation and keyboard display
-  python score_complete_layout.py --items "abc" --positions "FDJ" --validate --keyboard
+  python score_layout.py --items "abc" --positions "FDJ" --validate --keyboard
         """
     )
     
@@ -373,7 +375,7 @@ Examples:
                        help="Output in CSV format (total_score,item_score,item_pair_score)")    
     parser.add_argument("--nonletter-items", action="store_true",
                        help="Allow non-letter characters in --items (default: letters only)")
-    parser.add_argument("--position-pair-file", default="input/normalized_key_pair_comfort_scores_extended.csv",
+    parser.add_argument("--position-pair-file", default="input/comfort/normalized_key_pair_comfort_scores.csv",
                        help="Path to position-pair file (default overrides optimize_layout's default)")
     parser.add_argument("--validate", action="store_true",
                        help="Run validation on this specific layout")

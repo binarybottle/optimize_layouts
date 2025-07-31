@@ -25,7 +25,7 @@ python optimize_layout.py --moo --max-solutions 50 --detailed --validate --verbo
 python analyze_results.py
 
 # Score a specific layout
-python score_complete_layout.py --items "etaoi" --positions "FJDSV"
+python score_layout.py --items "etaoi" --positions "FJDSV"
 ```
 
 ## Overview
@@ -170,10 +170,15 @@ where direction (sequence of a given pair) matters.
   - pair_only: Only pair interactions (internal + cross)
   - combined: Multiplicative combination (item × total_pairs)
 
-Note: Since the scoring accepts any characters and any positions,
+Note: Since the scoring accepts any characters for items and any positions,
 there could be a problem if item or position files are incomplete.
 Layouts with items or positions that are missing in these files 
-will be assigned default scores.
+will be assigned default scores:
+  - prepare_scoring_arrays() will assign default scores of 1.0 for any missing pairs:
+    - missing_item_pair_score: float = 1.0,      # ← DEFAULT SCORE FOR MISSING ITEM PAIRS
+    - missing_position_pair_score: float = 1.0   # ← DEFAULT SCORE FOR MISSING POSITION PAIRS
+For an expanded, standalone "engram" scorer intended for keyboard layouts, 
+see https://github.com/binarybottle/keyboard_layout_scorers.
 
 ## Branch-and-bound optimization
   - Calculates exact scores for placed letters
