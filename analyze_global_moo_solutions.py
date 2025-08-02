@@ -1,19 +1,22 @@
 #!/usr/bin/env python3
 """
-Quick analysis and visualization of global Pareto results.
+Analysis and visualization of global Pareto results.
+
+Features:
+- Pareto front visualization (colored by source file + clean grayscale version)
+- Source file distribution analysis
+- Letter-position stability matrix (sparse heatmap)
+- Flexible filtering by letter-position constraints
+- Layout scorer command generation for external comparison
 
 Dependencies: pandas, matplotlib, numpy, seaborn
 
 Usage: 
     python3 analyze_global_moo_solutions.py output/global_moo_solutions.csv
-    
-    # Filter for e in J only
-    python3 analyze_global_moo_solutions.py data.csv --filter-assignments "e:J"  
-    
-    # Multiple constraints: e in J AND t in F
+    python3 analyze_global_moo_solutions.py data.csv --filter-assignments "e:J"
     python3 analyze_global_moo_solutions.py data.csv --filter-assignments "e:J,t:F,a:S"
-
 """
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
@@ -129,17 +132,18 @@ def calculate_stability_metrics(df):
     return letter_stability, position_stability, assignment_counts
 
 
-def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix=""):
+def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix="", filename_suffix=""):
     """
     Create a stability matrix heatmap showing letter-position assignment frequencies.
     
     Args:
         df: DataFrame with solutions
         output_dir: Output directory for plots
-        filter_condition: Optional function to filter solutions
+        filter_condition: Optional function to filter solutions (deprecated - filtering should be done before calling)
         title_suffix: Additional text for plot title
+        filename_suffix: Additional text for filename
     """
-    # Apply filter if provided
+    # Apply filter if provided (for backward compatibility, but should be done externally now)
     if filter_condition:
         filtered_df = df[df.apply(filter_condition, axis=1)].copy()
         print(f"Filtered from {len(df)} to {len(filtered_df)} solutions")
@@ -208,8 +212,7 @@ def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix=""
     plt.tight_layout()
     
     # Save the plot
-    suffix = "_filtered" if filter_condition else ""
-    filename = f'stability_matrix{suffix}.png'
+    filename = f'stability_matrix{filename_suffix}.png'
     plt.savefig(output_dir / filename, dpi=300, bbox_inches='tight')
     plt.show()
     
@@ -421,7 +424,241 @@ def print_statistics(df, item_col, pair_col, file_counts):
     return top_solutions
 
 
+def generate_layout_scorer_command(df, output_dir, filter_constraints=None, 
+                                   additional_items="", 
+                                   additional_positions=""):
+    """
+    Generate a layout_scorer.py command file for comparing all layouts in the CSV.
+    
+    Args:
+        df: DataFrame with solutions (after any filtering)
+        output_dir: Output directory for the command file
+        filter_constraints: Optional filter constraints for documentation
+        additional_items: String of additional characters to append to each solution's items
+                         e.g., "qz'\",.-?" 
+        additional_positions: String of additional positions to append to each solution's positions
+                            e.g., "['TYGHBN"
+    """
+    # Standard QWERTY position order for layout_scorer.py (including [ and ')
+    qwerty_positions = "qwertyuiopasdfghjkl;zxcvbnm,./['"
+    
+    # Mapping from QWERTY position to CSV position name
+    qwerty_to_csv_position = {
+        'q': 'Q', 'w': 'W', 'e': 'E', 'r': 'R', 't': 'T', 'y': 'Y', 'u': 'U', 'i': 'I', 'o': 'O', 'p': 'P',
+        'a': 'A', 's': 'S', 'd': 'D', 'f': 'F', 'g': 'G', 'h': 'H', 'j': 'J', 'k': 'K', 'l': 'L', ';': ';',
+        'z': 'Z', 'x': 'X', 'c': 'C', 'v': 'V', 'b': 'B', 'n': 'N', 'm': 'M', ',': ',', '.': '.', '/': '/',
+        '[': '[', "'": "'"
+    }
+    
+    layout_specs = []
+    
+    for idx, row in df.iterrows():
+        # Parse items and positions from the MOO solution
+        original_items = list(row['items'])
+        original_positions = list(row['positions'])
+        
+        # Extend with additional characters
+        extended_items = original_items + list(additional_items)
+        extended_positions = original_positions + list(additional_positions)
+        
+        # Ensure we don't have mismatched lengths
+        if len(extended_items) != len(extended_positions):
+            print(f"Warning: Layout {idx+1} has mismatched items/positions lengths after extension")
+            print(f"  Items: {len(extended_items)}, Positions: {len(extended_positions)}")
+            # Truncate to the shorter length
+            min_len = min(len(extended_items), len(extended_positions))
+            extended_items = extended_items[:min_len]
+            extended_positions = extended_positions[:min_len]
+        
+        # Create mapping: CSV position -> letter
+        position_to_letter = {}
+        for letter, csv_position in zip(extended_items, extended_positions):
+            position_to_letter[csv_position] = letter
+        
+        # Build layout string by going through QWERTY positions in order
+        layout_string = ""
+        for qwerty_char in qwerty_positions:
+            csv_position = qwerty_to_csv_position[qwerty_char]
+            if csv_position in position_to_letter:
+                layout_string += position_to_letter[csv_position]
+            else:
+                # Fallback to original character if position not found
+                layout_string += qwerty_char
+        
+        # Escape any double quotes in the layout string
+        escaped_layout_string = layout_string.replace('"', '\\"')
+        
+        # Use original CSV line number as layout name
+        layout_name = f"layout{idx + 1}"
+        layout_specs.append(f'{layout_name}:"{escaped_layout_string}"')
+    
+    # Build the complete command
+    command_parts = [
+        "python layout_scorer.py",
+        "--compare",
+        " ".join(layout_specs),
+        "--csv results.csv",
+        '--text "hello"'
+    ]
+    
+    command = " ".join(command_parts)
+    
+    # Write to file
+    command_file = output_dir / 'layout_scorer_command.txt'
+    with open(command_file, 'w') as f:
+        f.write("# Layout Scorer Command\n")
+        f.write("# Generated from MOO analysis results\n")
+        if filter_constraints:
+            f.write(f"# Filter constraints: {format_constraints_string(filter_constraints)}\n")
+        if additional_items or additional_positions:
+            f.write(f"# Additional items added: '{additional_items}'\n")
+            f.write(f"# Additional positions added: '{additional_positions}'\n")
+        f.write(f"# Number of layouts: {len(df)}\n")
+        f.write("# Layout numbers correspond to original CSV line numbers\n")
+        f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
+        f.write(command)
+        f.write("\n")
+    
+    print(f"\nLayout scorer command saved to: {command_file}")
+    print(f"Command includes {len(df)} layouts for comparison")
+    if filter_constraints:
+        print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
+    if additional_items or additional_positions:
+        print(f"Extended each layout with:")
+        print(f"  Additional items: '{additional_items}'")
+        print(f"  Additional positions: '{additional_positions}'")
+    
+    return command_file
+
+
+def generate_layout_scorer_command(df, output_dir, filter_constraints=None, 
+                                   additional_items="", 
+                                   additional_positions=""):
+    """
+    Generate a layout_scorer.py command file for comparing all layouts in the CSV.
+    
+    Args:
+        df: DataFrame with solutions (after any filtering)
+        output_dir: Output directory for the command file
+        filter_constraints: Optional filter constraints for documentation
+        additional_items: String of additional characters to append to each solution's items
+                         e.g., "qz'\",.-?" 
+        additional_positions: String of additional positions to append to each solution's positions
+                            e.g., "['TYGHBN"
+    """
+    # Standard QWERTY position order for layout_scorer.py (including [ and ')
+    qwerty_positions = "qwertyuiopasdfghjkl;zxcvbnm,./['"
+    
+    # Mapping from QWERTY position to CSV position name
+    qwerty_to_csv_position = {
+        'q': 'Q', 'w': 'W', 'e': 'E', 'r': 'R', 't': 'T', 'y': 'Y', 'u': 'U', 'i': 'I', 'o': 'O', 'p': 'P',
+        'a': 'A', 's': 'S', 'd': 'D', 'f': 'F', 'g': 'G', 'h': 'H', 'j': 'J', 'k': 'K', 'l': 'L', ';': ';',
+        'z': 'Z', 'x': 'X', 'c': 'C', 'v': 'V', 'b': 'B', 'n': 'N', 'm': 'M', ',': ',', '.': '.', '/': '/',
+        '[': '[', "'": "'"
+    }
+    
+    layout_specs = []
+    
+    for idx, row in df.iterrows():
+        # Parse items and positions from the MOO solution
+        original_items = list(row['items'])
+        original_positions = list(row['positions'])
+        
+        # Extend with additional characters
+        extended_items = original_items + list(additional_items)
+        extended_positions = original_positions + list(additional_positions)
+        
+        # Ensure we don't have mismatched lengths
+        if len(extended_items) != len(extended_positions):
+            print(f"Warning: Layout {idx+1} has mismatched items/positions lengths after extension")
+            print(f"  Items: {len(extended_items)}, Positions: {len(extended_positions)}")
+            # Truncate to the shorter length
+            min_len = min(len(extended_items), len(extended_positions))
+            extended_items = extended_items[:min_len]
+            extended_positions = extended_positions[:min_len]
+        
+        # Create mapping: CSV position -> letter
+        position_to_letter = {}
+        for letter, csv_position in zip(extended_items, extended_positions):
+            position_to_letter[csv_position] = letter
+        
+        # Build layout string by going through QWERTY positions in order
+        layout_string = ""
+        for qwerty_char in qwerty_positions:
+            csv_position = qwerty_to_csv_position[qwerty_char]
+            if csv_position in position_to_letter:
+                layout_string += position_to_letter[csv_position]
+            else:
+                # Fallback to original character if position not found
+                layout_string += qwerty_char
+        
+        # Escape any double quotes in the layout string
+        escaped_layout_string = layout_string.replace('"', '\\"')
+        
+        # Use original CSV line number as layout name
+        layout_name = f"layout{idx + 1}"
+        layout_specs.append(f'{layout_name}:"{escaped_layout_string}"')
+    
+    # Build the complete command
+    command_parts = [
+        "python layout_scorer.py",
+        "--compare",
+        " ".join(layout_specs),
+        "--csv results.csv",
+        '--text "hello"'
+    ]
+    
+    command = " ".join(command_parts)
+    
+    # Write to file
+    command_file = output_dir / 'layout_scorer_command.txt'
+    with open(command_file, 'w') as f:
+        f.write("# Layout Scorer Command\n")
+        f.write("# Generated from MOO analysis results\n")
+        if filter_constraints:
+            f.write(f"# Filter constraints: {format_constraints_string(filter_constraints)}\n")
+        if additional_items or additional_positions:
+            f.write(f"# Additional items added: '{additional_items}'\n")
+            f.write(f"# Additional positions added: '{additional_positions}'\n")
+        f.write(f"# Number of layouts: {len(df)}\n")
+        f.write("# Layout numbers correspond to original CSV line numbers\n")
+        f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
+        f.write(command)
+        f.write("\n")
+    
+    print(f"\nLayout scorer command saved to: {command_file}")
+    print(f"Command includes {len(df)} layouts for comparison")
+    if filter_constraints:
+        print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
+    if additional_items or additional_positions:
+        print(f"Extended each layout with:")
+        print(f"  Additional items: '{additional_items}'")
+        print(f"  Additional positions: '{additional_positions}'")
+    
+    return command_file
+
+    
 def save_results(df, file_counts, top_solutions, output_dir, filter_constraints=None):
+    """Save analysis results to files."""
+    # Save summary statistics
+    with open(output_dir / 'analysis_summary.txt', 'w') as f:
+        f.write(f"Global Pareto Analysis Summary\n")
+        f.write(f"==============================\n\n")
+        f.write(f"Number of solutions: {len(df)}\n")
+        if file_counts is not None:
+            f.write(f"Number of source files: {len(file_counts)}\n")
+        if filter_constraints:
+            f.write(f"Filter constraints: {format_constraints_string(filter_constraints)}\n")
+        if 'global_rank' in df.columns:
+            f.write(f"Global rank range: {df['global_rank'].min()} to {df['global_rank'].max()}\n")
+        f.write(f"\nTop 10 Solutions by Global Rank:\n")
+        f.write(top_solutions.to_string(index=False))
+    
+    # Save full results with rankings to CSV
+    if 'global_rank' in df.columns:
+        output_csv = output_dir / 'global_moo_solutions_with_ranks.csv'
+        df.to_csv(output_csv, index=False)
+        print(f"\nFull results with rankings saved to: {output_csv}")
     """Save analysis results to files."""
     # Save summary statistics
     with open(output_dir / 'analysis_summary.txt', 'w') as f:
@@ -479,26 +716,49 @@ def main():
     output_dir = Path(args.output_dir)
     output_dir.mkdir(exist_ok=True)
     
+    # Apply filtering to the main dataframe if constraints provided
+    if filter_constraints:
+        filter_function = create_general_filter(filter_constraints)
+        original_count = len(df)
+        df = df[df.apply(filter_function, axis=1)].copy()
+        print(f"Applied filter constraints: {format_constraints_string(filter_constraints)}")
+        print(f"Filtered from {original_count} to {len(df)} solutions")
+        
+        if len(df) == 0:
+            print("Error: No solutions remain after filtering. Exiting.")
+            return
+    
     # Generate plots and collect statistics
     file_counts = plot_pareto_front(df, item_col, pair_col, output_dir)
     if 'source_file' in df.columns:
         plot_source_distribution(df, output_dir)
     
-    # Create stability matrix for all solutions
-    print(f"\n=== Creating Stability Matrix for All Solutions ===")
-    plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix=" (All Solutions)")
-    
-    # Create filtered stability matrix if constraints provided
+    # Create stability matrix (now using the already-filtered dataframe)
+    print(f"\n=== Creating Stability Matrix ===")
     if filter_constraints:
-        print(f"\n=== Creating Filtered Stability Matrix ===")
-        filter_function = create_general_filter(filter_constraints)
         constraint_desc = format_constraints_string(filter_constraints)
-        plot_stability_matrix(df, output_dir, filter_condition=filter_function, 
-                            title_suffix=f" ({constraint_desc})")
+        plot_stability_matrix(df, output_dir, filter_condition=None, 
+                            title_suffix=f" ({constraint_desc})", 
+                            filename_suffix="_filtered")
+    else:
+        plot_stability_matrix(df, output_dir, filter_condition=None, 
+                            title_suffix=" (All Solutions)",
+                            filename_suffix="")
     
     # Print and save statistics
     top_solutions = print_statistics(df, item_col, pair_col, file_counts)
     save_results(df, file_counts, top_solutions, output_dir, filter_constraints)
+    
+
+    # Define additional characters to append to each MOO solution
+    # CUSTOMIZE THESE AS NEEDED:
+    extra_items = "qz'\",.-?"        # Characters to add to items
+    extra_positions = "['TYGHBN"     # Positions to add to positions
+    
+    # Generate layout scorer command file with extended characters
+    generate_layout_scorer_command(df, output_dir, filter_constraints,
+                                 additional_items=extra_items,
+                                 additional_positions=extra_positions)
     
     print(f"\nAnalysis complete! Plots and files saved to {output_dir}/")
     print(f"Key outputs:")
