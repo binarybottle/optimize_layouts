@@ -132,109 +132,6 @@ def calculate_stability_metrics(df):
     return letter_stability, position_stability, assignment_counts
 
 
-def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix="", filename_suffix=""):
-    """
-    Create a stability matrix heatmap showing letter-position assignment frequencies.
-    
-    Args:
-        df: DataFrame with solutions
-        output_dir: Output directory for plots
-        filter_condition: Optional function to filter solutions (deprecated - filtering should be done before calling)
-        title_suffix: Additional text for plot title
-        filename_suffix: Additional text for filename
-    """
-    # Apply filter if provided (for backward compatibility, but should be done externally now)
-    if filter_condition:
-        filtered_df = df[df.apply(filter_condition, axis=1)].copy()
-        print(f"Filtered from {len(df)} to {len(filtered_df)} solutions")
-    else:
-        filtered_df = df.copy()
-    
-    if len(filtered_df) == 0:
-        print("Warning: No solutions remain after filtering")
-        return
-    
-    # Calculate stability metrics
-    letter_stability, position_stability, assignment_counts = calculate_stability_metrics(filtered_df)
-    
-    # Sort letters and positions by stability (most stable first)
-    letters_by_stability = sorted(letter_stability.keys(), key=lambda x: letter_stability[x])
-    positions_by_stability = sorted(position_stability.keys(), key=lambda x: position_stability[x])
-    
-    print(f"Most stable letters: {letters_by_stability[:6]}")
-    print(f"Most stable positions: {positions_by_stability[:6]}")
-    
-    # Create matrix data
-    letter_indices = {letter: i for i, letter in enumerate(letters_by_stability)}
-    position_indices = {pos: i for i, pos in enumerate(positions_by_stability)}
-    
-    # Initialize matrix with zeros
-    matrix = np.zeros((len(letters_by_stability), len(positions_by_stability)))
-    
-    # Fill matrix with assignment counts
-    for (letter, position), count in assignment_counts.items():
-        if letter in letter_indices and position in position_indices:
-            matrix[letter_indices[letter], position_indices[position]] = count
-    
-    # Create the heatmap
-    plt.figure(figsize=(16, 12))
-    
-    # Create annotations matrix (empty strings for zeros, values for non-zeros)
-    annot_matrix = np.where(matrix == 0, '', matrix.astype(int).astype(str))
-    
-    # Create heatmap with annotations for non-zero values only
-    sns.heatmap(matrix, 
-                xticklabels=[f"{pos} ({position_stability[pos]})" for pos in positions_by_stability],
-                yticklabels=[f"{letter} ({letter_stability[letter]})" for letter in letters_by_stability],
-                cmap='Reds',
-                linewidths=0.5,
-                linecolor='white',
-                square=True,
-                cbar_kws={'label': 'Assignment Count', 'shrink': 0.5},  # Smaller colorbar
-                fmt='',  # No formatting since we're providing custom annotations
-                annot=annot_matrix,  # Custom annotations (empty for zeros)
-                annot_kws={'size': 8})
-    
-    # Remove ticks
-    plt.tick_params(left=False, bottom=False)
-    
-    # Customize the plot
-    plt.title(f'Letter-Position Stability Matrix{title_suffix}\n'
-              f'({len(filtered_df)} solutions, axes ordered by stability)', 
-              fontsize=14, fontweight='bold')
-    plt.xlabel('Positions (stability score in parentheses)', fontweight='bold')
-    plt.ylabel('Letters (stability score in parentheses)', fontweight='bold')
-    
-    # Rotate labels for better readability
-    plt.xticks(rotation=45, ha='right')
-    plt.yticks(rotation=0)
-    
-    plt.tight_layout()
-    
-    # Save the plot
-    filename = f'stability_matrix{filename_suffix}.png'
-    plt.savefig(output_dir / filename, dpi=300, bbox_inches='tight')
-    plt.show()
-    
-    # Print stability statistics
-    print(f"\nStability Statistics{title_suffix}:")
-    print(f"Most stable letters (fewest positions):")
-    for letter in letters_by_stability[:8]:
-        print(f"  {letter}: {letter_stability[letter]} unique positions")
-    
-    print(f"Most stable positions (fewest letters):")
-    for position in positions_by_stability[:8]:
-        print(f"  {position}: {position_stability[position]} unique letters")
-    
-    # Calculate sparsity
-    total_cells = len(letters_by_stability) * len(positions_by_stability)
-    non_zero_cells = np.count_nonzero(matrix)
-    sparsity = (total_cells - non_zero_cells) / total_cells * 100
-    print(f"Matrix sparsity: {sparsity:.1f}% ({non_zero_cells}/{total_cells} cells have assignments)")
-    
-    return letter_stability, position_stability, assignment_counts
-
-
 def parse_filter_assignments(filter_string):
     """
     Parse filter string into letter-position constraints.
@@ -429,6 +326,7 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
                                    additional_positions=""):
     """
     Generate a layout_scorer.py command file for comparing all layouts in the CSV.
+    Reorders items to match QWERTY position sequence: qwertyuiopasdfghjkl;zxcvbnm,./['
     
     Args:
         df: DataFrame with solutions (after any filtering)
@@ -439,7 +337,7 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
         additional_positions: String of additional positions to append to each solution's positions
                             e.g., "['TYGHBN"
     """
-    # Standard QWERTY position order for layout_scorer.py (including [ and ')
+    # Standard QWERTY position order for layout_scorer.py
     qwerty_positions = "qwertyuiopasdfghjkl;zxcvbnm,./['"
     
     # Mapping from QWERTY position to CSV position name
@@ -485,6 +383,11 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
                 # Fallback to original character if position not found
                 layout_string += qwerty_char
         
+        # Debug output for first layout
+        if idx == 0:
+            print(f"  Final layout string: {layout_string}")
+            print(f"  Expected QWERTY order: {qwerty_positions}")
+        
         # Escape any double quotes in the layout string
         escaped_layout_string = layout_string.replace('"', '\\"')
         
@@ -515,12 +418,14 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
             f.write(f"# Additional positions added: '{additional_positions}'\n")
         f.write(f"# Number of layouts: {len(df)}\n")
         f.write("# Layout numbers correspond to original CSV line numbers\n")
+        f.write("# Items reordered to match QWERTY position order: qwertyuiopasdfghjkl;zxcvbnm,./['\n")
         f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
         f.write(command)
         f.write("\n")
     
     print(f"\nLayout scorer command saved to: {command_file}")
     print(f"Command includes {len(df)} layouts for comparison")
+    print(f"Items reordered to match QWERTY position order")
     if filter_constraints:
         print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
     if additional_items or additional_positions:
@@ -531,111 +436,107 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
     return command_file
 
 
-def generate_layout_scorer_command(df, output_dir, filter_constraints=None, 
-                                   additional_items="", 
-                                   additional_positions=""):
+def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix="", filename_suffix=""):
     """
-    Generate a layout_scorer.py command file for comparing all layouts in the CSV.
+    Create a stability matrix heatmap showing letter-position assignment frequencies.
     
     Args:
-        df: DataFrame with solutions (after any filtering)
-        output_dir: Output directory for the command file
-        filter_constraints: Optional filter constraints for documentation
-        additional_items: String of additional characters to append to each solution's items
-                         e.g., "qz'\",.-?" 
-        additional_positions: String of additional positions to append to each solution's positions
-                            e.g., "['TYGHBN"
+        df: DataFrame with solutions
+        output_dir: Output directory for plots
+        filter_condition: Optional function to filter solutions (deprecated - filtering should be done before calling)
+        title_suffix: Additional text for plot title
+        filename_suffix: Additional text for filename
     """
-    # Standard QWERTY position order for layout_scorer.py (including [ and ')
-    qwerty_positions = "qwertyuiopasdfghjkl;zxcvbnm,./['"
+    # Apply filter if provided (for backward compatibility, but should be done externally now)
+    if filter_condition:
+        filtered_df = df[df.apply(filter_condition, axis=1)].copy()
+        print(f"Filtered from {len(df)} to {len(filtered_df)} solutions")
+    else:
+        filtered_df = df.copy()
     
-    # Mapping from QWERTY position to CSV position name
-    qwerty_to_csv_position = {
-        'q': 'Q', 'w': 'W', 'e': 'E', 'r': 'R', 't': 'T', 'y': 'Y', 'u': 'U', 'i': 'I', 'o': 'O', 'p': 'P',
-        'a': 'A', 's': 'S', 'd': 'D', 'f': 'F', 'g': 'G', 'h': 'H', 'j': 'J', 'k': 'K', 'l': 'L', ';': ';',
-        'z': 'Z', 'x': 'X', 'c': 'C', 'v': 'V', 'b': 'B', 'n': 'N', 'm': 'M', ',': ',', '.': '.', '/': '/',
-        '[': '[', "'": "'"
-    }
+    if len(filtered_df) == 0:
+        print("Warning: No solutions remain after filtering")
+        return
     
-    layout_specs = []
+    # Calculate stability metrics
+    letter_stability, position_stability, assignment_counts = calculate_stability_metrics(filtered_df)
     
-    for idx, row in df.iterrows():
-        # Parse items and positions from the MOO solution
-        original_items = list(row['items'])
-        original_positions = list(row['positions'])
-        
-        # Extend with additional characters
-        extended_items = original_items + list(additional_items)
-        extended_positions = original_positions + list(additional_positions)
-        
-        # Ensure we don't have mismatched lengths
-        if len(extended_items) != len(extended_positions):
-            print(f"Warning: Layout {idx+1} has mismatched items/positions lengths after extension")
-            print(f"  Items: {len(extended_items)}, Positions: {len(extended_positions)}")
-            # Truncate to the shorter length
-            min_len = min(len(extended_items), len(extended_positions))
-            extended_items = extended_items[:min_len]
-            extended_positions = extended_positions[:min_len]
-        
-        # Create mapping: CSV position -> letter
-        position_to_letter = {}
-        for letter, csv_position in zip(extended_items, extended_positions):
-            position_to_letter[csv_position] = letter
-        
-        # Build layout string by going through QWERTY positions in order
-        layout_string = ""
-        for qwerty_char in qwerty_positions:
-            csv_position = qwerty_to_csv_position[qwerty_char]
-            if csv_position in position_to_letter:
-                layout_string += position_to_letter[csv_position]
-            else:
-                # Fallback to original character if position not found
-                layout_string += qwerty_char
-        
-        # Escape any double quotes in the layout string
-        escaped_layout_string = layout_string.replace('"', '\\"')
-        
-        # Use original CSV line number as layout name
-        layout_name = f"layout{idx + 1}"
-        layout_specs.append(f'{layout_name}:"{escaped_layout_string}"')
+    # Sort letters and positions by stability (most stable first)
+    letters_by_stability = sorted(letter_stability.keys(), key=lambda x: letter_stability[x])
+    positions_by_stability = sorted(position_stability.keys(), key=lambda x: position_stability[x])
     
-    # Build the complete command
-    command_parts = [
-        "python layout_scorer.py",
-        "--compare",
-        " ".join(layout_specs),
-        "--csv results.csv",
-        '--text "hello"'
-    ]
+    print(f"Most stable letters: {letters_by_stability[:6]}")
+    print(f"Most stable positions: {positions_by_stability[:6]}")
     
-    command = " ".join(command_parts)
+    # Create matrix data
+    letter_indices = {letter: i for i, letter in enumerate(letters_by_stability)}
+    position_indices = {pos: i for i, pos in enumerate(positions_by_stability)}
     
-    # Write to file
-    command_file = output_dir / 'layout_scorer_command.txt'
-    with open(command_file, 'w') as f:
-        f.write("# Layout Scorer Command\n")
-        f.write("# Generated from MOO analysis results\n")
-        if filter_constraints:
-            f.write(f"# Filter constraints: {format_constraints_string(filter_constraints)}\n")
-        if additional_items or additional_positions:
-            f.write(f"# Additional items added: '{additional_items}'\n")
-            f.write(f"# Additional positions added: '{additional_positions}'\n")
-        f.write(f"# Number of layouts: {len(df)}\n")
-        f.write("# Layout numbers correspond to original CSV line numbers\n")
-        f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
-        f.write(command)
-        f.write("\n")
+    # Initialize matrix with zeros
+    matrix = np.zeros((len(letters_by_stability), len(positions_by_stability)))
     
-    print(f"\nLayout scorer command saved to: {command_file}")
-    print(f"Command includes {len(df)} layouts for comparison")
-    if filter_constraints:
-        print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
-    if additional_items or additional_positions:
-        print(f"Extended each layout with:")
-        print(f"  Additional items: '{additional_items}'")
-        print(f"  Additional positions: '{additional_positions}'")
+    # Fill matrix with assignment counts
+    for (letter, position), count in assignment_counts.items():
+        if letter in letter_indices and position in position_indices:
+            matrix[letter_indices[letter], position_indices[position]] = count
     
-    return command_file
+    # Create the heatmap
+    plt.figure(figsize=(16, 12))
+    
+    # Create annotations matrix (empty strings for zeros, values for non-zeros)
+    annot_matrix = np.where(matrix == 0, '', matrix.astype(int).astype(str))
+    
+    # Create heatmap with annotations for non-zero values only
+    sns.heatmap(matrix, 
+                xticklabels=positions_by_stability,  # Clean labels without stability scores
+                yticklabels=letters_by_stability,    # Clean labels without stability scores
+                cmap='Reds',
+                linewidths=0.5,
+                linecolor='white',
+                square=True,
+                cbar_kws={'label': 'Assignment Count', 'shrink': 0.5},  # Smaller colorbar
+                fmt='',  # No formatting since we're providing custom annotations
+                annot=annot_matrix,  # Custom annotations (empty for zeros)
+                annot_kws={'size': 8})
+    
+    # Remove ticks
+    plt.tick_params(left=False, bottom=False)
+    
+    # Customize the plot
+    plt.title(f'Letter-Position Stability Matrix{title_suffix}\n'
+              f'({len(filtered_df)} solutions, axes ordered by stability)', 
+              fontsize=14, fontweight='bold')
+    plt.xlabel('Positions (ordered by stability)', fontweight='bold')
+    plt.ylabel('Letters (ordered by stability)', fontweight='bold')
+    
+    # Keep labels horizontal (no rotation)
+    plt.xticks(rotation=0)
+    plt.yticks(rotation=0)
+    
+    plt.tight_layout()
+    
+    # Save the plot
+    filename = f'stability_matrix{filename_suffix}.png'
+    plt.savefig(output_dir / filename, dpi=300, bbox_inches='tight')
+    plt.show()
+    
+    # Print stability statistics
+    print(f"\nStability Statistics{title_suffix}:")
+    print(f"Most stable letters (fewest positions):")
+    for letter in letters_by_stability[:8]:
+        print(f"  {letter}: {letter_stability[letter]} unique positions")
+    
+    print(f"Most stable positions (fewest letters):")
+    for position in positions_by_stability[:8]:
+        print(f"  {position}: {position_stability[position]} unique letters")
+    
+    # Calculate sparsity
+    total_cells = len(letters_by_stability) * len(positions_by_stability)
+    non_zero_cells = np.count_nonzero(matrix)
+    sparsity = (total_cells - non_zero_cells) / total_cells * 100
+    print(f"Matrix sparsity: {sparsity:.1f}% ({non_zero_cells}/{total_cells} cells have assignments)")
+    
+    return letter_stability, position_stability, assignment_counts
 
     
 def save_results(df, file_counts, top_solutions, output_dir, filter_constraints=None):
