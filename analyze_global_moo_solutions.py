@@ -338,15 +338,7 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
                             e.g., "['TYGHBN"
     """
     # Standard QWERTY position order for layout_scorer.py
-    qwerty_positions = "qwertyuiopasdfghjkl;zxcvbnm,./['"
-    
-    # Mapping from QWERTY position to CSV position name
-    qwerty_to_csv_position = {
-        'q': 'Q', 'w': 'W', 'e': 'E', 'r': 'R', 't': 'T', 'y': 'Y', 'u': 'U', 'i': 'I', 'o': 'O', 'p': 'P',
-        'a': 'A', 's': 'S', 'd': 'D', 'f': 'F', 'g': 'G', 'h': 'H', 'j': 'J', 'k': 'K', 'l': 'L', ';': ';',
-        'z': 'Z', 'x': 'X', 'c': 'C', 'v': 'V', 'b': 'B', 'n': 'N', 'm': 'M', ',': ',', '.': '.', '/': '/',
-        '[': '[', "'": "'"
-    }
+    qwerty_positions = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./"
     
     layout_specs = []
     
@@ -355,7 +347,7 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
         original_items = list(row['items'])
         original_positions = list(row['positions'])
         
-        # Extend with additional characters
+        # Extend with additional characters if provided
         extended_items = original_items + list(additional_items)
         extended_positions = original_positions + list(additional_positions)
         
@@ -368,25 +360,45 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
             extended_items = extended_items[:min_len]
             extended_positions = extended_positions[:min_len]
         
-        # Create mapping: CSV position -> letter
-        position_to_letter = {}
-        for letter, csv_position in zip(extended_items, extended_positions):
-            position_to_letter[csv_position] = letter
+        # Create mapping: Position -> Character
+        position_to_char = {}
+        for char, pos in zip(extended_items, extended_positions):
+            position_to_char[pos.upper()] = char
         
         # Build layout string by going through QWERTY positions in order
         layout_string = ""
-        for qwerty_char in qwerty_positions:
-            csv_position = qwerty_to_csv_position[qwerty_char]
-            if csv_position in position_to_letter:
-                layout_string += position_to_letter[csv_position]
+        missing_positions = []
+        for qwerty_pos in qwerty_positions:
+            if qwerty_pos in position_to_char:
+                layout_string += position_to_char[qwerty_pos]
             else:
-                # Fallback to original character if position not found
-                layout_string += qwerty_char
+                # For positions not in the MOO solution, use the default QWERTY character
+                fallback_char = qwerty_pos.lower() if qwerty_pos.isalpha() else qwerty_pos
+                layout_string += fallback_char
+                missing_positions.append(qwerty_pos)
         
         # Debug output for first layout
         if idx == 0:
-            print(f"  Final layout string: {layout_string}")
-            print(f"  Expected QWERTY order: {qwerty_positions}")
+            print(f"\nDEBUG: First layout reordering (32-key):")
+            print(f"  Original items:     {row['items']} (length: {len(row['items'])})")
+            print(f"  Original positions: {row['positions']} (length: {len(row['positions'])})")
+            print(f"  Extended items:     {''.join(extended_items)} (length: {len(extended_items)})")
+            print(f"  Extended positions: {''.join(extended_positions)} (length: {len(extended_positions)})")
+            print(f"  Final layout string: {layout_string} (length: {len(layout_string)})")
+            print(f"  QWERTY order:       {qwerty_positions.lower()}")
+            if missing_positions:
+                print(f"  Missing positions (using defaults): {missing_positions}")
+            
+            # Show the mapping for verification
+            print(f"  Position mappings:")
+            for char, pos in zip(extended_items, extended_positions):
+                print(f"    '{char}' -> position '{pos}'")
+            
+            # Validate 32-character output
+            if len(layout_string) != 32:
+                print(f"  WARNING: Expected 32 characters, got {len(layout_string)}")
+            else:
+                print(f"  ✓ Generated 32-character layout string")
         
         # Escape any double quotes in the layout string
         escaped_layout_string = layout_string.replace('"', '\\"')
@@ -418,14 +430,14 @@ def generate_layout_scorer_command(df, output_dir, filter_constraints=None,
             f.write(f"# Additional positions added: '{additional_positions}'\n")
         f.write(f"# Number of layouts: {len(df)}\n")
         f.write("# Layout numbers correspond to original CSV line numbers\n")
-        f.write("# Items reordered to match QWERTY position order: qwertyuiopasdfghjkl;zxcvbnm,./['\n")
+        f.write(f"# Items reordered to match QWERTY position order (32 keys): {qwerty_positions.lower()}\n")
         f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
         f.write(command)
         f.write("\n")
     
     print(f"\nLayout scorer command saved to: {command_file}")
     print(f"Command includes {len(df)} layouts for comparison")
-    print(f"Items reordered to match QWERTY position order")
+    print(f"Items reordered to match QWERTY position order (32 keys)")
     if filter_constraints:
         print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
     if additional_items or additional_positions:
@@ -656,6 +668,9 @@ def main():
     extra_items = "qz'\",.-?"        # Characters to add to items
     extra_positions = "['TYGHBN"     # Positions to add to positions
     
+    print(f"\nExtra items: {extra_items}/")
+    print(f"Extra positions: {extra_positions}/")
+
     # Generate layout scorer command file with extended characters
     generate_layout_scorer_command(df, output_dir, filter_constraints,
                                  additional_items=extra_items,
