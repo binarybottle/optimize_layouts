@@ -12,7 +12,7 @@ to using only letters for items for this script (positions can use any character
   - The argument --nonletter-items uses any characters for items: "',.pyaoeui;qjkx":
     python score_layout.py --items "',.pyaoeui;qjkx" --positions "FDESRJKUMIVLA;" --nonletter-items
 Also, scores are only calculated for position-pairs that are present in the position-pair file.
-In the case of --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv",
+In the case of --position-pair-file "output/normalized_input/normalized_position_pair_scores.csv",
 scores are calculated only for within-hand bigrams:
   - prepare_scoring_arrays() will assign default scores of 1.0 for any missing pairs:
     - missing_item_pair_score: float = 1.0,      # ← DEFAULT SCORE FOR MISSING ITEM PAIRS
@@ -31,13 +31,13 @@ Usage:
 >> python score_layout.py \
     --items     "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
     --positions "qwertyuiopasdfghjkl;zxcvbnm,./" \
-    --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv" \
+    --position-pair-file "output/normalized_input/normalized_position_pair_scores.csv" \
     --details --validate
 
 # For keyboard applications, filter out same-hand bigrams and visualize a keyboard:
 >> python score_layout.py --items "',.pyfgcrlaoeuidhtns;qjkxbmwvz" \
     --positions "qwertyuiopasdfghjkl;zxcvbnm,./" --keyboard --ignore-keyboard-sides \
-    --position-pair-file "input/comfort/normalized_key_pair_comfort_scores.csv"
+    --position-pair-file "output/normalized_input/normalized_position_pair_scores.csv"
 
 # Your custom file should have format:
 # position_pair,score
@@ -375,7 +375,7 @@ Examples:
                        help="Output in CSV format (total_score,item_score,item_pair_score)")    
     parser.add_argument("--nonletter-items", action="store_true",
                        help="Allow non-letter characters in --items (default: letters only)")
-    parser.add_argument("--position-pair-file", default="input/comfort/normalized_key_pair_comfort_scores.csv",
+    parser.add_argument("--position-pair-file", default="output/normalized_input/normalized_position_pair_scores.csv",
                        help="Path to position-pair file (default overrides optimize_layout's default)")
     parser.add_argument("--validate", action="store_true",
                        help="Run validation on this specific layout")

@@ -320,134 +320,6 @@ def print_statistics(df, item_col, pair_col, file_counts):
     
     return top_solutions
 
-
-def generate_layout_scorer_command(df, output_dir, filter_constraints=None, 
-                                   additional_items="", 
-                                   additional_positions=""):
-    """
-    Generate a layout_scorer.py command file for comparing all layouts in the CSV.
-    Reorders items to match QWERTY position sequence: qwertyuiopasdfghjkl;zxcvbnm,./['
-    
-    Args:
-        df: DataFrame with solutions (after any filtering)
-        output_dir: Output directory for the command file
-        filter_constraints: Optional filter constraints for documentation
-        additional_items: String of additional characters to append to each solution's items
-                         e.g., "qz'\",.-?" 
-        additional_positions: String of additional positions to append to each solution's positions
-                            e.g., "['TYGHBN"
-    """
-    # Standard QWERTY position order for layout_scorer.py
-    qwerty_positions = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./"
-    
-    layout_specs = []
-    
-    for idx, row in df.iterrows():
-        # Parse items and positions from the MOO solution
-        original_items = list(row['items'])
-        original_positions = list(row['positions'])
-        
-        # Extend with additional characters if provided
-        extended_items = original_items + list(additional_items)
-        extended_positions = original_positions + list(additional_positions)
-        
-        # Ensure we don't have mismatched lengths
-        if len(extended_items) != len(extended_positions):
-            print(f"Warning: Layout {idx+1} has mismatched items/positions lengths after extension")
-            print(f"  Items: {len(extended_items)}, Positions: {len(extended_positions)}")
-            # Truncate to the shorter length
-            min_len = min(len(extended_items), len(extended_positions))
-            extended_items = extended_items[:min_len]
-            extended_positions = extended_positions[:min_len]
-        
-        # Create mapping: Position -> Character
-        position_to_char = {}
-        for char, pos in zip(extended_items, extended_positions):
-            position_to_char[pos.upper()] = char
-        
-        # Build layout string by going through QWERTY positions in order
-        layout_string = ""
-        missing_positions = []
-        for qwerty_pos in qwerty_positions:
-            if qwerty_pos in position_to_char:
-                layout_string += position_to_char[qwerty_pos]
-            else:
-                # For positions not in the MOO solution, use the default QWERTY character
-                fallback_char = qwerty_pos.lower() if qwerty_pos.isalpha() else qwerty_pos
-                layout_string += fallback_char
-                missing_positions.append(qwerty_pos)
-        
-        # Debug output for first layout
-        if idx == 0:
-            print(f"\nDEBUG: First layout reordering (32-key):")
-            print(f"  Original items:     {row['items']} (length: {len(row['items'])})")
-            print(f"  Original positions: {row['positions']} (length: {len(row['positions'])})")
-            print(f"  Extended items:     {''.join(extended_items)} (length: {len(extended_items)})")
-            print(f"  Extended positions: {''.join(extended_positions)} (length: {len(extended_positions)})")
-            print(f"  Final layout string: {layout_string} (length: {len(layout_string)})")
-            print(f"  QWERTY order:       {qwerty_positions.lower()}")
-            if missing_positions:
-                print(f"  Missing positions (using defaults): {missing_positions}")
-            
-            # Show the mapping for verification
-            print(f"  Position mappings:")
-            for char, pos in zip(extended_items, extended_positions):
-                print(f"    '{char}' -> position '{pos}'")
-            
-            # Validate 32-character output
-            if len(layout_string) != 32:
-                print(f"  WARNING: Expected 32 characters, got {len(layout_string)}")
-            else:
-                print(f"  ✓ Generated 32-character layout string")
-        
-        # Escape any double quotes in the layout string
-        escaped_layout_string = layout_string.replace('"', '\\"')
-        
-        # Use original CSV line number as layout name
-        layout_name = f"layout{idx + 1}"
-        layout_specs.append(f'{layout_name}:"{escaped_layout_string}"')
-    
-    # Build the complete command
-    command_parts = [
-        "python layout_scorer.py",
-        "--compare",
-        " ".join(layout_specs),
-        "--csv results.csv",
-        '--text "hello"'
-    ]
-    
-    command = " ".join(command_parts)
-    
-    # Write to file
-    command_file = output_dir / 'layout_scorer_command.txt'
-    with open(command_file, 'w') as f:
-        f.write("# Layout Scorer Command\n")
-        f.write("# Generated from MOO analysis results\n")
-        if filter_constraints:
-            f.write(f"# Filter constraints: {format_constraints_string(filter_constraints)}\n")
-        if additional_items or additional_positions:
-            f.write(f"# Additional items added: '{additional_items}'\n")
-            f.write(f"# Additional positions added: '{additional_positions}'\n")
-        f.write(f"# Number of layouts: {len(df)}\n")
-        f.write("# Layout numbers correspond to original CSV line numbers\n")
-        f.write(f"# Items reordered to match QWERTY position order (32 keys): {qwerty_positions.lower()}\n")
-        f.write("# Usage: Copy and run this command in your layout_scorer directory\n\n")
-        f.write(command)
-        f.write("\n")
-    
-    print(f"\nLayout scorer command saved to: {command_file}")
-    print(f"Command includes {len(df)} layouts for comparison")
-    print(f"Items reordered to match QWERTY position order (32 keys)")
-    if filter_constraints:
-        print(f"Layouts filtered by: {format_constraints_string(filter_constraints)}")
-    if additional_items or additional_positions:
-        print(f"Extended each layout with:")
-        print(f"  Additional items: '{additional_items}'")
-        print(f"  Additional positions: '{additional_positions}'")
-    
-    return command_file
-
-
 def plot_stability_matrix(df, output_dir, filter_condition=None, title_suffix="", filename_suffix=""):
     """
     Create a stability matrix heatmap showing letter-position assignment frequencies.
@@ -669,13 +541,7 @@ def main():
     extra_positions = "['TYGHBN"     # Positions to add to positions
     
     print(f"\nExtra items: {extra_items}/")
-    print(f"Extra positions: {extra_positions}/")
-
-    # Generate layout scorer command file with extended characters
-    generate_layout_scorer_command(df, output_dir, filter_constraints,
-                                 additional_items=extra_items,
-                                 additional_positions=extra_positions)
-    
+    print(f"Extra positions: {extra_positions}/")    
     print(f"\nAnalysis complete! Plots and files saved to {output_dir}/")
     print(f"Key outputs:")
     print(f"  - global_moo_solutions_with_ranks.csv: Complete results with rankings")
