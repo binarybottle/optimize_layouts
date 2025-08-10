@@ -47,7 +47,7 @@ def generate_score_layouts_command(df: pd.DataFrame,
         Path to the generated command file
     """
     # Standard QWERTY position order for score_layouts.py
-    qwerty_positions = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./"
+    qwerty_positions = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
     
     layout_specs = []
     
@@ -87,7 +87,7 @@ def generate_score_layouts_command(df: pd.DataFrame,
                 missing_positions.append(qwerty_pos)
                 
         # Escape any special characters for command line
-        escaped_layout_string = layout_string.replace('"', '\\"').replace("'", "\\'")
+        escaped_layout_string = layout_string.replace('"', '\\"') #.replace("'", "\\'")
         
         # Use original CSV line number as layout name
         layout_name = f"moo_layout_{idx + 1}"
