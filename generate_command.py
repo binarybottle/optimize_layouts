@@ -102,7 +102,7 @@ def generate_score_layouts_command(df: pd.DataFrame,
     with open(command_file, 'w') as f:
         # Header comments matching paste.txt format
         f.write("# MOO Layout Analysis → score_layouts.py → compare_layouts.py Commands\n")
-        f.write("# Two-step workflow for scoring, visualizing, and ranking MOO optimization results\n")
+        f.write("# Three-step workflow for scoring, visualizing, and ranking MOO optimization results\n")
         f.write(f"# Python command used: {python_cmd}\n")
         f.write(f"# Additional items: '{additional_items}'\n")
         f.write(f"# Additional positions: '{additional_positions}'\n")
@@ -117,13 +117,12 @@ def generate_score_layouts_command(df: pd.DataFrame,
         f.write(" ".join(layout_specs))
         f.write(" --csv output/moo_layout_scores.csv\n\n\n")
         
-        # STEP 2: Compare layouts commands
+        # STEP 2: Compare layouts commands for visualization
         f.write("# STEP 2: Create visualizations and metric-ranked tables using compare_layouts.py\n\n")
         
         # Basic metrics command
         f.write(f"{python_cmd} compare_layouts.py --tables output/moo_layout_scores.csv ")
         f.write("--metrics comfort comfort-key dvorak7 time_total distance_total ")
-        f.write("--rankings output/moo_layout_scores_rankings.csv ")
         f.write("--output output/moo_layout_scores\n\n")
         
         # Detailed metrics command
@@ -132,8 +131,23 @@ def generate_score_layouts_command(df: pd.DataFrame,
         f.write("dvorak7_vertical dvorak7_horizontal dvorak7_adjacent dvorak7_weak dvorak7_outward ")
         f.write("time_total time_setup time_interval time_return distance_total distance_setup ")
         f.write("distance_interval distance_return ")
-        f.write("--rankings output/moo_layout_scores_rankings_detailed.csv ")
         f.write("--output output/moo_layout_scores_detailed\n\n")
+
+         # STEP 3: Compare layouts commands for ranking
+        f.write("# STEP 2: Create visualizations and metric-ranked tables using compare_layouts.py\n\n")
+        
+        # Basic metrics command
+        f.write(f"{python_cmd} compare_layouts.py --tables output/moo_layout_scores.csv ")
+        f.write("--metrics dvorak7 time_total distance_total ")
+        f.write("--rankings output/moo_layout_scores_rankings.csv\n\n")
+        
+        # Detailed metrics command
+        f.write(f"{python_cmd} compare_layouts.py --tables output/moo_layout_scores.csv ")
+        f.write("--metrics dvorak7 dvorak7_repetition dvorak7_movement ")
+        f.write("dvorak7_vertical dvorak7_horizontal dvorak7_adjacent dvorak7_weak dvorak7_outward ")
+        f.write("time_total time_setup time_interval time_return distance_total distance_setup ")
+        f.write("distance_interval distance_return ")
+        f.write("--rankings output/moo_layout_scores_rankings_detailed.csv\n\n")
     
     print(f"\nMOO layout scorer commands generated:")
     print(f"  Commands file: {command_file}")
@@ -148,6 +162,7 @@ def generate_score_layouts_command(df: pd.DataFrame,
     print(f"  1. Copy/paste commands from: {command_file}")
     print(f"  2. Run the STEP 1 command to score all layouts")
     print(f"  3. Run the STEP 2 commands to create visualizations")
+    print(f"  4. Run the STEP 3 commands to create rankings")
     print(f"\nOutput files will be:")
     print(f"  - output/moo_layout_scores.csv (CSV with all scores)")
     print(f"  - output/moo_layout_scores_rankings.csv (Basic metrics rankings)")
