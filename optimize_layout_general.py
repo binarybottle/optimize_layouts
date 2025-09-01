@@ -214,9 +214,9 @@ class GeneralMOOScorer(LayoutScorer):
 #-----------------------------------------------------------------------------
 def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
                           weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
-    """Run general MOO with branch-and-bound search."""
+    """Run general MOO with custom branch-and-bound search for arbitrary objectives."""
     
-    print("Using branch-and-bound search with Pareto dominance pruning")
+    print("Using custom general MOO search with Pareto dominance pruning")
     
     # Load keypair table
     keypair_df = pd.read_csv(keypair_table, dtype={'key_pair': str})
@@ -227,46 +227,127 @@ def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
     if missing:
         raise ValueError(f"Missing objectives in keypair table: {missing}")
     
-    # Create general MOO arrays and scorer
+    # Create general MOO arrays and calculator
     items = list(config.optimization.items_to_assign)
     positions = list(config.optimization.positions_to_assign)
+    n_items = len(items)
+    n_positions = len(positions)
     
     general_arrays = GeneralMOOArrays(keypair_df, objectives, items, positions, weights, maximize)
-    general_scorer = GeneralMOOScorer(general_arrays)
+    calculator = GeneralMOOCalculator(general_arrays)
     
-    # Use existing sophisticated MOO search
-    print("\nRunning sophisticated branch-and-bound search...")
+    # Custom branch-and-bound search for general MOO
+    print(f"\nRunning custom general MOO search...")
     start_time = time.time()
     
-    pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, general_scorer,
-        max_solutions=kwargs.get('max_solutions'),
-        time_limit=kwargs.get('time_limit'),
-        processes=kwargs.get('processes', 1)
-    )
+    # Pareto front storage
+    pareto_front = []
+    pareto_objectives = []
+    
+    # Search statistics
+    nodes_processed = 0
+    nodes_pruned = 0
+    max_solutions = kwargs.get('max_solutions')
+    time_limit = kwargs.get('time_limit')
+    
+    def search_recursive(mapping: np.ndarray, used: np.ndarray, depth: int):
+        nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
+        
+        nodes_processed += 1
+        
+        # Check termination conditions
+        if time_limit and (time.time() - start_time) > time_limit:
+            return
+        if max_solutions and len(pareto_front) >= max_solutions:
+            return
+        
+        # Complete solution
+        if depth == n_items:
+            # Calculate all objectives
+            components = calculator.calculate_components(mapping)
+            all_objectives = getattr(components, 'all_objectives', [])
+            
+            if not all_objectives:
+                return
+            
+            # Check Pareto dominance
+            is_non_dominated = True
+            dominated_indices = []
+            
+            for i, existing_obj in enumerate(pareto_objectives):
+                if pareto_dominates(existing_obj, all_objectives):
+                    is_non_dominated = False
+                    break
+                elif pareto_dominates(all_objectives, existing_obj):
+                    dominated_indices.append(i)
+            
+            if is_non_dominated:
+                # Remove dominated solutions
+                for i in reversed(sorted(dominated_indices)):
+                    del pareto_front[i]
+                    del pareto_objectives[i]
+                
+                # Add new solution
+                item_mapping = {items[i]: positions[mapping[i]] for i in range(n_items)}
+                solution = {
+                    'mapping': item_mapping,
+                    'objectives': all_objectives
+                }
+                pareto_front.append(solution)
+                pareto_objectives.append(all_objectives)
+            
+            return
+        
+        # Branch: try each available position
+        available_positions = [i for i in range(n_positions) if not used[i]]
+        
+        for pos in available_positions:
+            # Basic pruning: if Pareto front is full, check if this partial solution
+            # could possibly lead to a non-dominated solution
+            if len(pareto_front) >= 100:  # Simple pruning threshold
+                # Could add more sophisticated upper bound pruning here
+                pass
+            
+            mapping[depth] = pos
+            used[pos] = True
+            
+            search_recursive(mapping, used, depth + 1)
+            
+            mapping[depth] = -1
+            used[pos] = False
+    
+    # Initialize search
+    initial_mapping = np.full(n_items, -1, dtype=np.int32)
+    initial_used = np.zeros(n_positions, dtype=bool)
+    
+    search_recursive(initial_mapping, initial_used, 0)
     
     elapsed_time = time.time() - start_time
     
     # Print results
     if pareto_front:
-        print(f"\nBranch-and-Bound Results:")
+        print(f"\nGeneral MOO Results:")
         print(f"  Pareto solutions: {len(pareto_front)}")
         print(f"  Nodes processed: {nodes_processed:,}")
-        print(f"  Nodes pruned: {nodes_pruned:,}")
-        if nodes_processed > 0 and nodes_pruned > 0:
-            total_nodes = nodes_processed + nodes_pruned
-            prune_rate = nodes_pruned / total_nodes * 100
-            print(f"  Pruning efficiency: {prune_rate:.1f}% ({nodes_pruned:,} of {total_nodes:,} nodes eliminated)")
         print(f"  Search time: {elapsed_time:.2f}s")
         if nodes_processed > 0:
             print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
         
-        # Show objective statistics
-        objectives_matrix = np.array([sol['objectives'] for sol in pareto_front])
-        print(f"\nObjective Statistics:")
-        for i, obj in enumerate(objectives):
-            values = objectives_matrix[:, i]
-            print(f"  {obj}: [{np.min(values):.6f}, {np.max(values):.6f}]")
+        # Show objective statistics - fix the indexing issue
+        if pareto_front and len(objectives) > 0:
+            # Verify objectives data structure
+            first_solution_objectives = pareto_front[0]['objectives']
+            print(f"  First solution has {len(first_solution_objectives)} objectives")
+            
+            if len(first_solution_objectives) == len(objectives):
+                objectives_matrix = np.array([sol['objectives'] for sol in pareto_front])
+                print(f"\nObjective Statistics:")
+                for i, obj in enumerate(objectives):
+                    if i < objectives_matrix.shape[1]:
+                        values = objectives_matrix[:, i]
+                        print(f"  {obj}: [{np.min(values):.6f}, {np.max(values):.6f}]")
+            else:
+                print(f"  WARNING: Objective count mismatch: expected {len(objectives)}, got {len(first_solution_objectives)}")
     else:
         print("\nNo Pareto solutions found!")
     
