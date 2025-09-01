@@ -10,8 +10,8 @@
 #   # original system
 #   bash run_jobs_slurm_general.sh
 #   
-#   # General MOO system with branch-and-bound
-#   bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_columns,engram8_curl,engram8_home,engram8_hspan,engram8_load,engram8_sequence,engram8_strength,engram8_vspan
+#   # General MOO system with branch-and-bound; example with 7 of 8 Engram-8 metrics
+#   bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized
 
 #--------------------------------------------------------------
 # SLURM settings (adjust for your cluster)
@@ -97,8 +97,8 @@ Usage:
   # Original system
   bash run_jobs_slurm_general.sh
   
-  # General MOO with branch-and-bound (recommended)
-  bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized
+  # General MOO with branch-and-bound (recommended); example with 7 of 8 Engram-8 metrics
+  bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized
   
   # General MOO with brute force (for validation/small problems)
   bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --brute-force

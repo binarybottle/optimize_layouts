@@ -2,18 +2,18 @@
 """
 General Multi-Objective Layout Optimizer with Branch-and-Bound
 
-Supports arbitrary number of objectives with both intelligent branch-and-bound search
-and optional brute-force enumeration for comparison/validation.
+Supports arbitrary number of objectives from keypair score tables using the existing
+search infrastructure. Integrates cleanly with the existing scoring and search systems.
 
 Usage:
-    # Branch-and-bound (recommended)
+    # Branch-and-bound (recommended); example with 7 of 8 Engram-8 metrics
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
+        --objectives engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
         --keypair-table input/keypair_scores_detailed.csv
 
     # Brute force option (for small problems or validation)
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
+        --objectives engram8_strength_normalized,engram8_vspan_normalized \
         --keypair-table input/keypair_scores_detailed.csv \
         --brute-force --max-solutions 100 --time-limit 3600
 """
@@ -32,15 +32,15 @@ import multiprocessing as mp
 from config import Config, load_config
 from display import print_optimization_header, print_search_space_info
 from scoring import ScoringArrays, LayoutScorer, ScoreComponents, ScoreCalculator
-from search import multi_objective_search
+from search import multi_objective_search  # Reuse existing search infrastructure
 from validation import run_validation_suite
 
 #-----------------------------------------------------------------------------
-# General MOO Scoring Infrastructure
+# General MOO Scoring Infrastructure  
 #-----------------------------------------------------------------------------
 class GeneralMOOArrays(ScoringArrays):
     """
-    Extended ScoringArrays that supports arbitrary objectives from keypair table.
+    Extended ScoringArrays supporting arbitrary objectives from keypair tables.
     Integrates with existing branch-and-bound infrastructure.
     """
     
@@ -82,16 +82,18 @@ class GeneralMOOArrays(ScoringArrays):
         
         print(f"Pre-computation complete: {total_memory / (1024*1024):.1f}MB total")
         
-        # Create minimal dummy arrays for parent class compatibility
+        # Create minimal compatible arrays for parent class
         n_items = len(items)
         n_positions = len(positions)
         
+        # Use first objective as primary for compatibility
+        primary_matrix = list(self.objective_matrices.values())[0] if self.objective_matrices else np.ones((n_positions, n_positions))
+        
         item_scores = np.ones(n_items, dtype=np.float32)
         item_pair_matrix = np.ones((n_items, n_items), dtype=np.float32)
-        position_matrix = np.ones((n_positions, n_positions), dtype=np.float32)
         
-        # Initialize parent class
-        super().__init__(item_scores, item_pair_matrix, position_matrix)
+        # Initialize parent class with compatible arrays
+        super().__init__(item_scores, item_pair_matrix, primary_matrix)
     
     def _create_objective_matrix(self, keypair_df: pd.DataFrame, obj_col: str) -> np.ndarray:
         """Create matrix for single objective from keypair table."""
@@ -132,24 +134,19 @@ class GeneralMOOCalculator(ScoreCalculator):
     
     def __init__(self, general_arrays: GeneralMOOArrays):
         self.general_arrays = general_arrays
-        # Initialize parent with the general arrays
-        super().__init__(general_arrays)
+        super().__init__(general_arrays)  # Initialize parent properly
     
     def calculate_components(self, mapping: np.ndarray) -> ScoreComponents:
         """Calculate objectives as independent components."""
-        # Calculate all objective scores
         objective_scores = self._calculate_all_objectives(mapping)
         
-        # For compatibility with existing 2-component system, we'll use the first
-        # two objectives as "item_score" and "item_pair_score", and store all
-        # objectives in a custom attribute
+        # For compatibility with existing 2-component system, use first two objectives
+        # as "item_score" and "item_pair_score", store all in custom attribute
         item_score = objective_scores[0] if len(objective_scores) > 0 else 0.0
         item_pair_score = objective_scores[1] if len(objective_scores) > 1 else 0.0
         
         components = ScoreComponents(item_score, item_pair_score)
-        
-        # Add custom attribute for all objectives
-        components.all_objectives = objective_scores
+        components.all_objectives = objective_scores  # Custom attribute
         
         return components
     
@@ -187,14 +184,12 @@ class GeneralMOOScorer(LayoutScorer):
     """Layout scorer for arbitrary objectives that integrates with existing search."""
     
     def __init__(self, general_arrays: GeneralMOOArrays):
-        self.general_arrays = general_arrays
-        self.calculator = GeneralMOOCalculator(general_arrays)
-        
-        # Initialize parent with multi_objective mode
+        # Initialize with multi_objective mode to ensure compatibility
         super().__init__(general_arrays, mode='multi_objective')
         
-        # Override calculator with our general one
+        # Replace calculator with our general one
         self.calculator = GeneralMOOCalculator(general_arrays)
+        self.general_arrays = general_arrays
     
     def score_layout(self, mapping: np.ndarray, return_components: bool = False):
         """Score layout using all objectives."""
@@ -210,13 +205,13 @@ class GeneralMOOScorer(LayoutScorer):
             return all_objectives
 
 #-----------------------------------------------------------------------------
-# Search Implementations
+# Search Wrapper Functions
 #-----------------------------------------------------------------------------
 def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
-                          weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
-    """Run general MOO with custom branch-and-bound search for arbitrary objectives."""
+                   weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
+    """Run general MOO using existing search infrastructure."""
     
-    print("Using custom general MOO search with Pareto dominance pruning")
+    print("Using general MOO with existing branch-and-bound search infrastructure")
     
     # Load keypair table
     keypair_df = pd.read_csv(keypair_table, dtype={'key_pair': str})
@@ -227,135 +222,38 @@ def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
     if missing:
         raise ValueError(f"Missing objectives in keypair table: {missing}")
     
-    # Create general MOO arrays and calculator
+    # Create general MOO scorer
     items = list(config.optimization.items_to_assign)
     positions = list(config.optimization.positions_to_assign)
-    n_items = len(items)
-    n_positions = len(positions)
     
     general_arrays = GeneralMOOArrays(keypair_df, objectives, items, positions, weights, maximize)
-    calculator = GeneralMOOCalculator(general_arrays)
+    scorer = GeneralMOOScorer(general_arrays)
     
-    # Custom branch-and-bound search for general MOO
-    print(f"\nRunning custom general MOO search...")
-    start_time = time.time()
+    # Use existing multi_objective_search from search.py
+    print(f"\nRunning multi-objective search with {len(objectives)} objectives...")
     
-    # Pareto front storage
-    pareto_front = []
-    pareto_objectives = []
+    pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
+        config, 
+        scorer, 
+        max_solutions=kwargs.get('max_solutions'),
+        time_limit=kwargs.get('time_limit'),
+        processes=kwargs.get('processes')
+    )
     
-    # Search statistics
-    nodes_processed = 0
-    nodes_pruned = 0
-    max_solutions = kwargs.get('max_solutions')
-    time_limit = kwargs.get('time_limit')
-    
-    def search_recursive(mapping: np.ndarray, used: np.ndarray, depth: int):
-        nonlocal nodes_processed, nodes_pruned, pareto_front, pareto_objectives
-        
-        nodes_processed += 1
-        
-        # Check termination conditions
-        if time_limit and (time.time() - start_time) > time_limit:
-            return
-        if max_solutions and len(pareto_front) >= max_solutions:
-            return
-        
-        # Complete solution
-        if depth == n_items:
-            # Calculate all objectives
-            components = calculator.calculate_components(mapping)
-            all_objectives = getattr(components, 'all_objectives', [])
-            
-            if not all_objectives:
-                return
-            
-            # Check Pareto dominance
-            is_non_dominated = True
-            dominated_indices = []
-            
-            for i, existing_obj in enumerate(pareto_objectives):
-                if pareto_dominates(existing_obj, all_objectives):
-                    is_non_dominated = False
-                    break
-                elif pareto_dominates(all_objectives, existing_obj):
-                    dominated_indices.append(i)
-            
-            if is_non_dominated:
-                # Remove dominated solutions
-                for i in reversed(sorted(dominated_indices)):
-                    del pareto_front[i]
-                    del pareto_objectives[i]
-                
-                # Add new solution
-                item_mapping = {items[i]: positions[mapping[i]] for i in range(n_items)}
-                solution = {
-                    'mapping': item_mapping,
-                    'objectives': all_objectives
-                }
-                pareto_front.append(solution)
-                pareto_objectives.append(all_objectives)
-            
-            return
-        
-        # Branch: try each available position
-        available_positions = [i for i in range(n_positions) if not used[i]]
-        
-        for pos in available_positions:
-            # Basic pruning: if Pareto front is full, check if this partial solution
-            # could possibly lead to a non-dominated solution
-            if len(pareto_front) >= 100:  # Simple pruning threshold
-                # Could add more sophisticated upper bound pruning here
-                pass
-            
-            mapping[depth] = pos
-            used[pos] = True
-            
-            search_recursive(mapping, used, depth + 1)
-            
-            mapping[depth] = -1
-            used[pos] = False
-    
-    # Initialize search
-    initial_mapping = np.full(n_items, -1, dtype=np.int32)
-    initial_used = np.zeros(n_positions, dtype=bool)
-    
-    search_recursive(initial_mapping, initial_used, 0)
-    
-    elapsed_time = time.time() - start_time
-    
-    # Print results
-    if pareto_front:
-        print(f"\nGeneral MOO Results:")
-        print(f"  Pareto solutions: {len(pareto_front)}")
-        print(f"  Nodes processed: {nodes_processed:,}")
-        print(f"  Search time: {elapsed_time:.2f}s")
-        if nodes_processed > 0:
-            print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
-        
-        # Show objective statistics - fix the indexing issue
-        if pareto_front and len(objectives) > 0:
-            # Verify objectives data structure
-            first_solution_objectives = pareto_front[0]['objectives']
-            print(f"  First solution has {len(first_solution_objectives)} objectives")
-            
-            if len(first_solution_objectives) == len(objectives):
-                objectives_matrix = np.array([sol['objectives'] for sol in pareto_front])
-                print(f"\nObjective Statistics:")
-                for i, obj in enumerate(objectives):
-                    if i < objectives_matrix.shape[1]:
-                        values = objectives_matrix[:, i]
-                        print(f"  {obj}: [{np.min(values):.6f}, {np.max(values):.6f}]")
-            else:
-                print(f"  WARNING: Objective count mismatch: expected {len(objectives)}, got {len(first_solution_objectives)}")
-    else:
-        print("\nNo Pareto solutions found!")
+    # Show objective statistics if results exist
+    if pareto_front and len(objectives) > 0:
+        objectives_matrix = np.array([sol['objectives'] for sol in pareto_front])
+        print(f"\nObjective Statistics:")
+        for i, obj in enumerate(objectives):
+            if i < objectives_matrix.shape[1]:
+                values = objectives_matrix[:, i]
+                print(f"  {obj}: [{np.min(values):.6f}, {np.max(values):.6f}]")
     
     return pareto_front
 
 def run_brute_force_general_moo(config: Config, keypair_table: str, objectives: List[str],
                                weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
-    """Run general MOO with brute force enumeration."""
+    """Run general MOO with brute force enumeration (for small problems or validation)."""
     
     max_solutions = kwargs.get('max_solutions')
     time_limit = kwargs.get('time_limit')
@@ -363,51 +261,41 @@ def run_brute_force_general_moo(config: Config, keypair_table: str, objectives: 
     print("Using BRUTE FORCE enumeration (all permutations)")
     print("WARNING: This will be very slow for problems larger than ~8 items!")
     
-    # Load keypair table
+    # Load keypair table and create scorer (same as above)
     keypair_df = pd.read_csv(keypair_table, dtype={'key_pair': str})
-    
-    # Create arrays
     items = list(config.optimization.items_to_assign)
     positions = list(config.optimization.positions_to_assign)
     n_items = len(items)
     n_positions = len(positions)
     
     general_arrays = GeneralMOOArrays(keypair_df, objectives, items, positions, weights, maximize)
+    scorer = GeneralMOOScorer(general_arrays)
     
-    # Calculate total search space
+    # Calculate and show search space
     total_perms = 1
     for i in range(n_items):
         total_perms *= (n_positions - i)
     
     print(f"Total permutations to evaluate: {total_perms:,}")
     
-    # Estimate time
+    # Warn for large problems
     estimated_seconds = total_perms / 1000  # Assume 1000 evals/sec
     if estimated_seconds > 3600:
         print(f"Estimated time: {estimated_seconds/3600:.1f} hours")
-        if estimated_seconds > 86400:
-            print(f"                {estimated_seconds/86400:.1f} days")
-    else:
-        print(f"Estimated time: {estimated_seconds:.0f} seconds")
+        if total_perms > 10000000:  # 10 million
+            response = input(f"\nThis will take a very long time. Continue? (y/N): ")
+            if response.lower() not in ['y', 'yes']:
+                print("Brute force search cancelled.")
+                return []
     
-    # Ask for confirmation on large problems
-    if total_perms > 10000000:  # 10 million
-        response = input(f"\nThis will take a very long time. Continue? (y/N): ")
-        if response.lower() not in ['y', 'yes']:
-            print("Brute force search cancelled.")
-            return []
+    # Import pareto dominance function from search module
+    from search import pareto_dominates
     
-    # Pareto front storage
+    # Run brute force enumeration
     pareto_front = []
     pareto_objectives = []
-    
-    # Search statistics
     evaluated = 0
     start_time = time.time()
-    
-    # Progress tracking
-    update_interval = max(1000, total_perms // 100)
-    next_update = update_interval
     
     print(f"\nStarting brute force enumeration...")
     
@@ -415,21 +303,17 @@ def run_brute_force_general_moo(config: Config, keypair_table: str, objectives: 
         for perm in permutations(range(n_positions), n_items):
             evaluated += 1
             
-            # Check time limit
+            # Check limits
             if time_limit and (time.time() - start_time) > time_limit:
                 print(f"\nTime limit reached at {evaluated:,} evaluations")
                 break
-            
-            # Check solution limit (early termination)
             if max_solutions and len(pareto_front) >= max_solutions:
                 print(f"\nSolution limit reached at {evaluated:,} evaluations")
                 break
             
-            # Create mapping and calculate objectives
+            # Calculate objectives
             mapping_array = np.array(perm, dtype=np.int32)
-            calc = GeneralMOOCalculator(general_arrays)
-            components = calc.calculate_components(mapping_array)
-            objectives = getattr(components, 'all_objectives', [])
+            objectives = scorer.score_layout(mapping_array)
             
             # Check Pareto dominance
             is_non_dominated = True
@@ -459,12 +343,11 @@ def run_brute_force_general_moo(config: Config, keypair_table: str, objectives: 
                 pareto_objectives.append(objectives)
             
             # Progress update
-            if evaluated >= next_update:
+            if evaluated % 10000 == 0:
                 elapsed = time.time() - start_time
                 rate = evaluated / elapsed if elapsed > 0 else 0
                 percent = (evaluated / total_perms) * 100
                 print(f"  Progress: {evaluated:,}/{total_perms:,} ({percent:.2f}%) - {rate:.0f} layouts/sec - {len(pareto_front)} Pareto solutions")
-                next_update += update_interval
     
     except KeyboardInterrupt:
         print(f"\nInterrupted by user at {evaluated:,} evaluations")
@@ -479,16 +362,6 @@ def run_brute_force_general_moo(config: Config, keypair_table: str, objectives: 
         print(f"  Rate: {evaluated/elapsed_time:.0f} layouts/sec")
     
     return pareto_front
-
-def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
-    """Check if obj1 Pareto dominates obj2 (works for any number of objectives)."""
-    better_in_one = False
-    for v1, v2 in zip(obj1, obj2):
-        if v1 < v2:
-            return False
-        if v1 > v2:
-            better_in_one = True
-    return better_in_one
 
 #-----------------------------------------------------------------------------
 # Results Management
@@ -533,7 +406,7 @@ def save_general_results(pareto_front: List[Dict], config: Config, objectives: L
 # Argument Parsing and Main
 #-----------------------------------------------------------------------------
 def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str: str = None):
-    """Parse objectives configuration."""
+    """Parse objectives configuration from command line."""
     objectives = [obj.strip() for obj in objectives_str.split(',') if obj.strip()]
     
     if weights_str:
@@ -557,11 +430,11 @@ def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="General MOO Layout Optimizer with Branch-and-Bound",
+        description="General MOO Layout Optimizer using existing search infrastructure",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Branch-and-bound (recommended)
+  # Branch-and-bound with arbitrary objectives (recommended)
   python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized \\
     --keypair-table data/keypair_scores.csv
@@ -586,8 +459,8 @@ Examples:
     parser.add_argument('--keypair-table', required=True, help='Keypair table CSV file')
     
     # Optional objective configuration
-    parser.add_argument('--weights', help='Comma-separated weights for objectives')
-    parser.add_argument('--maximize', help='Comma-separated true/false for each objective')
+    parser.add_argument('--weights', help='Comma-separated weights for objectives (default: all 1.0)')
+    parser.add_argument('--maximize', help='Comma-separated true/false for each objective (default: all true)')
     
     # Search method
     parser.add_argument('--brute-force', action='store_true', 

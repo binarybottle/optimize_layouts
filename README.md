@@ -21,6 +21,12 @@ python optimize_layout.py --config config.yaml --moo
 # Detailed MOO analysis with comprehensive validation
 python optimize_layout.py --moo --max-solutions 50 --detailed --validate --verbose
 
+# General MOO with arbitrary objectives from keypair tables
+python optimize_layout_general.py --config config.yaml \
+  --objectives comfort_score,time_total,accuracy_score \
+  --keypair-table input/keypair_scores_detailed.csv \
+  --processes 16 --max-solutions 200 --time-limit 3600
+
 # Analyze results
 python analyze_results.py
 
@@ -53,6 +59,7 @@ The system is built with a modular, maintainable architecture:
   - display.py: Keyboard visualization and results formatting
   - validation.py: Comprehensive testing and validation suite
   - optimize_layout.py: Main CLI interface
+  - optimize_layout_general.py: General MOO with arbitrary objectives from keypair tables
 
 ## Optimization Modes
 
@@ -84,6 +91,32 @@ The system is built with a modular, maintainable architecture:
   python optimize_layout.py --config config.yaml --moo --max-solutions 100 --time-limit 300
   ```
 
+  ### General Multi-Objective Optimization (General MOO)
+    - Algorithm**: Branch-and-bound search with arbitrary objectives
+    - Goal: Optimize for any number of objectives from keypair score tables
+    - Input: CSV tables with keypair scores for different metrics
+    - Output: Pareto front across all specified objectives
+
+  ```bash
+  # Optimize for multiple metrics from keypair table
+  python optimize_layout_general.py --config config.yaml \
+    --objectives engram8_columns,engram8_curl,engram8_home,engram8_hspan \
+    --keypair-table input/keypair_scores_detailed.csv
+
+  # With custom weights and directions
+  python optimize_layout_general.py --config config.yaml \
+    --objectives comfort_score,time_total,accuracy_score \
+    --keypair-table data/keypair_scores.csv \
+    --weights 1.0,2.0,0.5 \
+    --maximize true,false,true
+
+  # Brute force for small problems or validation
+  python optimize_layout_general.py --config config.yaml \
+    --objectives comfort_score,time_total \
+    --keypair-table data/keypair_scores.csv \
+    --brute-force --max-solutions 100
+  ```
+
 ## Inputs
 The system accepts normalized score files in CSV format.
 The code will accept any set of letters (or special characters) 
@@ -91,6 +124,7 @@ to represent items, item-pairs, positions, and position-pairs,
 so long as each item-pair is represented by two item characters 
 and each position-pair is represented by two position characters.
 
+  ### Normalized scores
   - raw_item_scores_file:           
     ```
     item, score
@@ -126,9 +160,26 @@ and each position-pair is represented by two position characters.
     ZY, 0.5
     ```
 
-A configuration file (config.yaml) specifies raw input filenames. 
-The system automatically generates normalized versions in 
-`output/normalized_input/` with standardized names:
+  The script detects different distribution types and applies appropriate methods.
+  For example, in a keyboard layout optimization problem:
+    - Item & position scores: Robust scaling (1st-99th percentile clipping)
+    - Item-pair scores: Heavy-tailed distribution → square root transformation
+    - Position-pair scores: Symmetric distribution → standard min-max scaling
+
+  ### Keypair tables for general MOO
+  For general multi-objective optimization, provide a keypair table with multiple objective columns:
+
+  ```csv
+  key_pair,comfort_score,time_total,accuracy_score,engram8_columns,engram8_curl
+  qw,0.85,0.23,0.91,0.78,0.65
+  we,0.72,0.31,0.88,0.82,0.71
+  er,0.68,0.28,0.85,0.75,0.69
+  ```
+
+  ### Configuration file
+  A configuration file (config.yaml) specifies raw input filenames. 
+  The system automatically generates normalized versions in 
+  `output/normalized_input/` with standardized names:
 
   ```yaml
   paths:
@@ -138,22 +189,17 @@ The system automatically generates normalized versions in
       raw_position_scores_file: "data/comfort/key_comfort_estimates.csv"
       raw_position_pair_scores_file: "data/comfort/key_pair_comfort_estimates.csv"
   ```
-The script detects different distribution types and applies appropriate methods.
-For example, in a keyboard layout optimization problem:
-  - Item & position scores: Robust scaling (1st-99th percentile clipping)
-  - Item-pair scores: Heavy-tailed distribution → square root transformation
-  - Position-pair scores: Symmetric distribution → standard min-max scaling
 
-Required optimization variables:
-    - items_to_assign: items to arrange in positions_to_assign
-    - positions_to_assign: available positions
-Optional:
-    - items_assigned: items already assigned to positions
-    - positions_assigned: positions that are already filled 
-    - items_to_constrain: subset of items_to_assign 
-      to arrange every way within positions_to_constrain
-    - positions_to_constrain: subset of positions_to_assign 
-      to constrain the possible assignment of items_to_constrain
+  Required optimization variables:
+      - items_to_assign: items to arrange in positions_to_assign
+      - positions_to_assign: available positions
+  Optional:
+      - items_assigned: items already assigned to positions
+      - positions_assigned: positions that are already filled 
+      - items_to_constrain: subset of items_to_assign 
+        to arrange every way within positions_to_constrain
+      - positions_to_constrain: subset of positions_to_assign 
+        to constrain the possible assignment of items_to_constrain
 
 ## Scoring system
 Layouts are scored based on normalized item and item-pair scores 
@@ -203,6 +249,7 @@ see https://github.com/binarybottle/keyboard_layout_scorers.
   Automatically saved timestamped files:
   - SOO: soo_results_config_YYYYMMDD_HHMMSS.csv
   - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
+  - General MOO: branch_and_bound_moo_results_config_YYYYMMDD_HHMMSS.csv
 
 ## Running many configurations
 You can generate configuration files in output/configs1/
