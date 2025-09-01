@@ -1,17 +1,17 @@
 #!/bin/bash
 #
-# SLURM job submission script for General MOO System
+# SLURM job submission script for General MOO System (Updated for Proper Branch-and-Bound)
 # 
 # This extends your existing run_jobs_slurm.sh to support both:
 # 1. Current system (optimize_layout.py --moo)  
-# 2. General MOO system (optimize_layout_general.py)
+# 2. General MOO system with proper branch-and-bound (optimize_layout_general_proper.py)
 #
 # Usage:
 #   # Current system (unchanged)
-#   bash run_jobs_slurm_general.sh
+#   bash run_jobs_slurm_general_updated.sh
 #   
-#   # General MOO system
-#   bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized,engram8_score_normalized
+#   # General MOO system with proper branch-and-bound
+#   bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized,engram8_score_normalized
 
 #--------------------------------------------------------------
 # SLURM settings (adjust for your cluster)
@@ -32,6 +32,7 @@ WEIGHTS=""
 MAXIMIZE=""
 MAX_SOLUTIONS=""
 TIME_LIMIT=""
+BRUTE_FORCE=""
 
 #--------------------------------------------------------------
 # Parse command line arguments
@@ -67,6 +68,10 @@ parse_args() {
                 TIME_LIMIT="$2"
                 shift 2
                 ;;
+            --brute-force)
+                BRUTE_FORCE="--brute-force"
+                shift
+                ;;
             --max-jobs)
                 MAX_JOBS="$2"
                 shift 2
@@ -86,17 +91,20 @@ parse_args() {
 
 print_usage() {
     cat << EOF
-SLURM General MOO Job Submitter
+SLURM General MOO Job Submitter (Updated for Proper Branch-and-Bound)
 
 Usage:
   # Current system (unchanged)
-  bash run_jobs_slurm_general.sh
+  bash run_jobs_slurm_general_updated.sh
   
-  # General MOO with 2 objectives
-  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized
+  # General MOO with proper branch-and-bound (recommended)
+  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized
+  
+  # General MOO with brute force (for validation/small problems)
+  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --brute-force
   
   # With custom weights and directions
-  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --weights 1.0,2.0 --maximize true,false
+  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --weights 1.0,2.0 --maximize true,false
 
 Arguments:
   --mode              current or general (default: current)
@@ -104,6 +112,7 @@ Arguments:
   --objectives        Comma-separated objective columns (required for general mode)
   --weights           Comma-separated objective weights (optional)
   --maximize          Comma-separated true/false flags (optional)
+  --brute-force       Use brute force instead of branch-and-bound (general mode only)
   --max-solutions     Maximum Pareto solutions per config (optional)
   --time-limit        Time limit per config in seconds (optional)
   --max-jobs          Maximum concurrent SLURM jobs (default: 16)
@@ -131,7 +140,8 @@ validate_args() {
             exit 1
         fi
         
-        SCRIPT_PATH="optimize_layout_general.py"
+        # Use the new proper branch-and-bound script
+        SCRIPT_PATH="optimize_layout_general_proper.py"
     fi
     
     if [[ ! -f "$SCRIPT_PATH" ]]; then
@@ -147,7 +157,12 @@ get_output_pattern() {
     local config_id=$1
     
     if [[ "$SCRIPT_MODE" == "general" ]]; then
-        echo "general_moo_results_config_${config_id}_*.csv"
+        # Updated pattern for new script (it uses method name in filename)
+        if [[ -n "$BRUTE_FORCE" ]]; then
+            echo "brute_force_moo_results_config_${config_id}_*.csv"
+        else
+            echo "branch_and_bound_moo_results_config_${config_id}_*.csv"
+        fi
     else
         echo "moo_results_config_${config_id}_*.csv"
     fi
@@ -168,8 +183,8 @@ build_optimization_command() {
     local config_file="${CONFIG_PREFIX}${config_id}${CONFIG_SUFFIX}"
     
     if [[ "$SCRIPT_MODE" == "general" ]]; then
-        # General MOO system
-        local cmd="python3 optimize_layout_general.py --config $config_file --mode general --keypair-table $KEYPAIR_TABLE --objectives $OBJECTIVES"
+        # Updated command for new proper script (no --mode flag needed)
+        local cmd="python3 optimize_layout_general_proper.py --config $config_file --keypair-table $KEYPAIR_TABLE --objectives $OBJECTIVES"
         
         if [[ -n "$WEIGHTS" ]]; then
             cmd="$cmd --weights $WEIGHTS"
@@ -187,7 +202,11 @@ build_optimization_command() {
             cmd="$cmd --time-limit $TIME_LIMIT"
         fi
         
-        # Use all allocated CPUs for parallel search
+        if [[ -n "$BRUTE_FORCE" ]]; then
+            cmd="$cmd --brute-force"
+        fi
+        
+        # Use all allocated CPUs for parallel search (branch-and-bound supports this)
         cmd="$cmd --processes \$SLURM_CPUS_PER_TASK"
         
     else
@@ -206,11 +225,29 @@ submit_individual_job() {
     local optimization_cmd=$(build_optimization_command $config_id)
     local output_pattern=$(get_output_pattern $config_id)
     
+    # Adjust resources based on mode
+    local cpus=24
+    local memory="500GB"
+    local time_limit="8:00:00"
+    
+    # Branch-and-bound is more efficient, might need less resources
+    if [[ "$SCRIPT_MODE" == "general" && -z "$BRUTE_FORCE" ]]; then
+        # Branch-and-bound should be much faster
+        memory="100GB"  # Less memory needed due to pruning
+        time_limit="4:00:00"  # Shorter time limit due to efficiency
+    fi
+    
+    # Brute force needs more time and resources
+    if [[ -n "$BRUTE_FORCE" ]]; then
+        time_limit="24:00:00"  # Much longer for brute force
+        memory="500GB"  # Keep high memory for brute force
+    fi
+    
     cat > "$job_script" << JOBEOF
 #!/bin/bash
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=500GB
-#SBATCH --time=8:00:00
+#SBATCH --cpus-per-task=$cpus
+#SBATCH --mem=$memory
+#SBATCH --time=$time_limit
 #SBATCH --partition=EM
 #SBATCH --account=med250002p
 #SBATCH --job-name=${SCRIPT_MODE}_${config_id}
@@ -233,6 +270,9 @@ if find output/layouts -name "$output_pattern" 2>/dev/null | grep -q .; then
 fi
 
 echo "Processing config ${config_id} using ${SCRIPT_MODE} mode with \$SLURM_CPUS_PER_TASK processes..."
+if [[ -n "$BRUTE_FORCE" ]]; then
+    echo "WARNING: Using brute force enumeration - this will take much longer!"
+fi
 echo "Command: $optimization_cmd"
 
 # Run optimization
@@ -247,7 +287,11 @@ JOBEOF
     
     if [[ $job_output == *"Submitted batch job"* ]]; then
         local job_id=$(echo "$job_output" | grep -o '[0-9]\+')
-        echo "  Submitted config $config_id as job $job_id ($SCRIPT_MODE mode)"
+        local method="branch-and-bound"
+        if [[ -n "$BRUTE_FORCE" ]]; then
+            method="brute-force"
+        fi
+        echo "  Submitted config $config_id as job $job_id ($SCRIPT_MODE mode, $method)"
         return 0
     else
         echo "  Failed to submit config $config_id: $job_output"
@@ -292,7 +336,7 @@ parse_args "$@"
 # Validate configuration
 validate_args
 
-echo "=== SLURM General MOO Job Submitter ==="
+echo "=== SLURM General MOO Job Submitter (Updated for Proper Branch-and-Bound) ==="
 echo "Mode: $SCRIPT_MODE"
 echo "Script: $SCRIPT_PATH"
 if [[ "$SCRIPT_MODE" == "general" ]]; then
@@ -303,6 +347,11 @@ if [[ "$SCRIPT_MODE" == "general" ]]; then
     fi
     if [[ -n "$MAXIMIZE" ]]; then
         echo "Maximize: $MAXIMIZE"
+    fi
+    if [[ -n "$BRUTE_FORCE" ]]; then
+        echo "Method: Brute Force (WARNING: Very slow!)"
+    else
+        echo "Method: Branch-and-Bound (Recommended)"
     fi
 fi
 echo "Max jobs: $MAX_JOBS"
@@ -316,19 +365,32 @@ SUBMITTED_FILE="/tmp/submitted_configs_${SCRIPT_MODE}_$$"
 # Clean up on exit
 trap "rm -f '$SUBMITTED_FILE'" EXIT
 
-# Main submission loop (unchanged logic from your original)
+# Main submission loop
 while true; do
     # Check current status
     CURRENT_JOBS=$(squeue -u $USER -h | wc -l)
     
     # Count completed configs (use appropriate pattern)
     if [[ "$SCRIPT_MODE" == "general" ]]; then
-        COMPLETED=$(find "$OUTPUT_DIR" -name "general_moo_results_config_*" | wc -l)
+        if [[ -n "$BRUTE_FORCE" ]]; then
+            COMPLETED=$(find "$OUTPUT_DIR" -name "brute_force_moo_results_config_*" | wc -l)
+        else
+            COMPLETED=$(find "$OUTPUT_DIR" -name "branch_and_bound_moo_results_config_*" | wc -l)
+        fi
     else
         COMPLETED=$(find "$OUTPUT_DIR" -name "moo_results_config_*" | wc -l)
     fi
     
-    echo "$(date): Jobs running: $CURRENT_JOBS, Completed: $COMPLETED/$TOTAL_CONFIGS ($SCRIPT_MODE mode)"
+    method_desc="$SCRIPT_MODE mode"
+    if [[ "$SCRIPT_MODE" == "general" ]]; then
+        if [[ -n "$BRUTE_FORCE" ]]; then
+            method_desc="$method_desc (brute-force)"
+        else
+            method_desc="$method_desc (branch-and-bound)"
+        fi
+    fi
+    
+    echo "$(date): Jobs running: $CURRENT_JOBS, Completed: $COMPLETED/$TOTAL_CONFIGS ($method_desc)"
     
     # Submit more jobs if we have capacity
     if [ $CURRENT_JOBS -lt $MAX_JOBS ]; then
