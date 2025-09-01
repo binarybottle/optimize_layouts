@@ -18,10 +18,10 @@
 #--------------------------------------------------------------
 MAX_JOBS=16
 CHECK_INTERVAL=300
-CONFIG_PREFIX="output/configs2/config_"
+CONFIG_PREFIX="output/configs/config_"
 CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
-TOTAL_CONFIGS=84
+TOTAL_CONFIGS=1
 
 # Default settings (current system)
 SCRIPT_MODE="current"
