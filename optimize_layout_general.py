@@ -8,13 +8,13 @@ and optional brute-force enumeration for comparison/validation.
 Usage:
     # Branch-and-bound (recommended)
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_columns,engram8_curl,engram8_home,engram8_hspan,engram8_load,engram8_sequence,engram8_strength,engram8_vspan \
-        --keypair-table data/keypair_scores.csv
+        --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
+        --keypair-table input/keypair_scores_detailed.csv
 
     # Brute force option (for small problems or validation)
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_columns_normalized,engram8_curl_normalized \
-        --keypair-table data/keypair_scores.csv \
+        --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
+        --keypair-table input/keypair_scores_detailed.csv \
         --brute-force --max-solutions 100 --time-limit 3600
 """
 

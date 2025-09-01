@@ -3,15 +3,15 @@
 # SLURM job submission script for General MOO System
 # 
 # This extends your existing run_jobs_slurm.sh to support both:
-# 1. Current system (optimize_layout.py --moo)  
+# 1. original system (optimize_layout.py --moo)  
 # 2. General MOO system with branch-and-bound (optimize_layout_general.py)
 #
 # Usage:
-#   # Current system (unchanged)
-#   bash run_jobs_slurm_general_updated.sh
+#   # original system
+#   bash run_jobs_slurm_general.sh
 #   
 #   # General MOO system with branch-and-bound
-#   bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized,engram8_score_normalized
+#   bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_columns,engram8_curl,engram8_home,engram8_hspan,engram8_load,engram8_sequence,engram8_strength,engram8_vspan
 
 #--------------------------------------------------------------
 # SLURM settings (adjust for your cluster)
@@ -23,8 +23,8 @@ CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
 TOTAL_CONFIGS=1
 
-# Default settings (current system)
-SCRIPT_MODE="current"
+# Default settings (original system)
+SCRIPT_MODE="original"
 SCRIPT_PATH="optimize_layout.py"
 KEYPAIR_TABLE=""
 OBJECTIVES=""
@@ -98,7 +98,7 @@ Usage:
   bash run_jobs_slurm_general.sh
   
   # General MOO with branch-and-bound (recommended)
-  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized
+  bash run_jobs_slurm_general.sh --mode general --keypair-table input/keypair_scores_detailed.csv --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized
   
   # General MOO with brute force (for validation/small problems)
   bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --brute-force
@@ -107,7 +107,7 @@ Usage:
   bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --weights 1.0,2.0 --maximize true,false
 
 Arguments:
-  --mode              current or general (default: current)
+  --mode              original or general (default: original)
   --keypair-table     Path to key-pair scoring table (required for general mode)
   --objectives        Comma-separated objective columns (required for general mode)
   --weights           Comma-separated objective weights (optional)
@@ -210,7 +210,7 @@ build_optimization_command() {
         cmd="$cmd --processes \$SLURM_CPUS_PER_TASK"
         
     else
-        # Current system (unchanged)
+        # original system (unchanged)
         local cmd="python3 optimize_layout.py --config $config_file --moo --processes \$SLURM_CPUS_PER_TASK"
     fi
     
