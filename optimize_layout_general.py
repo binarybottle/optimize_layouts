@@ -7,13 +7,13 @@ and optional brute-force enumeration for comparison/validation.
 
 Usage:
     # Branch-and-bound (recommended)
-    python optimize_layout_general_proper.py --config config.yaml \
+    python optimize_layout_general.py --config config.yaml \
         --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized \
         --keypair-table data/keypair_scores.csv \
         --max-solutions 50 --time-limit 3600
 
     # Brute force option (for small problems or validation)
-    python optimize_layout_general_proper.py --config config.yaml \
+    python optimize_layout_general.py --config config.yaml \
         --objectives engram8_columns_normalized,engram8_curl_normalized \
         --keypair-table data/keypair_scores.csv \
         --brute-force --max-solutions 100
@@ -213,7 +213,7 @@ class GeneralMOOScorer(LayoutScorer):
 #-----------------------------------------------------------------------------
 # Search Implementations
 #-----------------------------------------------------------------------------
-def run_proper_general_moo(config: Config, keypair_table: str, objectives: List[str],
+def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
                           weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
     """Run general MOO with branch-and-bound search."""
     
@@ -482,18 +482,18 @@ def main():
         epilog="""
 Examples:
   # Branch-and-bound (recommended)
-  python optimize_layout_general_proper.py --config config.yaml \\
+  python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized \\
     --keypair-table data/keypair_scores.csv
 
   # With search limits
-  python optimize_layout_general_proper.py --config config.yaml \\
+  python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized \\
     --keypair-table data/keypair_scores.csv \\
     --max-solutions 50 --time-limit 3600
 
   # Brute force (for small problems or validation)
-  python optimize_layout_general_proper.py --config config.yaml \\
+  python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized \\
     --keypair-table data/keypair_scores.csv \\
     --brute-force --max-solutions 100
@@ -575,7 +575,7 @@ Examples:
             )
             method = "brute_force"
         else:
-            pareto_front = run_proper_general_moo(
+            pareto_front = run_general_moo(
                 config, args.keypair_table, objectives, weights, maximize, **search_kwargs
             )
             method = "branch_and_bound"

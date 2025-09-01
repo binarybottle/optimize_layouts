@@ -1,16 +1,16 @@
 #!/bin/bash
 #
-# SLURM job submission script for General MOO System (Updated for Proper Branch-and-Bound)
+# SLURM job submission script for General MOO System
 # 
 # This extends your existing run_jobs_slurm.sh to support both:
 # 1. Current system (optimize_layout.py --moo)  
-# 2. General MOO system with proper branch-and-bound (optimize_layout_general_proper.py)
+# 2. General MOO system with branch-and-bound (optimize_layout_general_proper.py)
 #
 # Usage:
 #   # Current system (unchanged)
 #   bash run_jobs_slurm_general_updated.sh
 #   
-#   # General MOO system with proper branch-and-bound
+#   # General MOO system with branch-and-bound
 #   bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized,engram8_score_normalized
 
 #--------------------------------------------------------------
