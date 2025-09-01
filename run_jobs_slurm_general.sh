@@ -4,7 +4,7 @@
 # 
 # This extends your existing run_jobs_slurm.sh to support both:
 # 1. Current system (optimize_layout.py --moo)  
-# 2. General MOO system with branch-and-bound (optimize_layout_general_proper.py)
+# 2. General MOO system with branch-and-bound (optimize_layout_general.py)
 #
 # Usage:
 #   # Current system (unchanged)
@@ -91,20 +91,20 @@ parse_args() {
 
 print_usage() {
     cat << EOF
-SLURM General MOO Job Submitter (Updated for Proper Branch-and-Bound)
+SLURM General MOO Job Submitter
 
 Usage:
-  # Current system (unchanged)
-  bash run_jobs_slurm_general_updated.sh
+  # Original system
+  bash run_jobs_slurm_general.sh
   
-  # General MOO with proper branch-and-bound (recommended)
-  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized
+  # General MOO with branch-and-bound (recommended)
+  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized
   
   # General MOO with brute force (for validation/small problems)
-  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --brute-force
+  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --brute-force
   
   # With custom weights and directions
-  bash run_jobs_slurm_general_updated.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --weights 1.0,2.0 --maximize true,false
+  bash run_jobs_slurm_general.sh --mode general --keypair-table data/keypair_scores.csv --objectives comfort_score_normalized,time_total_normalized --weights 1.0,2.0 --maximize true,false
 
 Arguments:
   --mode              current or general (default: current)
@@ -140,8 +140,8 @@ validate_args() {
             exit 1
         fi
         
-        # Use the new proper branch-and-bound script
-        SCRIPT_PATH="optimize_layout_general_proper.py"
+        # Use branch-and-bound script
+        SCRIPT_PATH="optimize_layout_general.py"
     fi
     
     if [[ ! -f "$SCRIPT_PATH" ]]; then
@@ -157,7 +157,7 @@ get_output_pattern() {
     local config_id=$1
     
     if [[ "$SCRIPT_MODE" == "general" ]]; then
-        # Updated pattern for new script (it uses method name in filename)
+        # Pattern for general moo script (it uses method name in filename)
         if [[ -n "$BRUTE_FORCE" ]]; then
             echo "brute_force_moo_results_config_${config_id}_*.csv"
         else
@@ -183,8 +183,8 @@ build_optimization_command() {
     local config_file="${CONFIG_PREFIX}${config_id}${CONFIG_SUFFIX}"
     
     if [[ "$SCRIPT_MODE" == "general" ]]; then
-        # Updated command for new proper script (no --mode flag needed)
-        local cmd="python3 optimize_layout_general_proper.py --config $config_file --keypair-table $KEYPAIR_TABLE --objectives $OBJECTIVES"
+
+        local cmd="python3 optimize_layout_general.py --config $config_file --keypair-table $KEYPAIR_TABLE --objectives $OBJECTIVES"
         
         if [[ -n "$WEIGHTS" ]]; then
             cmd="$cmd --weights $WEIGHTS"
@@ -229,12 +229,12 @@ submit_individual_job() {
     local cpus=24
     local memory="500GB"
     local time_limit="8:00:00"
-    
+
     # Branch-and-bound is more efficient, might need less resources
     if [[ "$SCRIPT_MODE" == "general" && -z "$BRUTE_FORCE" ]]; then
         # Branch-and-bound should be much faster
-        memory="100GB"  # Less memory needed due to pruning
-        time_limit="4:00:00"  # Shorter time limit due to efficiency
+        memory="500GB"  # Less memory needed due to pruning
+        time_limit="8:00:00"  # Shorter time limit due to efficiency
     fi
     
     # Brute force needs more time and resources
@@ -336,7 +336,7 @@ parse_args "$@"
 # Validate configuration
 validate_args
 
-echo "=== SLURM General MOO Job Submitter (Updated for Proper Branch-and-Bound) ==="
+echo "=== SLURM General MOO Job Submitter ==="
 echo "Mode: $SCRIPT_MODE"
 echo "Script: $SCRIPT_PATH"
 if [[ "$SCRIPT_MODE" == "general" ]]; then
