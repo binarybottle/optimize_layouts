@@ -8,23 +8,29 @@ search infrastructure. Integrates cleanly with the existing scoring and search s
 A goal programming option turns the MOO problem into a SOO minimization of total weighted deviations,
 handles discrete data well, and shows exactly how far each solution deviates from targets.
 
+SOLUTION SAVING BEHAVIOR:
+- Regular MOO: Saves Pareto-optimal solutions (typically 10-100 solutions)
+- Goal programming: By default saves ALL candidate solutions found by branch-and-bound
+  (typically 100-1000 solutions). These candidates survived pruning and represent the
+  high-quality portion of the search space. Use --max-solutions to limit if needed.
+
 Usage (with 6 of 7 Engram-7 metrics):
-    # Branch-and-bound 
+    # Branch-and-bound MOO (saves Pareto front)
     python optimize_layout_general.py --config config.yaml \
         --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
         --keypair-table input/keypair_scores_detailed.csv
 
-    # Brute force (for small problems or validation)
-    python optimize_layout_general.py --config config.yaml \
-        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
-        --keypair-table input/keypair_scores_detailed.csv \
-        --brute-force --max-solutions 100 --time-limit 3600
-
-    # Goal programming (minimize deviations from targets)
+    # Goal programming (saves all candidates found - typically hundreds of solutions)
     python optimize_layout_general.py --config config.yaml \
         --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
         --keypair-table input/keypair_scores_detailed.csv \
         --goal-programming
+
+    # Goal programming with limited solutions (for faster search)
+    python optimize_layout_general.py --config config.yaml \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
+        --keypair-table input/keypair_scores_detailed.csv \
+        --goal-programming --max-solutions 50
 
     # Goal programming with custom targets and deviation weights
     python optimize_layout_general.py --config config.yaml \
@@ -33,6 +39,12 @@ Usage (with 6 of 7 Engram-7 metrics):
         --goal-programming \
         --targets "1.0,1.0,1.0,1.0,1.0,1.0" \
         --deviation-weights "2.0,1.0,1.0,2.0,1.0,1.0"
+
+    # Brute force (for small problems or validation)
+    python optimize_layout_general.py --config config.yaml \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
+        --keypair-table input/keypair_scores_detailed.csv \
+        --brute-force --max-solutions 100 --time-limit 3600
 
 """
 
@@ -110,8 +122,10 @@ class GeneralMOOScorer:
                         original_score = norm_position_pair_scores.get((pos1.lower(), pos2.lower()), 1.0)
                         objective_modifier = float(row[obj])
                         
-                        # Apply objective-specific scaling
-                        modified_score = original_score * objective_modifier
+                        # Use blended scaling instead of pure multiplication to avoid zeros
+                        # This preserves base frequency weighting while applying objective influence
+                        blend_factor = 0.7  # How much to blend vs replace
+                        modified_score = blend_factor * original_score + (1 - blend_factor) * objective_modifier
                         modified_position_pair_scores[(pos1.lower(), pos2.lower())] = modified_score
                         
                         objective_values.append(objective_modifier)
@@ -169,6 +183,10 @@ class GeneralMOOScorer:
             total_memory += arrays.item_scores.nbytes + arrays.item_pair_matrix.nbytes + arrays.position_matrix.nbytes
         
         print(f"Pre-computation complete: {total_memory / (1024*1024):.1f}MB total")
+        
+        # Store the first arrays object for compatibility with existing MOO search
+        # The MOO search infrastructure expects a .arrays attribute
+        self.arrays = list(self.objective_scorers.values())[0].arrays if self.objective_scorers else None
     
     def score_layout(self, mapping: np.ndarray, return_components: bool = False):
         """Score layout using all objectives."""
@@ -333,11 +351,15 @@ def goal_programming_search(config: Config, moo_scorer: GeneralMOOScorer,
                     solutions.append(solution_dict)
                     solutions.sort(key=lambda x: x['total_deviation'])
                     
-                    if len(solutions) > max_solutions:
+                    # Only trim if max_solutions is finite
+                    if max_solutions != float('inf') and len(solutions) > max_solutions:
                         solutions = solutions[:max_solutions]
                     
-                    if solutions:
-                        best_deviation = solutions[-1]['total_deviation']
+                    # Update best deviation for pruning (use worst kept solution)
+                    if max_solutions == float('inf'):
+                        best_deviation = float('inf')  # No pruning when saving all solutions
+                    elif solutions:
+                        best_deviation = solutions[-1]['total_deviation'] if len(solutions) <= max_solutions else solutions[max_solutions-1]['total_deviation']
                         
                     if solutions_found <= 10:
                         print(f"    Solution #{solutions_found}: deviation = {total_deviation:.6f}")
