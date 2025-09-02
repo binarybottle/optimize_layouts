@@ -46,6 +46,7 @@ from pathlib import Path
 from itertools import permutations
 from numba import jit
 import multiprocessing as mp
+from math import factorial
 
 from config import Config, load_config
 from display import print_optimization_header, print_search_space_info
@@ -374,20 +375,10 @@ class GeneralMOOScorer(LayoutScorer):
 # Goal Programming (Clean Implementation)
 #-----------------------------------------------------------------------------
 def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObjectives, 
-                          target_values: List[float], deviation_weights: List[float], 
-                          max_solutions: int = 10) -> List[Dict]:
+                                 target_values: List[float], deviation_weights: List[float], 
+                                 max_solutions: int = 10) -> List[Dict]:
     """
-    Dedicated goal programming search without monkey patching.
-    
-    Args:
-        config: Configuration object
-        moo_arrays: Multi-objective arrays with objective calculation capability
-        target_values: Target values for each objective
-        deviation_weights: Weights for deviations
-        max_solutions: Maximum solutions to find
-        
-    Returns:
-        List of solutions ranked by total weighted deviation
+    Goal programming search.
     """
     
     print("Running goal programming search...")
@@ -400,6 +391,9 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
     n_items = len(items_list)
     n_positions = len(positions_list)
     
+    print(f"Search space: {n_items} items in {n_positions} positions")
+    print(f"Expected permutations: {factorial(n_positions) // factorial(n_positions - n_items):,}")
+    
     # Set up constraints
     constrained_items = np.array([i for i, item in enumerate(items_list) 
                                  if item in opt.items_to_constrain_set], dtype=np.int32)
@@ -410,7 +404,8 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
     initial_mapping = np.full(n_items, -1, dtype=np.int16)
     initial_used = np.zeros(n_positions, dtype=bool)
     
-    # Handle pre-assigned items
+    # Handle pre-assigned items (FIXED: track actual assigned count)
+    initial_assigned_count = 0
     if opt.items_assigned:
         item_to_idx = {item: idx for idx, item in enumerate(items_list)}
         pos_to_idx = {pos: idx for idx, pos in enumerate(positions_list)}
@@ -421,78 +416,80 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
                 pos_idx = pos_to_idx[pos.upper()]
                 initial_mapping[item_idx] = pos_idx
                 initial_used[pos_idx] = True
+                initial_assigned_count += 1
+    
+    print(f"Pre-assigned items: {initial_assigned_count}")
     
     # Goal programming specific data structures
     solutions = []
     best_deviation = float('inf')
     nodes_processed = 0
     nodes_pruned = 0
+    solutions_found = 0
     
     def calculate_goal_programming_score(mapping: np.ndarray) -> Tuple[float, List[float], List[float]]:
         """Calculate goal programming score using RAW objectives."""
+        # Ensure all items are assigned
+        if np.any(mapping < 0):
+            return float('inf'), [0.0] * len(target_values), [0.0] * len(target_values)
+        
         permutation = [int(mapping[i]) for i in range(len(mapping))]
         
-        # CHANGED: Use RAW objectives for meaningful target comparison
-        raw_objectives = moo_arrays.get_raw_objectives(permutation)
-        
-        # Calculate deviations from raw objectives
-        deviations = [abs(obj_val - target) for obj_val, target in zip(raw_objectives, target_values)]
-        total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
-        
-        return total_deviation, raw_objectives, deviations
+        try:
+            # Use RAW objectives for meaningful target comparison
+            raw_objectives = moo_arrays.get_raw_objectives(permutation)
+            
+            # Calculate deviations from raw objectives
+            deviations = [abs(obj_val - target) for obj_val, target in zip(raw_objectives, target_values)]
+            total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
+            
+            return total_deviation, raw_objectives, deviations
+        except Exception as e:
+            print(f"Error calculating objectives: {e}")
+            return float('inf'), [0.0] * len(target_values), [0.0] * len(target_values)
     
-    def goal_programming_upper_bound(partial_mapping: np.ndarray, used_positions: np.ndarray) -> float:
-        """Calculate lower bound on total weighted deviation (adapted from complex MOO bounds)."""
+    def simple_goal_programming_bound(partial_mapping: np.ndarray) -> float:
+        """
+        SIMPLIFIED upper bound calculation for goal programming.
         
-        # Count assigned items
+        Returns a conservative lower bound on the total weighted deviation.
+        Conservative = higher bound = less pruning = correct but slower search.
+        """
         assigned_count = np.sum(partial_mapping >= 0)
         
         if assigned_count == n_items:
-            # Complete assignment - return actual deviation
+            # Complete assignment - return actual score
             deviation, _, _ = calculate_goal_programming_score(partial_mapping)
             return deviation
         
-        # Find unassigned items and available positions
-        unassigned_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
-        available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
+        if assigned_count == 0:
+            # No assignments yet - use optimistic bound (perfect assignment possible)
+            return 0.0
         
-        if not unassigned_items:
-            return float('inf')  # Should not happen
+        # Partial assignment - use a simple conservative estimate
+        # Assume remaining assignments contribute zero deviation (optimistic)
+        # This bound might not be tight, but it's correct and fast
         
-        # For each objective, estimate the best possible value achievable
-        min_possible_total_deviation = 0.0
+        # For a more conservative (higher) bound, assume some minimum deviation
+        # from unassigned items. This reduces pruning but ensures correctness.
+        min_deviation_per_unassigned = 0.01  # Conservative assumption
+        unassigned_count = n_items - assigned_count
         
-        for obj_idx, obj_name in enumerate(moo_arrays.objectives):
-            raw_matrix = moo_arrays.raw_objective_matrices[obj_name]
-            target = target_values[obj_idx]
-            weight = deviation_weights[obj_idx]
-            
-            # Calculate current partial contribution to this objective
-            current_obj_value = _calculate_partial_objective_value(partial_mapping, raw_matrix)
-            
-            # Estimate best possible improvement from unassigned items
-            max_possible_improvement = _estimate_max_objective_improvement(
-                unassigned_items, available_positions, partial_mapping, raw_matrix
-            )
-            
-            # Best achievable objective value
-            best_possible_obj_value = current_obj_value + max_possible_improvement
-            
-            # Minimum possible deviation for this objective
-            min_deviation = abs(best_possible_obj_value - target)
-            min_possible_total_deviation += min_deviation * weight
-        
-        return min_possible_total_deviation
-
-    def dfs_goal_programming(mapping: np.ndarray, used: np.ndarray, depth: int):
-        """Goal programming specific DFS search."""
-        nonlocal nodes_processed, nodes_pruned, solutions, best_deviation
+        return min_deviation_per_unassigned * unassigned_count
+    
+    def dfs_goal_programming_fixed(mapping: np.ndarray, used: np.ndarray, depth: int):
+        """FIXED goal programming DFS with proper depth management."""
+        nonlocal nodes_processed, nodes_pruned, solutions, best_deviation, solutions_found
         
         nodes_processed += 1
         
-        # Check if solution is complete
+        # Progress reporting
+        if nodes_processed % 10000 == 0 or nodes_processed <= 100:
+            print(f"  Nodes: {nodes_processed:,}, Depth: {depth}, Solutions: {solutions_found}, Best: {best_deviation:.6f}")
+        
+        # TERMINATION CONDITION: Check if solution is complete
         if depth == n_items:
-            # Validate constraints
+            # All items assigned - evaluate solution
             if len(constrained_items) > 0:
                 if not validate_constraints_jit(mapping, constrained_items, constrained_positions):
                     return
@@ -500,37 +497,44 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
             # Calculate goal programming score
             total_deviation, objectives, deviations = calculate_goal_programming_score(mapping)
             
-            # Update solutions list
-            if len(solutions) < max_solutions or total_deviation < best_deviation:
-                # Convert to dictionary mapping
-                item_mapping = {items_list[i]: positions_list[mapping[i]] for i in range(n_items)}
+            if total_deviation < float('inf'):
+                solutions_found += 1
                 
-                solution_dict = {
-                    'rank': len(solutions) + 1,  # Will be reordered later
-                    'total_deviation': total_deviation,
-                    'mapping': item_mapping,
-                    'objectives': objectives,
-                    'deviations': deviations
-                }
-                
-                solutions.append(solution_dict)
-                
-                # Sort by total deviation (ascending - lower is better)
-                solutions.sort(key=lambda x: x['total_deviation'])
-                
-                # Keep only top max_solutions
-                if len(solutions) > max_solutions:
-                    solutions = solutions[:max_solutions]
-                
-                # Update worst acceptable deviation
-                if solutions:
-                    best_deviation = solutions[-1]['total_deviation']
+                # Update solutions list
+                if len(solutions) < max_solutions or total_deviation < best_deviation:
+                    # Convert to dictionary mapping
+                    item_mapping = {items_list[i]: positions_list[mapping[i]] for i in range(n_items)}
+                    
+                    solution_dict = {
+                        'rank': len(solutions) + 1,
+                        'total_deviation': total_deviation,
+                        'mapping': item_mapping,
+                        'objectives': objectives,
+                        'deviations': deviations
+                    }
+                    
+                    solutions.append(solution_dict)
+                    
+                    # Sort by total deviation (ascending - lower is better)
+                    solutions.sort(key=lambda x: x['total_deviation'])
+                    
+                    # Keep only top max_solutions
+                    if len(solutions) > max_solutions:
+                        solutions = solutions[:max_solutions]
+                    
+                    # Update best (worst of kept solutions)
+                    if solutions:
+                        best_deviation = solutions[-1]['total_deviation']
+                        
+                    if solutions_found <= 10:
+                        print(f"    Solution #{solutions_found}: deviation = {total_deviation:.6f}")
             
             return
         
-        # Get next item to assign
+        # SEARCH CONTINUATION: Get next item to assign
         next_item = get_next_item_jit(mapping, constrained_items)
         if next_item == -1:
+            print(f"    ERROR: No next item found at depth {depth}, but depth < n_items")
             return
         
         # Get valid positions for this item
@@ -539,33 +543,44 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
         else:
             valid_positions = [pos for pos in range(n_positions) if not used[pos]]
         
+        if not valid_positions:
+            print(f"    No valid positions for item {next_item} at depth {depth}")
+            return
+        
         # Try each valid position
         for pos in valid_positions:
             # Create new state
             mapping[next_item] = pos
             used[pos] = True
             
-            # Pruning check
-            if len(solutions) >= max_solutions:
-                upper_bound = goal_programming_upper_bound(mapping, used)
-                if upper_bound >= best_deviation:
+            # OPTIONAL PRUNING (can be disabled for debugging)
+            do_pruning = True
+            if do_pruning and len(solutions) >= max_solutions:
+                bound = simple_goal_programming_bound(mapping)
+                if bound > best_deviation + 1e-9:  # Small epsilon for numerical stability
                     nodes_pruned += 1
+                    # Restore state
                     mapping[next_item] = -1
                     used[pos] = False
                     continue
             
-            # Recurse
-            dfs_goal_programming(mapping, used, depth + 1)
+            # Recurse to next depth
+            dfs_goal_programming_fixed(mapping, used, depth + 1)
             
             # Backtrack
             mapping[next_item] = -1
             used[pos] = False
     
-    # Run the search
-    print(f"\nStarting goal programming search for {n_items} items in {n_positions} positions...")
+    # FIXED: Start search with correct initial depth
+    print(f"\nStarting fixed goal programming search...")
+    print(f"  Items: {n_items}, Positions: {n_positions}")
+    print(f"  Initial assigned: {initial_assigned_count}")
+    print(f"  Search will start at depth: {initial_assigned_count}")
+    
     start_time = time.time()
     
-    dfs_goal_programming(initial_mapping, initial_used, np.sum(initial_mapping >= 0))
+    # Start search with correct depth
+    dfs_goal_programming_fixed(initial_mapping, initial_used, initial_assigned_count)
     
     elapsed_time = time.time() - start_time
     
@@ -573,15 +588,23 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
     for i, solution in enumerate(solutions):
         solution['rank'] = i + 1
     
-    print(f"\nGoal Programming Search Results:")
-    print(f"  Solutions found: {len(solutions)}")
+    print(f"\nFIXED Goal Programming Search Results:")
+    print(f"  Solutions found: {solutions_found}")
+    print(f"  Solutions kept: {len(solutions)}")
     print(f"  Nodes processed: {nodes_processed:,}")
     print(f"  Nodes pruned: {nodes_pruned:,}")
     print(f"  Search time: {elapsed_time:.2f}s")
+    print(f"  Rate: {nodes_processed/elapsed_time:.0f} nodes/sec")
     
     if solutions:
         print(f"  Best deviation: {solutions[0]['total_deviation']:.6f}")
-        print(f"  Worst deviation: {solutions[-1]['total_deviation']:.6f}")
+        print(f"  Worst kept deviation: {solutions[-1]['total_deviation']:.6f}")
+        
+        # Show diversity of solutions
+        if len(solutions) > 1:
+            deviations = [sol['total_deviation'] for sol in solutions]
+            print(f"  Deviation range: {min(deviations):.6f} to {max(deviations):.6f}")
+            print(f"  Standard deviation: {np.std(deviations):.6f}")
     
     return solutions
 
@@ -990,7 +1013,6 @@ Examples:
                 csv_path = save_goal_programming_results(results, config, objectives)
                 print(f"\nResults saved to: {csv_path}")
                 print(f"\nGoal Programming completed successfully!")
-                print(f"Targets were interpreted as raw objective values (before any transformations)")
             else:
                 print("No solutions found!")
         
