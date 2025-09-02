@@ -61,10 +61,9 @@ class GeneralMOOArrays(ScoringArrays):
     Extended ScoringArrays supporting arbitrary objectives from keypair tables.
     Integrates with existing branch-and-bound infrastructure.
     """
-    
     def __init__(self, keypair_df: pd.DataFrame, objectives: List[str], 
-                 items: List[str], positions: List[str], 
-                 weights: List[float], maximize: List[bool]):
+                items: List[str], positions: List[str], 
+                weights: List[float], maximize: List[bool]):
         
         self.objectives = objectives
         self.objective_weights = weights
@@ -78,25 +77,29 @@ class GeneralMOOArrays(ScoringArrays):
         self.item_to_idx = {item: i for i, item in enumerate(self.items)}
         self.position_to_idx = {pos: i for i, pos in enumerate(self.positions)}
         
-        # Pre-compute objective matrices for each objective
-        self.objective_matrices = {}
+        # Pre-compute BOTH raw and transformed objective matrices
+        self.raw_objective_matrices = {}      # NEW: For goal programming
+        self.objective_matrices = {}          # Existing: For MOO optimization
         total_memory = 0
         
         for i, obj in enumerate(objectives):
             print(f"  [{i+1}/{len(objectives)}] Computing {obj}...")
             
-            matrix = self._create_objective_matrix(keypair_df, obj)
+            # Create raw matrix first (NEW)
+            raw_matrix = self._create_objective_matrix(keypair_df, obj)
+            self.raw_objective_matrices[obj] = raw_matrix.astype(np.float32)
             
-            # Apply weight and direction
+            # Create transformed matrix for MOO (MODIFIED)
+            transformed_matrix = raw_matrix.copy()
             if weights[i] != 1.0:
-                matrix *= weights[i]
+                transformed_matrix *= weights[i]
             if not maximize[i]:
-                matrix *= -1.0  # Convert minimize to maximize
+                transformed_matrix *= -1.0
             
-            self.objective_matrices[obj] = matrix.astype(np.float32)
-            total_memory += matrix.nbytes
+            self.objective_matrices[obj] = transformed_matrix.astype(np.float32)
+            total_memory += raw_matrix.nbytes + transformed_matrix.nbytes
             
-            print(f"      Range: [{np.min(matrix):.6f}, {np.max(matrix):.6f}]")
+            print(f"      Range: [{np.min(raw_matrix):.6f}, {np.max(raw_matrix):.6f}]")
         
         print(f"Pre-computation complete: {total_memory / (1024*1024):.1f}MB total")
         
@@ -104,7 +107,7 @@ class GeneralMOOArrays(ScoringArrays):
         n_items = len(items)
         n_positions = len(positions)
         
-        # Use first objective as primary for compatibility
+        # Use first transformed objective as primary for compatibility
         primary_matrix = list(self.objective_matrices.values())[0] if self.objective_matrices else np.ones((n_positions, n_positions))
         
         item_scores = np.ones(n_items, dtype=np.float32)
@@ -146,7 +149,7 @@ class GeneralMOOArrays(ScoringArrays):
             print(f"      Missing: {missing_pairs}/{total_pairs} pairs ({missing_pairs/total_pairs*100:.1f}%)")
         
         return matrix
-
+    
 class GeneralMOOArraysWithObjectives(GeneralMOOArrays):
     """Extended GeneralMOOArrays with built-in objective calculation."""
     
@@ -161,9 +164,47 @@ class GeneralMOOArraysWithObjectives(GeneralMOOArrays):
         
         # Create calculator for getting objectives
         self.scorer = GeneralMOOScorer(self)
-    
+
+    def get_raw_objectives(self, permutation: List[int]) -> List[float]:
+        """Get raw objective values for goal programming (no weights/direction changes)."""
+        mapping_array = np.array(permutation, dtype=np.int32)
+        
+        # Validate permutation
+        if len(permutation) != len(self.items):
+            raise ValueError(f"Permutation length {len(permutation)} != items length {len(self.items)}")
+        
+        if any(p < 0 or p >= len(self.positions) for p in permutation):
+            raise ValueError("Invalid position indices in permutation")
+        
+        raw_objectives = []
+        for obj_name in self.objectives:
+            raw_matrix = self.raw_objective_matrices[obj_name]  # Use raw matrices
+            score = self._score_single_objective_jit(mapping_array, raw_matrix)
+            raw_objectives.append(score)
+        
+        return raw_objectives
+
+    @staticmethod
+    @jit(nopython=True, fastmath=True)
+    def _score_single_objective_jit(mapping_array: np.ndarray, objective_matrix: np.ndarray) -> float:
+        """JIT-compiled single objective scoring."""
+        total_score = 0.0
+        pair_count = 0
+        n_items = len(mapping_array)
+        
+        for i in range(n_items):
+            pos_i = mapping_array[i]
+            if pos_i >= 0 and pos_i < objective_matrix.shape[0]:
+                for j in range(n_items):
+                    pos_j = mapping_array[j]
+                    if i != j and pos_j >= 0 and pos_j < objective_matrix.shape[1]:
+                        total_score += objective_matrix[pos_i, pos_j]
+                        pair_count += 1
+        
+        return total_score / max(1, pair_count)
+
     def get_objectives(self, permutation: List[int]) -> List[float]:
-        """Get objective values for a permutation."""
+        """Get objective values for a permutation (uses transformed objectives for MOO)."""
         mapping_array = np.array(permutation, dtype=np.int32)
         
         # Validate permutation
@@ -316,16 +357,17 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
     nodes_pruned = 0
     
     def calculate_goal_programming_score(mapping: np.ndarray) -> Tuple[float, List[float], List[float]]:
-        """Calculate goal programming score and return details."""
-        # Convert mapping to permutation
+        """Calculate goal programming score using RAW objectives."""
         permutation = [int(mapping[i]) for i in range(len(mapping))]
-        objectives = moo_arrays.get_objectives(permutation)
         
-        # Calculate deviations
-        deviations = [abs(obj_val - target) for obj_val, target in zip(objectives, target_values)]
+        # CHANGED: Use RAW objectives for meaningful target comparison
+        raw_objectives = moo_arrays.get_raw_objectives(permutation)
+        
+        # Calculate deviations from raw objectives
+        deviations = [abs(obj_val - target) for obj_val, target in zip(raw_objectives, target_values)]
         total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
         
-        return total_deviation, objectives, deviations
+        return total_deviation, raw_objectives, deviations
     
     def goal_programming_upper_bound(partial_mapping: np.ndarray, used_positions: np.ndarray) -> float:
         """Calculate upper bound for goal programming (lower deviation bound)."""
@@ -835,7 +877,7 @@ Examples:
             'processes': args.processes
         }
 
-        # Goal programming logic - CORRECTED VERSION
+        # Goal programming logic
         if args.goal_programming:
             if not args.targets:
                 target_values = [1.0] * len(objectives)
@@ -860,7 +902,7 @@ Examples:
             if missing:
                 raise ValueError(f"Missing objectives in keypair table: {missing}")
             
-            # Create extended MOO arrays with built-in objective calculation
+            # IMPORTANT: Create extended MOO arrays with corrected implementation
             items = list(config.optimization.items_to_assign)
             positions = list(config.optimization.positions_to_assign)
             
@@ -868,7 +910,7 @@ Examples:
                 keypair_df, objectives, items, positions, weights, maximize
             )
             
-            # Run clean goal programming search
+            # Run corrected goal programming search
             results = goal_programming_search(
                 config, moo_arrays, target_values, deviation_weights, 
                 max_solutions=args.max_solutions or 10
@@ -878,6 +920,8 @@ Examples:
             if results:
                 csv_path = save_goal_programming_results(results, config, objectives)
                 print(f"\nResults saved to: {csv_path}")
+                print(f"\nGoal Programming completed successfully!")
+                print(f"Targets were interpreted as raw objective values (before any transformations)")
             else:
                 print("No solutions found!")
         
