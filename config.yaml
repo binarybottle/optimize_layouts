@@ -6,23 +6,23 @@
 #-----------------------------------------------------------------------
 paths:
   input:
-    raw_item_scores_file:          "input/frequency/english-letter-counts-leipzig.csv"
-    raw_item_pair_scores_file:     "input/frequency/english-letter-pair-counts-leipzig.csv"
-    raw_position_scores_file:      "input/comfort/key-comfort-scores.csv"
-    raw_position_pair_scores_file: "input/comfort/key-pair-comfort-scores.csv"
+    raw_item_pair_scores_file:     "input/frequency/english-letter-pair-counts-google-ngrams.csv"
+    raw_position_pair_scores_file: "input/comfort/keypair_engram7_scores.csv"
+    raw_item_scores_file:          "input/dummy-item-scores.csv"
+    raw_position_scores_file:      "input/dummy-position-scores.csv"
   output:
     layout_results_folder:         "output/layouts"
 
 #-----------------------------------------------------------------------
 # Optimization settings
 #-----------------------------------------------------------------------
-# Example for 12 of 24 items: etaoinsrhldc umfpgwybvkxj
-# arranged in 12 of 24 positions: FDESVRJKILMU WACQZXO;,P/.
+# Example for 12 of 24 items: etaoin srhldc umfpgw ybvkxj
+# arranged in 12 of 24 positions: FDESVR JKILMU WACQZ XO;,P/.
 optimization:   
   items_assigned:       ""      # Items already assigned to positions
   positions_assigned:   ""      # Positions that are already filled 
-  items_to_assign:      "etaoins" # items to arrange in positions
-  positions_to_assign:  "FDESVRJ" # available positions
+  items_to_assign:      "etaoinsrhldcumfp" # items to arrange in positions
+  positions_to_assign:  "FDESVRJKILMUWAO;" # available positions
 
   # Subset of items_to_assign to arrange within positions_to_constrain
   # and subset of positions_to_assign to constrain items_to_constrain

@@ -2,8 +2,23 @@
 """
 Layout optimization software
 
-This script consolidates all optimization logic to support both 
-Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO).
+Supports both Single-Objective Optimization (SOO) and Multi-Objective Optimization (MOO)
+with branch-and-bound search to optimize the arrangement of items (and item-pairs)
+in positions (and position-pairs). An example use case is optimizing keyboard layouts.
+
+The version of MOO is limited to two (item/item-pair) objectives.
+See optimize_layout_general.py for arbitrary number of item-pair objectives.
+
+Usage:
+    # Single-objective optimization (default)
+    python optimize_layout.py --config config.yaml --n-solutions 100
+
+    # Multi-objective optimization (Pareto front of candidate solutions)
+    python optimize_layout.py --config config.yaml --moo
+
+    # Detailed MOO analysis with comprehensive validation
+    python optimize_layout.py --moo --max-solutions 50 --detailed --validate
+
 """
 
 import argparse
