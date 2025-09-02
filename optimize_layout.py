@@ -11,7 +11,7 @@ See optimize_layout_general.py for arbitrary number of item-pair objectives.
 
 Usage:
     # Single-objective optimization (default)
-    python optimize_layout.py --config config.yaml --n-solutions 100
+    python optimize_layout.py --config config.yaml --processes 8 --n-solutions 10
 
     # Multi-objective optimization (Pareto front of candidate solutions)
     python optimize_layout.py --config config.yaml --moo

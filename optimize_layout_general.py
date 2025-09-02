@@ -5,17 +5,35 @@ General Multi-Objective Layout Optimizer with Branch-and-Bound
 Supports arbitrary number of objectives from keypair score tables using the existing
 search infrastructure. Integrates cleanly with the existing scoring and search systems.
 
-Usage:
-    # Branch-and-bound (recommended); example with 7 of 8 Engram-8 metrics
+A goal programming option turns the MOO problem into a SOO minimization of total weighted deviations,
+handles discrete data well, and shows exactly how far each solution deviates from targets.
+
+Usage (with 6 of 7 Engram-7 metrics):
+    # Branch-and-bound 
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_curl_normalized,engram8_home_normalized,engram8_hspan_normalized,engram8_load_normalized,engram8_sequence_normalized,engram8_strength_normalized,engram8_vspan_normalized \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
         --keypair-table input/keypair_scores_detailed.csv
 
-    # Brute force option (for small problems or validation)
+    # Brute force (for small problems or validation)
     python optimize_layout_general.py --config config.yaml \
-        --objectives engram8_strength_normalized,engram8_vspan_normalized \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
         --keypair-table input/keypair_scores_detailed.csv \
         --brute-force --max-solutions 100 --time-limit 3600
+
+    # Goal programming (minimize deviations from targets)
+    python optimize_layout_general.py --config config.yaml \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
+        --keypair-table input/keypair_scores_detailed.csv \
+        --goal-programming
+
+    # Goal programming with custom targets and deviation weights
+    python optimize_layout_general.py --config config.yaml \
+        --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
+        --keypair-table input/keypair_scores_detailed.csv \
+        --goal-programming \
+        --targets "1.0,1.0,1.0,1.0,1.0,1.0" \
+        --deviation-weights "2.0,1.0,1.0,2.0,1.0,1.0"
+
 """
 
 import argparse
@@ -32,11 +50,11 @@ import multiprocessing as mp
 from config import Config, load_config
 from display import print_optimization_header, print_search_space_info
 from scoring import ScoringArrays, LayoutScorer, ScoreComponents, ScoreCalculator
-from search import multi_objective_search  # Reuse existing search infrastructure
+from search import single_objective_search, multi_objective_search, get_next_item_jit, validate_constraints_jit
 from validation import run_validation_suite
 
 #-----------------------------------------------------------------------------
-# General MOO Scoring Infrastructure  
+# General MOO Scoring
 #-----------------------------------------------------------------------------
 class GeneralMOOArrays(ScoringArrays):
     """
@@ -129,6 +147,41 @@ class GeneralMOOArrays(ScoringArrays):
         
         return matrix
 
+class GeneralMOOArraysWithObjectives(GeneralMOOArrays):
+    """Extended GeneralMOOArrays with built-in objective calculation."""
+    
+    def __init__(self, keypair_df: pd.DataFrame, objectives: List[str], 
+                 items: List[str], positions: List[str], 
+                 weights: List[float], maximize: List[bool]):
+        
+        super().__init__(keypair_df, objectives, items, positions, weights, maximize)
+        
+        # Store objective names for reference
+        self.objective_names = objectives
+        
+        # Create calculator for getting objectives
+        self.scorer = GeneralMOOScorer(self)
+    
+    def get_objectives(self, permutation: List[int]) -> List[float]:
+        """Get objective values for a permutation."""
+        mapping_array = np.array(permutation, dtype=np.int32)
+        
+        # Validate permutation
+        if len(permutation) != len(self.items):
+            raise ValueError(f"Permutation length {len(permutation)} != items length {len(self.items)}")
+        
+        if any(p < 0 or p >= len(self.positions) for p in permutation):
+            raise ValueError("Invalid position indices in permutation")
+        
+        # Calculate objectives using the scorer
+        objectives = self.scorer.score_layout(mapping_array)
+        
+        return objectives
+    
+    def get_objective_names(self) -> List[str]:
+        """Get the list of objective names."""
+        return self.objective_names.copy()
+
 class GeneralMOOCalculator(ScoreCalculator):
     """Score calculator for arbitrary objectives."""
     
@@ -203,6 +256,249 @@ class GeneralMOOScorer(LayoutScorer):
         else:
             # Return just the objective list for MOO search
             return all_objectives
+
+#-----------------------------------------------------------------------------
+# Goal Programming (Clean Implementation)
+#-----------------------------------------------------------------------------
+def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObjectives, 
+                          target_values: List[float], deviation_weights: List[float], 
+                          max_solutions: int = 10) -> List[Dict]:
+    """
+    Dedicated goal programming search without monkey patching.
+    
+    Args:
+        config: Configuration object
+        moo_arrays: Multi-objective arrays with objective calculation capability
+        target_values: Target values for each objective
+        deviation_weights: Weights for deviations
+        max_solutions: Maximum solutions to find
+        
+    Returns:
+        List of solutions ranked by total weighted deviation
+    """
+    
+    print("Running goal programming search...")
+    print(f"Target values: {target_values}")
+    print(f"Deviation weights: {deviation_weights}")
+    
+    opt = config.optimization
+    items_list = list(opt.items_to_assign)
+    positions_list = list(opt.positions_to_assign)
+    n_items = len(items_list)
+    n_positions = len(positions_list)
+    
+    # Set up constraints
+    constrained_items = np.array([i for i, item in enumerate(items_list) 
+                                 if item in opt.items_to_constrain_set], dtype=np.int32)
+    constrained_positions = np.array([i for i, pos in enumerate(positions_list) 
+                                    if pos.upper() in opt.positions_to_constrain_set], dtype=np.int32)
+    
+    # Initialize search state
+    initial_mapping = np.full(n_items, -1, dtype=np.int16)
+    initial_used = np.zeros(n_positions, dtype=bool)
+    
+    # Handle pre-assigned items
+    if opt.items_assigned:
+        item_to_idx = {item: idx for idx, item in enumerate(items_list)}
+        pos_to_idx = {pos: idx for idx, pos in enumerate(positions_list)}
+        
+        for item, pos in zip(opt.items_assigned, opt.positions_assigned):
+            if item in item_to_idx and pos.upper() in pos_to_idx:
+                item_idx = item_to_idx[item]
+                pos_idx = pos_to_idx[pos.upper()]
+                initial_mapping[item_idx] = pos_idx
+                initial_used[pos_idx] = True
+    
+    # Goal programming specific data structures
+    solutions = []
+    best_deviation = float('inf')
+    nodes_processed = 0
+    nodes_pruned = 0
+    
+    def calculate_goal_programming_score(mapping: np.ndarray) -> Tuple[float, List[float], List[float]]:
+        """Calculate goal programming score and return details."""
+        # Convert mapping to permutation
+        permutation = [int(mapping[i]) for i in range(len(mapping))]
+        objectives = moo_arrays.get_objectives(permutation)
+        
+        # Calculate deviations
+        deviations = [abs(obj_val - target) for obj_val, target in zip(objectives, target_values)]
+        total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
+        
+        return total_deviation, objectives, deviations
+    
+    def goal_programming_upper_bound(partial_mapping: np.ndarray, used_positions: np.ndarray) -> float:
+        """Calculate upper bound for goal programming (lower deviation bound)."""
+        
+        # Count assigned items
+        assigned_count = np.sum(partial_mapping >= 0)
+        
+        if assigned_count == n_items:
+            # Complete assignment
+            deviation, _, _ = calculate_goal_programming_score(partial_mapping)
+            return deviation
+        
+        # For partial assignment, calculate minimum possible total deviation
+        if assigned_count == 0:
+            return 0.0  # Optimistic: perfect assignment possible
+        
+        # Conservative approach: calculate current partial deviation
+        # and assume remaining assignments contribute optimally (zero deviation)
+        
+        # Fill unassigned positions with dummy values for calculation
+        temp_mapping = partial_mapping.copy()
+        unassigned_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
+        available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
+        
+        # Assign remaining items to remaining positions (first available)
+        for i, item_idx in enumerate(unassigned_items):
+            if i < len(available_positions):
+                temp_mapping[item_idx] = available_positions[i]
+        
+        # Calculate objectives for temporary complete mapping
+        try:
+            permutation = [int(temp_mapping[i]) for i in range(len(temp_mapping))]
+            objectives = moo_arrays.get_objectives(permutation)
+            
+            # Scale deviation by ratio of assigned items (optimistic bound)
+            deviations = [abs(obj_val - target) for obj_val, target in zip(objectives, target_values)]
+            total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
+            
+            # Scale by assignment ratio for optimistic bound
+            assignment_ratio = assigned_count / n_items
+            estimated_deviation = total_deviation * assignment_ratio
+            
+            return estimated_deviation
+        except:
+            # Fallback: return a conservative bound
+            return 0.0
+    
+    def dfs_goal_programming(mapping: np.ndarray, used: np.ndarray, depth: int):
+        """Goal programming specific DFS search."""
+        nonlocal nodes_processed, nodes_pruned, solutions, best_deviation
+        
+        nodes_processed += 1
+        
+        # Check if solution is complete
+        if depth == n_items:
+            # Validate constraints
+            if len(constrained_items) > 0:
+                if not validate_constraints_jit(mapping, constrained_items, constrained_positions):
+                    return
+            
+            # Calculate goal programming score
+            total_deviation, objectives, deviations = calculate_goal_programming_score(mapping)
+            
+            # Update solutions list
+            if len(solutions) < max_solutions or total_deviation < best_deviation:
+                # Convert to dictionary mapping
+                item_mapping = {items_list[i]: positions_list[mapping[i]] for i in range(n_items)}
+                
+                solution_dict = {
+                    'rank': len(solutions) + 1,  # Will be reordered later
+                    'total_deviation': total_deviation,
+                    'mapping': item_mapping,
+                    'objectives': objectives,
+                    'deviations': deviations
+                }
+                
+                solutions.append(solution_dict)
+                
+                # Sort by total deviation (ascending - lower is better)
+                solutions.sort(key=lambda x: x['total_deviation'])
+                
+                # Keep only top max_solutions
+                if len(solutions) > max_solutions:
+                    solutions = solutions[:max_solutions]
+                
+                # Update worst acceptable deviation
+                if solutions:
+                    best_deviation = solutions[-1]['total_deviation']
+            
+            return
+        
+        # Get next item to assign
+        next_item = get_next_item_jit(mapping, constrained_items)
+        if next_item == -1:
+            return
+        
+        # Get valid positions for this item
+        if next_item in constrained_items:
+            valid_positions = [pos for pos in constrained_positions if not used[pos]]
+        else:
+            valid_positions = [pos for pos in range(n_positions) if not used[pos]]
+        
+        # Try each valid position
+        for pos in valid_positions:
+            # Create new state
+            mapping[next_item] = pos
+            used[pos] = True
+            
+            # Pruning check
+            if len(solutions) >= max_solutions:
+                upper_bound = goal_programming_upper_bound(mapping, used)
+                if upper_bound >= best_deviation:
+                    nodes_pruned += 1
+                    mapping[next_item] = -1
+                    used[pos] = False
+                    continue
+            
+            # Recurse
+            dfs_goal_programming(mapping, used, depth + 1)
+            
+            # Backtrack
+            mapping[next_item] = -1
+            used[pos] = False
+    
+    # Run the search
+    print(f"\nStarting goal programming search for {n_items} items in {n_positions} positions...")
+    start_time = time.time()
+    
+    dfs_goal_programming(initial_mapping, initial_used, np.sum(initial_mapping >= 0))
+    
+    elapsed_time = time.time() - start_time
+    
+    # Update ranks
+    for i, solution in enumerate(solutions):
+        solution['rank'] = i + 1
+    
+    print(f"\nGoal Programming Search Results:")
+    print(f"  Solutions found: {len(solutions)}")
+    print(f"  Nodes processed: {nodes_processed:,}")
+    print(f"  Nodes pruned: {nodes_pruned:,}")
+    print(f"  Search time: {elapsed_time:.2f}s")
+    
+    if solutions:
+        print(f"  Best deviation: {solutions[0]['total_deviation']:.6f}")
+        print(f"  Worst deviation: {solutions[-1]['total_deviation']:.6f}")
+    
+    return solutions
+
+def save_goal_programming_results(results: List[Dict], config: Config, objectives: List[str]) -> str:
+    """Save goal programming optimization results to CSV."""
+    timestamp = time.strftime('%Y%m%d_%H%M%S')
+    output_dir = Path(config.paths.layout_results_folder)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    csv_path = output_dir / f"goal_programming_results_{timestamp}.csv"
+    
+    # Convert results to DataFrame
+    rows = []
+    for result in results:
+        row = {
+            'rank': result['rank'],
+            'total_deviation': result['total_deviation'],
+            'mapping': str(result['mapping'])
+        }
+        # Add objective values and deviations
+        for i, (obj_name, obj_value) in enumerate(zip(objectives, result['objectives'])):
+            row[f'{obj_name}_value'] = obj_value
+            row[f'{obj_name}_deviation'] = result['deviations'][i]
+        
+        rows.append(row)
+    
+    df = pd.DataFrame(rows)
+    df.to_csv(csv_path, index=False)
+    return str(csv_path)
 
 #-----------------------------------------------------------------------------
 # Search Wrapper Functions
@@ -430,7 +726,7 @@ def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="General MOO Layout Optimizer using existing search infrastructure",
+        description="Multi-objective optimization for layout problems",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
@@ -438,25 +734,35 @@ Examples:
   python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized,engram8_home_normalized \\
     --keypair-table data/keypair_scores.csv
-
   # With search limits
   python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized \\
     --keypair-table data/keypair_scores.csv \\
     --max-solutions 50 --time-limit 3600
-
   # Brute force (for small problems or validation)
   python optimize_layout_general.py --config config.yaml \\
     --objectives engram8_columns_normalized,engram8_curl_normalized \\
     --keypair-table data/keypair_scores.csv \\
     --brute-force --max-solutions 100
+  # Goal programming (minimize deviations from targets)
+  python optimize_layout_general.py --config config.yaml \\
+    --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_hspan_normalized,engram7_vspan_normalized,engram7_sequence_normalized \\
+    --keypair-table input/keypair_scores_detailed.csv \\
+    --goal-programming
+  # Goal programming with custom targets and deviation weights
+  python optimize_layout_general.py --config config.yaml \\
+    --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_hspan_normalized,engram7_vspan_normalized,engram7_sequence_normalized \\
+    --keypair-table input/keypair_scores_detailed.csv \\
+    --goal-programming \\
+    --targets "1.0,1.0,1.0,1.0,1.0,1.0" \\
+    --deviation-weights "2.0,1.0,1.0,2.0,1.0,1.0"
         """
     )
     
     # Required arguments
     parser.add_argument('--config', required=True, help='Configuration YAML file')
     parser.add_argument('--objectives', required=True, help='Comma-separated objectives from keypair table')
-    parser.add_argument('--keypair-table', required=True, help='Keypair table CSV file')
+    parser.add_argument('--keypair-table', required=True, help='CSV file with keypair data')
     
     # Optional objective configuration
     parser.add_argument('--weights', help='Comma-separated weights for objectives (default: all 1.0)')
@@ -475,6 +781,14 @@ Examples:
     parser.add_argument('--validate', action='store_true', help='Run validation before optimization')
     parser.add_argument('--dry-run', action='store_true', help='Validate configuration only')
     
+    # Goal programming
+    parser.add_argument('--goal-programming', action='store_true',
+                       help='Use goal programming instead of traditional MOO')
+    parser.add_argument('--targets', type=str,
+                       help='Comma-separated target values for each objective (e.g., "1.0,1.0,0.5")')
+    parser.add_argument('--deviation-weights', type=str,
+                       help='Comma-separated weights for deviations (default: equal weights)')
+    
     args = parser.parse_args()
     
     try:
@@ -488,7 +802,7 @@ Examples:
         print(f"  Items to assign: {config.optimization.items_to_assign}")
         print(f"  Positions to assign: {config.optimization.positions_to_assign}")
         print(f"  Keypair table: {args.keypair_table}")
-        print(f"  Search method: {'Brute Force' if args.brute_force else 'Branch-and-Bound'}")
+        print(f"  Search method: {'Goal Programming' if args.goal_programming else ('Brute Force' if args.brute_force else 'Branch-and-Bound')}")
         print(f"  Objectives ({len(objectives)}):")
         for i, obj in enumerate(objectives):
             direction = "maximize" if maximize[i] else "minimize"
@@ -520,23 +834,72 @@ Examples:
             'time_limit': args.time_limit,
             'processes': args.processes
         }
-        
-        # Run optimization
-        if args.brute_force:
-            pareto_front = run_brute_force_general_moo(
-                config, args.keypair_table, objectives, weights, maximize, **search_kwargs
+
+        # Goal programming logic - CORRECTED VERSION
+        if args.goal_programming:
+            if not args.targets:
+                target_values = [1.0] * len(objectives)
+                print(f"Using default targets: {target_values}")
+            else:
+                target_values = [float(t.strip()) for t in args.targets.split(',')]
+                if len(target_values) != len(objectives):
+                    raise ValueError(f"Targets count ({len(target_values)}) != objectives count ({len(objectives)})")
+            
+            if args.deviation_weights:
+                deviation_weights = [float(w.strip()) for w in args.deviation_weights.split(',')]
+                if len(deviation_weights) != len(objectives):
+                    raise ValueError(f"Deviation weights count != objectives count")
+            else:
+                deviation_weights = [1.0] * len(objectives)
+            
+            # Load and validate keypair table
+            keypair_df = pd.read_csv(args.keypair_table, dtype={'key_pair': str})
+            print(f"Loaded keypair table: {len(keypair_df)} rows")
+            
+            missing = [obj for obj in objectives if obj not in keypair_df.columns]
+            if missing:
+                raise ValueError(f"Missing objectives in keypair table: {missing}")
+            
+            # Create extended MOO arrays with built-in objective calculation
+            items = list(config.optimization.items_to_assign)
+            positions = list(config.optimization.positions_to_assign)
+            
+            moo_arrays = GeneralMOOArraysWithObjectives(
+                keypair_df, objectives, items, positions, weights, maximize
             )
-            method = "brute_force"
+            
+            # Run clean goal programming search
+            results = goal_programming_search(
+                config, moo_arrays, target_values, deviation_weights, 
+                max_solutions=args.max_solutions or 10
+            )
+            
+            # Save results
+            if results:
+                csv_path = save_goal_programming_results(results, config, objectives)
+                print(f"\nResults saved to: {csv_path}")
+            else:
+                print("No solutions found!")
+        
+        # Regular MOO or brute force
         else:
-            pareto_front = run_general_moo(
-                config, args.keypair_table, objectives, weights, maximize, **search_kwargs
-            )
-            method = "branch_and_bound"
-        
-        # Save results
-        if pareto_front:
-            csv_path = save_general_results(pareto_front, config, objectives, method)
-            print(f"\nResults saved to: {csv_path}")
+            if args.brute_force:
+                results = run_brute_force_general_moo(
+                    config, args.keypair_table, objectives, weights, maximize, **search_kwargs
+                )
+                method = "brute_force"
+            else:
+                results = run_general_moo(
+                    config, args.keypair_table, objectives, weights, maximize, **search_kwargs
+                )
+                method = "branch_and_bound"
+            
+            # Save results
+            if results:
+                csv_path = save_general_results(results, config, objectives, method)
+                print(f"\nResults saved to: {csv_path}")
+            else:
+                print("No solutions found!")
         
         return 0
         
@@ -547,4 +910,4 @@ Examples:
         return 1
 
 if __name__ == "__main__":
-    exit(main())
+    main()
