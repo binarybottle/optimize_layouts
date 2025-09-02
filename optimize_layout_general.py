@@ -53,6 +53,78 @@ from scoring import ScoringArrays, LayoutScorer, ScoreComponents, ScoreCalculato
 from search import single_objective_search, multi_objective_search, get_next_item_jit, validate_constraints_jit
 from validation import run_validation_suite
 
+@jit(nopython=True, fastmath=True)
+def _calculate_partial_objective_value(partial_mapping: np.ndarray, objective_matrix: np.ndarray) -> float:
+    """Calculate current contribution to objective from assigned items."""
+    total_score = 0.0
+    pair_count = 0
+    n_items = len(partial_mapping)
+    
+    # Only count pairs where both items are assigned
+    for i in range(n_items):
+        pos_i = partial_mapping[i]
+        if pos_i >= 0:  # Item i is assigned
+            for j in range(n_items):
+                pos_j = partial_mapping[j]
+                if i != j and pos_j >= 0:  # Item j is also assigned
+                    total_score += objective_matrix[pos_i, pos_j]
+                    pair_count += 1
+    
+    return total_score / max(1, pair_count) if pair_count > 0 else 0.0
+
+def _estimate_max_objective_improvement(unassigned_items: List[int], available_positions: List[int],
+                                    partial_mapping: np.ndarray, objective_matrix: np.ndarray) -> float:
+    """Estimate maximum possible improvement to objective from optimal assignment of unassigned items."""
+    
+    if not unassigned_items or not available_positions:
+        return 0.0
+    
+    max_improvement = 0.0
+    n_items = len(partial_mapping)
+    
+    # Method 1: Pairs between unassigned items (optimistically assume best pairing)
+    if len(unassigned_items) >= 2:
+        max_internal_pairs = 0.0
+        
+        # For each pair of unassigned items, find their best position pair
+        for i in range(len(unassigned_items)):
+            for j in range(i + 1, len(unassigned_items)):
+                item1, item2 = unassigned_items[i], unassigned_items[j]
+                best_pair_score = 0.0
+                
+                # Try all available position pairs
+                for pos1 in available_positions:
+                    for pos2 in available_positions:
+                        if pos1 != pos2:
+                            fwd_score = objective_matrix[pos1, pos2]
+                            bwd_score = objective_matrix[pos2, pos1]
+                            pair_score = fwd_score + bwd_score
+                            best_pair_score = max(best_pair_score, pair_score)
+                
+                max_internal_pairs += best_pair_score
+        
+        max_improvement += max_internal_pairs
+    
+    # Method 2: Pairs between unassigned and assigned items
+    assigned_items = [i for i in range(n_items) if partial_mapping[i] >= 0]
+    
+    for unassigned_item in unassigned_items:
+        for assigned_item in assigned_items:
+            assigned_pos = partial_mapping[assigned_item]
+            best_mixed_score = 0.0
+            
+            for pos in available_positions:
+                fwd_score = objective_matrix[pos, assigned_pos]
+                bwd_score = objective_matrix[assigned_pos, pos]
+                mixed_score = fwd_score + bwd_score
+                best_mixed_score = max(best_mixed_score, mixed_score)
+            
+            max_improvement += best_mixed_score
+    
+    # Normalize by total expected pair count (this is the key adaptation)
+    total_pairs = n_items * (n_items - 1) if n_items > 1 else 1
+    return max_improvement / total_pairs
+
 #-----------------------------------------------------------------------------
 # General MOO Scoring
 #-----------------------------------------------------------------------------
@@ -370,51 +442,48 @@ def goal_programming_search(config: Config, moo_arrays: GeneralMOOArraysWithObje
         return total_deviation, raw_objectives, deviations
     
     def goal_programming_upper_bound(partial_mapping: np.ndarray, used_positions: np.ndarray) -> float:
-        """Calculate upper bound for goal programming (lower deviation bound)."""
+        """Calculate lower bound on total weighted deviation (adapted from complex MOO bounds)."""
         
         # Count assigned items
         assigned_count = np.sum(partial_mapping >= 0)
         
         if assigned_count == n_items:
-            # Complete assignment
+            # Complete assignment - return actual deviation
             deviation, _, _ = calculate_goal_programming_score(partial_mapping)
             return deviation
         
-        # For partial assignment, calculate minimum possible total deviation
-        if assigned_count == 0:
-            return 0.0  # Optimistic: perfect assignment possible
-        
-        # Conservative approach: calculate current partial deviation
-        # and assume remaining assignments contribute optimally (zero deviation)
-        
-        # Fill unassigned positions with dummy values for calculation
-        temp_mapping = partial_mapping.copy()
+        # Find unassigned items and available positions
         unassigned_items = [i for i in range(len(partial_mapping)) if partial_mapping[i] < 0]
         available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
         
-        # Assign remaining items to remaining positions (first available)
-        for i, item_idx in enumerate(unassigned_items):
-            if i < len(available_positions):
-                temp_mapping[item_idx] = available_positions[i]
+        if not unassigned_items:
+            return float('inf')  # Should not happen
         
-        # Calculate objectives for temporary complete mapping
-        try:
-            permutation = [int(temp_mapping[i]) for i in range(len(temp_mapping))]
-            objectives = moo_arrays.get_objectives(permutation)
+        # For each objective, estimate the best possible value achievable
+        min_possible_total_deviation = 0.0
+        
+        for obj_idx, obj_name in enumerate(moo_arrays.objectives):
+            raw_matrix = moo_arrays.raw_objective_matrices[obj_name]
+            target = target_values[obj_idx]
+            weight = deviation_weights[obj_idx]
             
-            # Scale deviation by ratio of assigned items (optimistic bound)
-            deviations = [abs(obj_val - target) for obj_val, target in zip(objectives, target_values)]
-            total_deviation = sum(dev * weight for dev, weight in zip(deviations, deviation_weights))
+            # Calculate current partial contribution to this objective
+            current_obj_value = _calculate_partial_objective_value(partial_mapping, raw_matrix)
             
-            # Scale by assignment ratio for optimistic bound
-            assignment_ratio = assigned_count / n_items
-            estimated_deviation = total_deviation * assignment_ratio
+            # Estimate best possible improvement from unassigned items
+            max_possible_improvement = _estimate_max_objective_improvement(
+                unassigned_items, available_positions, partial_mapping, raw_matrix
+            )
             
-            return estimated_deviation
-        except:
-            # Fallback: return a conservative bound
-            return 0.0
-    
+            # Best achievable objective value
+            best_possible_obj_value = current_obj_value + max_possible_improvement
+            
+            # Minimum possible deviation for this objective
+            min_deviation = abs(best_possible_obj_value - target)
+            min_possible_total_deviation += min_deviation * weight
+        
+        return min_possible_total_deviation
+
     def dfs_goal_programming(mapping: np.ndarray, used: np.ndarray, depth: int):
         """Goal programming specific DFS search."""
         nonlocal nodes_processed, nodes_pruned, solutions, best_deviation
