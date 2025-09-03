@@ -257,12 +257,11 @@ build_optimization_command() {
             cmd="$cmd --brute-force"
         fi
         
-        # Use all allocated CPUs for parallel search (branch-and-bound supports this)
-        cmd="$cmd --processes \$SLURM_CPUS_PER_TASK"
+        cmd="$cmd"
         
     else
         # original system (unchanged)
-        local cmd="python3 optimize_layout.py --config $config_file --moo --processes \$SLURM_CPUS_PER_TASK"
+        local cmd="python3 optimize_layout.py --config $config_file --moo"
     fi
     
     echo "$cmd"
@@ -320,7 +319,7 @@ if find output/layouts -name "$output_pattern" 2>/dev/null | grep -q .; then
     exit 0
 fi
 
-echo "Processing config ${config_id} using ${SCRIPT_MODE} mode with \$SLURM_CPUS_PER_TASK processes..."
+echo "Processing config ${config_id} using ${SCRIPT_MODE} mode..."
 if [[ -n "$BRUTE_FORCE" ]]; then
     echo "WARNING: Using brute force enumeration - this will take much longer!"
 fi

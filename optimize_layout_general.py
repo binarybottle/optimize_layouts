@@ -124,7 +124,7 @@ class GeneralMOOScorer:
                         
                         # Use blended scaling instead of pure multiplication to avoid zeros
                         # This preserves base frequency weighting while applying objective influence
-                        blend_factor = 0.7  # How much to blend vs replace
+                        blend_factor = 0.5  # How much to blend vs replace
                         modified_score = blend_factor * original_score + (1 - blend_factor) * objective_modifier
                         modified_position_pair_scores[(pos1.lower(), pos2.lower())] = modified_score
                         
@@ -700,7 +700,7 @@ Examples:
     # Search limits
     parser.add_argument('--max-solutions', type=int, help='Maximum Pareto solutions')
     parser.add_argument('--time-limit', type=float, help='Time limit in seconds')
-    parser.add_argument('--processes', type=int, help='Number of parallel processes')
+    parser.add_argument('--processes', type=int, default=1, help='Number of parallel processes (default: 1)')
     
     # Utility options
     parser.add_argument('--validate', action='store_true', help='Run validation before optimization')

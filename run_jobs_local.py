@@ -37,7 +37,7 @@ TARGET_CPU_PERCENT = 90     # Ideal CPU usage target
 SCALE_UP_THRESHOLD = 2    # Scale up after 2 successful completions
 SCALE_DOWN_IMMEDIATE = True  # Scale down immediately on overload
 MIN_WORKERS = 1
-MAX_WORKERS = None  # Will be set based on available CPUs
+MAX_WORKERS = 1 #None  # Will be set based on available CPUs
 
 class AdaptiveOptimizer:
     def __init__(self, config_ids, reserved_cpus=1, max_workers_override=None, show_output=False):
@@ -53,8 +53,8 @@ class AdaptiveOptimizer:
         available_cpus = max(1, total_cpus - self.reserved_cpus)
         
         # Adaptive scaling state
-        self.current_workers = min(4, available_cpus)  # Start with up to 4 workers, but respect available CPUs
-        self.max_workers = max_workers_override or available_cpus
+        self.current_workers = 1 #min(4, available_cpus)  # Start with up to 4 workers, but respect available CPUs
+        self.max_workers = 1 #max_workers_override or available_cpus
         self.successful_completions = 0
         self.last_scale_time = time.time()
         self.recent_completion_times = deque(maxlen=10)
@@ -66,7 +66,7 @@ class AdaptiveOptimizer:
         self.error_count = 0
         
         print(f"🚀 Starting adaptive optimizer")
-        print(f"   Workers: {self.current_workers} (will auto-scale up to {self.max_workers})")
+        #print(f"   Workers: {self.current_workers} (will auto-scale up to {self.max_workers})")
         print(f"   Reserved CPUs: {self.reserved_cpus} (out of {total_cpus} total)")
         print(f"   Available CPUs for processing: {available_cpus}")
         print(f"   Configs to process: {len(self.config_ids)}")
@@ -84,69 +84,69 @@ class AdaptiveOptimizer:
             'total_memory_gb': memory.total / (1024**3)
         }
     
-    def should_scale_down(self, resources):
-        """Check if we should reduce parallelism"""
-        if resources['memory_percent'] > MAX_MEMORY_PERCENT:
-            return True, f"Memory high: {resources['memory_percent']:.1f}%"
-        
-        if resources['memory_available_gb'] < MIN_FREE_MEMORY_GB:
-            return True, f"Low free memory: {resources['memory_available_gb']:.1f}GB"
-        
-        if resources['cpu_percent'] > MAX_CPU_PERCENT:
-            return True, f"CPU high: {resources['cpu_percent']:.1f}%"
-        
-        # Scale down if we have too many workers compared to available cores
-        available_cores = max(1, psutil.cpu_count() - self.reserved_cpus)
-        if len(self.active_processes) > available_cores:
-            return True, f"Too many workers for available cores: {len(self.active_processes)} > {available_cores}"
-        
-        return False, None
-    
-    def should_scale_up(self, resources):
-        """Check if we can increase parallelism"""
-        if self.current_workers >= self.max_workers:
-            return False, "At max workers"
-        
-        if resources['memory_percent'] > TARGET_MEMORY_PERCENT:
-            return False, f"Memory usage too high for scaling: {resources['memory_percent']:.1f}%"
-        
-        if resources['cpu_percent'] > TARGET_CPU_PERCENT:
-            return False, f"CPU usage too high for scaling: {resources['cpu_percent']:.1f}%"
-        
-        if resources['memory_available_gb'] < MIN_FREE_MEMORY_GB + 1:
-            return False, f"Not enough free memory for scaling: {resources['memory_available_gb']:.1f}GB"
-        
-        if self.successful_completions < SCALE_UP_THRESHOLD:
-            return False, f"Need {SCALE_UP_THRESHOLD - self.successful_completions} more completions before scaling"
-        
-        # Check if recent completions suggest we can handle more load
-        if len(self.recent_completion_times) >= 3:
-            avg_time = sum(self.recent_completion_times) / len(self.recent_completion_times)
-            if avg_time > 300:  # If taking more than 5 minutes per config, be cautious
-                return False, f"Recent configs taking too long: {avg_time:.1f}s avg"
-        
-        return True, "Resources available"
-    
-    def adjust_workers(self):
-        """Dynamically adjust the number of workers"""
-        resources = self.get_system_resources()
-        
-        # Check if we should scale down (immediate)
-        should_down, down_reason = self.should_scale_down(resources)
-        if should_down and self.current_workers > MIN_WORKERS:
-            old_workers = self.current_workers
-            self.current_workers = max(MIN_WORKERS, self.current_workers - 1)
-            print(f"📉 Scaling DOWN: {old_workers} → {self.current_workers} workers ({down_reason})")
-            self.successful_completions = 0  # Reset counter
-            return
-        
-        # Check if we should scale up (after successful runs)
-        should_up, up_reason = self.should_scale_up(resources)
-        if should_up:
-            old_workers = self.current_workers
-            self.current_workers = min(self.max_workers, self.current_workers + 1)
-            print(f"📈 Scaling UP: {old_workers} → {self.current_workers} workers ({up_reason})")
-            self.successful_completions = 0  # Reset counter
+    #def should_scale_down(self, resources):
+    #    """Check if we should reduce parallelism"""
+    #    if resources['memory_percent'] > MAX_MEMORY_PERCENT:
+    #        return True, f"Memory high: {resources['memory_percent']:.1f}%"
+    #    
+    #    if resources['memory_available_gb'] < MIN_FREE_MEMORY_GB:
+    #        return True, f"Low free memory: {resources['memory_available_gb']:.1f}GB"
+    #    
+    #    if resources['cpu_percent'] > MAX_CPU_PERCENT:
+    #        return True, f"CPU high: {resources['cpu_percent']:.1f}%"
+    #    
+    #    # Scale down if we have too many workers compared to available cores
+    #    available_cores = max(1, psutil.cpu_count() - self.reserved_cpus)
+    #    if len(self.active_processes) > available_cores:
+    #        return True, f"Too many workers for available cores: {len(self.active_processes)} > {available_cores}"
+    #    
+    #    return False, None
+    #
+    #def should_scale_up(self, resources):
+    #    """Check if we can increase parallelism"""
+    #    if self.current_workers >= self.max_workers:
+    #        return False, "At max workers"
+    #    
+    #    if resources['memory_percent'] > TARGET_MEMORY_PERCENT:
+    #        return False, f"Memory usage too high for scaling: {resources['memory_percent']:.1f}%"
+    #    
+    #    if resources['cpu_percent'] > TARGET_CPU_PERCENT:
+    #        return False, f"CPU usage too high for scaling: {resources['cpu_percent']:.1f}%"
+    #    
+    #    if resources['memory_available_gb'] < MIN_FREE_MEMORY_GB + 1:
+    #        return False, f"Not enough free memory for scaling: {resources['memory_available_gb']:.1f}GB"
+    #    
+    #    if self.successful_completions < SCALE_UP_THRESHOLD:
+    #        return False, f"Need {SCALE_UP_THRESHOLD - self.successful_completions} more completions before scaling"
+    #    
+    #    # Check if recent completions suggest we can handle more load
+    #    if len(self.recent_completion_times) >= 3:
+    #        avg_time = sum(self.recent_completion_times) / len(self.recent_completion_times)
+    #        if avg_time > 300:  # If taking more than 5 minutes per config, be cautious
+    #            return False, f"Recent configs taking too long: {avg_time:.1f}s avg"
+    #    
+    #    return True, "Resources available"
+    #
+    #def adjust_workers(self):
+    #    """Dynamically adjust the number of workers"""
+    #    resources = self.get_system_resources()
+    #    
+    #    # Check if we should scale down (immediate)
+    #    should_down, down_reason = self.should_scale_down(resources)
+    #    if should_down and self.current_workers > MIN_WORKERS:
+    #        old_workers = self.current_workers
+    #        self.current_workers = max(MIN_WORKERS, self.current_workers - 1)
+    #        print(f"📉 Scaling DOWN: {old_workers} → {self.current_workers} workers ({down_reason})")
+    #        self.successful_completions = 0  # Reset counter
+    #        return
+    #    
+    #    # Check if we should scale up (after successful runs)
+    #    should_up, up_reason = self.should_scale_up(resources)
+    #    if should_up:
+    #        old_workers = self.current_workers
+    #        self.current_workers = min(self.max_workers, self.current_workers + 1)
+    #        print(f"📈 Scaling UP: {old_workers} → {self.current_workers} workers ({up_reason})")
+    #        self.successful_completions = 0  # Reset counter
     
     def config_already_completed(self, config_id):
         """Check if a config has already been processed"""
@@ -242,9 +242,9 @@ class AdaptiveOptimizer:
                         print(f"🔄 Started config {config_id} (worker {len(self.active_processes)}/{self.current_workers})")
                 
                 # Adjust workers periodically (every 30 seconds)
-                if time.time() - last_adjust_time > 30:
-                    self.adjust_workers()
-                    last_adjust_time = time.time()
+                #if time.time() - last_adjust_time > 30:
+                #    self.adjust_workers()
+                #    last_adjust_time = time.time()
                 
                 # Show status periodically (every 60 seconds)
                 if time.time() - last_status_time > 60:
@@ -278,7 +278,7 @@ class AdaptiveOptimizer:
         available_cpus = total_cpus - self.reserved_cpus
         
         print(f"\n📊 Status Report:")
-        print(f"   Workers: {len(self.active_processes)}/{self.current_workers} active (max: {self.max_workers})")
+        #print(f"   Workers: {len(self.active_processes)}/{self.current_workers} active (max: {self.max_workers})")
         print(f"   CPUs: {available_cpus} available, {self.reserved_cpus} reserved, {total_cpus} total")
         print(f"   Progress: ✅{self.success_count} ⏭️{self.skip_count} ❌{self.error_count}")
         print(f"   Remaining: {len(self.config_ids)} configs")
@@ -296,8 +296,8 @@ def main():
                        help="Starting config ID (default: 1)")
     parser.add_argument("--end-config", type=int, default=TOTAL_CONFIGS,
                        help="Ending config ID (default: highest)")
-    parser.add_argument("--max-workers", type=int, default=None,
-                       help="Maximum workers (default: CPU count - reserve-cpus)")
+    #parser.add_argument("--max-workers", type=int, default=None,
+    #                   help="Maximum workers (default: CPU count - reserve-cpus)")
     parser.add_argument("--reserve-cpus", type=int, default=1,
                        help="Number of CPU cores to keep free (default: 1)")
     parser.add_argument("--show-output", action="store_true",
@@ -320,7 +320,7 @@ def main():
     
     # Set global max workers (if specified)
     global MAX_WORKERS
-    MAX_WORKERS = args.max_workers
+    MAX_WORKERS = 1 #args.max_workers
     
     # Setup
     output_dir = Path(OUTPUT_DIR)
@@ -331,12 +331,12 @@ def main():
     # Show system info
     memory = psutil.virtual_memory()
     available_cpus = max(1, cpu_count - args.reserve_cpus)
-    max_workers = args.max_workers or available_cpus
+    max_workers = 1 #args.max_workers or available_cpus
     
     print(f"System: {cpu_count} CPUs, {memory.total / (1024**3):.1f}GB RAM")
     print(f"Reserved CPUs: {args.reserve_cpus}")
     print(f"Available CPUs: {available_cpus}")
-    print(f"Max workers: {max_workers}")
+    #print(f"Max workers: {max_workers}")
     
     # Determine if we're going ascending or descending and generate config list accordingly
     if args.start_config <= args.end_config:
@@ -370,7 +370,7 @@ def main():
     optimizer = AdaptiveOptimizer(
         config_ids, 
         reserved_cpus=args.reserve_cpus,
-        max_workers_override=args.max_workers,
+        max_workers_override=1, #args.max_workers,
         show_output=args.show_output
     )
     optimizer.run()

@@ -11,7 +11,7 @@ See optimize_layout_general.py for arbitrary number of item-pair objectives.
 
 Usage:
     # Single-objective optimization (default)
-    python optimize_layout.py --config config.yaml --processes 8 --n-solutions 10
+    python optimize_layout.py --config config.yaml --n-solutions 10
 
     # Multi-objective optimization (Pareto front of candidate solutions)
     python optimize_layout.py --config config.yaml --moo
@@ -114,7 +114,7 @@ def run_single_objective_optimization(config: Config, n_solutions: int = 5, verb
     print(f"  Total time: {elapsed_time:.2f}s")
 
 def run_multi_objective_optimization(config: Config, max_solutions: int = None, 
-                                   time_limit: float = None, processes: int=None) -> None:
+                                   time_limit: float = None, processes: int=None) -> None: 
     """
     Multi-objective search with configurable process count.
     
@@ -178,8 +178,7 @@ def run_multi_objective_optimization(config: Config, max_solutions: int = None,
     
     # multi_objective_search
     pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, scorer, max_solutions, time_limit, processes
-    )
+        config, scorer, max_solutions, time_limit, processes=1)
 
     elapsed_time = time.time() - start_time
     
@@ -264,8 +263,8 @@ Examples:
                        help='Number of items to test in analysis (default: auto-detect)')
     parser.add_argument('--sample-size', type=int, default=200,
                        help='Number of solutions to analyze (default: 200)')
-    parser.add_argument('--processes', type=int, default=None,
-                       help='Number of parallel processes for MOO (default: auto-detect CPU count)')
+    parser.add_argument('--processes', type=int, default=1,
+                       help='Number of parallel processes for MOO (default: 1)')
     
     # Validation options
     parser.add_argument('--validate', action='store_true',

@@ -25,7 +25,7 @@ python optimize_layout.py --moo --max-solutions 50 --detailed --validate --verbo
 python optimize_layout_general.py --config config.yaml \
   --objectives comfort_score,time_total,accuracy_score \
   --keypair-table input/keypair_scores_detailed.csv \
-  --processes 16 --max-solutions 200 --time-limit 3600
+  --max-solutions 200 --time-limit 3600
 
 # Analyze results
 python analyze_results.py
