@@ -15,17 +15,20 @@ paths:
 
 #-----------------------------------------------------------------------
 # Optimization settings
+#
+# Example keyboard optimization problem:
+#   12 of 24 items:     etaoin srhldc umfpgw ybvkxj
+#   12 of 24 positions: FDESVR JKILMU WACQZX O;,P/.
 #-----------------------------------------------------------------------
-# Example for 12 of 24 items: etaoin srhldc umfpgw ybvkxj
-# arranged in 12 of 24 positions: FDESVR JKILMU WACQZ XO;,P/.
+# _to_assign:    Items to arrange in available positions
+# _assigned:     Items already assigned to positions
+# _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
+#                and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_assigned:       ""      # Items already assigned to positions
-  positions_assigned:   ""      # Positions that are already filled 
-  items_to_assign:      "etaoinsrhl" # items to arrange in positions
-  positions_to_assign:  "FDESVRJKIL" # available positions
-
-  # Subset of items_to_assign to arrange within positions_to_constrain
-  # and subset of positions_to_assign to constrain items_to_constrain
+  items_to_assign:      "etaoinsrhl"
+  positions_to_assign:  "FDESVRJKIL"
+  items_assigned:       ""   
+  positions_assigned:   ""  
   items_to_constrain:      ""   
   positions_to_constrain:  ""  
 
