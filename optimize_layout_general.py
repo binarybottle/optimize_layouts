@@ -69,10 +69,38 @@ from validation import run_validation_suite
 #-----------------------------------------------------------------------------
 # General MOO Scoring Classes
 #-----------------------------------------------------------------------------
+class TransformedScorer:
+    """Standalone class for transformed scoring to ensure proper functionality."""
+    
+    def __init__(self, base_scorer, weight, maximize_flag):
+        self.base_scorer = base_scorer
+        self.weight = weight
+        self.maximize = maximize_flag
+        
+    def score_layout(self, mapping, return_components=False):
+        score = self.base_scorer.score_layout(mapping, return_components)
+        if return_components:
+            transformed_score = score[0] * self.weight
+            if not self.maximize:
+                transformed_score *= -1.0
+            return (transformed_score,) + score[1:]
+        else:
+            transformed_score = score * self.weight
+            if not self.maximize:
+                transformed_score *= -1.0
+            return transformed_score
+    
+    def get_components(self, mapping):
+        return self.base_scorer.get_components(mapping)
+        
+    def clear_cache(self):
+        return self.base_scorer.clear_cache()
+
+
 class GeneralMOOScorer:
     """
-    Multi-objective scorer that uses existing scoring infrastructure with 
-    objective-specific modifications.
+    Multi-objective scorer optimized for single-process execution.
+    Pre-creates all objective scorers for efficiency and reliability.
     """
     
     def __init__(self, config: Config, objectives: List[str], keypair_table_path: str,
@@ -100,36 +128,33 @@ class GeneralMOOScorer:
         if missing:
             raise ValueError(f"Missing objectives in keypair table: {missing}")
         
-        # Create objective-specific scorers
+        # Pre-create all objective-specific scorers
         self.objective_scorers = {}
         total_memory = 0
-        
+
         for i, obj in enumerate(objectives):
             print(f"  [{i+1}/{len(objectives)}] Computing {obj}...")
             
             # Create modified position pair scores for this objective
             modified_position_pair_scores = norm_position_pair_scores.copy()
-            
+
             # Apply objective-specific modifications from keypair table
             objective_values = []
             for _, row in keypair_df.iterrows():
-                key_pair = str(row['key_pair'])
+                key_pair = str(row['key_pair']).strip("'\"")
                 if len(key_pair) == 2 and not pd.isna(row[obj]):
                     pos1, pos2 = key_pair[0].upper(), key_pair[1].upper()
                     
-                    # Only modify if both positions are in our optimization set
                     if pos1 in positions and pos2 in positions:
                         original_score = norm_position_pair_scores.get((pos1.lower(), pos2.lower()), 1.0)
                         objective_modifier = float(row[obj])
                         
-                        # Use blended scaling instead of pure multiplication to avoid zeros
-                        # This preserves base frequency weighting while applying objective influence
-                        blend_factor = 0.5  # How much to blend vs replace
+                        blend_factor = 0.5
                         modified_score = blend_factor * original_score + (1 - blend_factor) * objective_modifier
                         modified_position_pair_scores[(pos1.lower(), pos2.lower())] = modified_score
                         
                         objective_values.append(objective_modifier)
-            
+
             if objective_values:
                 print(f"      Range: [{np.min(objective_values):.6f}, {np.max(objective_values):.6f}]")
             
@@ -145,51 +170,26 @@ class GeneralMOOScorer:
                 positions_assigned=list(config.optimization.positions_assigned) if config.optimization.positions_assigned else None
             )
             
-            # Create scorer that uses item-pair scoring (which includes proper weighting)
+            # Create base scorer
             scorer = LayoutScorer(arrays, mode='pair_only')
             
-            # Apply weight and direction transformations
+            # Apply weight and direction transformations if needed
             if weights[i] != 1.0 or not maximize[i]:
-                original_scorer = scorer
-                class TransformedScorer:
-                    def __init__(self, base_scorer, weight, maximize_flag):
-                        self.base_scorer = base_scorer
-                        self.weight = weight
-                        self.maximize = maximize_flag
-                        
-                    def score_layout(self, mapping, return_components=False):
-                        score = self.base_scorer.score_layout(mapping, return_components)
-                        if return_components:
-                            # Handle tuple return for components
-                            transformed_score = score[0] * self.weight
-                            if not self.maximize:
-                                transformed_score *= -1.0
-                            return (transformed_score,) + score[1:]
-                        else:
-                            transformed_score = score * self.weight
-                            if not self.maximize:
-                                transformed_score *= -1.0
-                            return transformed_score
-                    
-                    def get_components(self, mapping):
-                        return self.base_scorer.get_components(mapping)
-                        
-                    def clear_cache(self):
-                        return self.base_scorer.clear_cache()
-                
-                scorer = TransformedScorer(original_scorer, weights[i], maximize[i])
-            
+                scorer = TransformedScorer(scorer, weights[i], maximize[i])
+
             self.objective_scorers[obj] = scorer
             total_memory += arrays.item_scores.nbytes + arrays.item_pair_matrix.nbytes + arrays.position_matrix.nbytes
-        
+                
         print(f"Pre-computation complete: {total_memory / (1024*1024):.1f}MB total")
         
-        # Store the first arrays object for compatibility with existing MOO search
-        # The MOO search infrastructure expects a .arrays attribute
+        # Store the first arrays object for compatibility with existing MOO search infrastructure
         self.arrays = list(self.objective_scorers.values())[0].arrays if self.objective_scorers else None
     
     def score_layout(self, mapping: np.ndarray, return_components: bool = False):
-        """Score layout using all objectives."""
+        """
+        Score layout using all objectives.
+        Returns list of scores, one for each objective.
+        """
         scores = []
         
         for obj in self.objectives:
@@ -204,7 +204,9 @@ class GeneralMOOScorer:
             return scores
     
     def get_raw_objectives(self, permutation: List[int]) -> List[float]:
-        """Get raw objective values for goal programming."""
+        """
+        Get raw objective values (without weight/direction transformations) for goal programming.
+        """
         mapping_array = np.array(permutation, dtype=np.int32)
         
         if len(permutation) != len(self.items):
@@ -215,14 +217,14 @@ class GeneralMOOScorer:
         
         raw_objectives = []
         for obj in self.objectives:
-            # Use unweighted, undirected scorer for raw values
-            base_scorer = self.objective_scorers[obj]
-            if hasattr(base_scorer, 'base_scorer'):
-                # This is a transformed scorer, get the base
-                score = base_scorer.base_scorer.score_layout(mapping_array)
+            # Get raw score (before weight/direction transformations)
+            scorer = self.objective_scorers[obj]
+            if hasattr(scorer, 'base_scorer'):
+                # This is a transformed scorer, get the base score
+                score = scorer.base_scorer.score_layout(mapping_array)
             else:
                 # This is already the base scorer
-                score = base_scorer.score_layout(mapping_array)
+                score = scorer.score_layout(mapping_array)
             raw_objectives.append(score)
         
         return raw_objectives
@@ -230,6 +232,11 @@ class GeneralMOOScorer:
     def get_objective_names(self) -> List[str]:
         """Get the list of objective names."""
         return self.objectives.copy()
+    
+    def clear_cache(self):
+        """Clear all scorer caches."""
+        for scorer in self.objective_scorers.values():
+            scorer.clear_cache()
 
 #-----------------------------------------------------------------------------
 # Goal Programming Implementation
@@ -324,7 +331,7 @@ def goal_programming_search(config: Config, moo_scorer: GeneralMOOScorer,
         
         nodes_processed += 1
         
-        if nodes_processed % 10000 == 0 or nodes_processed <= 100:
+        if nodes_processed % 100000 == 0 or nodes_processed <= 20:
             print(f"  Nodes: {nodes_processed:,}, Depth: {depth}, Solutions: {solutions_found}, Best: {best_deviation:.6f}")
         
         if depth == n_items:
@@ -458,23 +465,19 @@ def save_goal_programming_results(results: List[Dict], config: Config, objective
 #-----------------------------------------------------------------------------
 def run_general_moo(config: Config, keypair_table: str, objectives: List[str],
                    weights: List[float], maximize: List[bool], **kwargs) -> List[Dict]:
-    """Run general MOO using existing search infrastructure."""
-    
-    print("Using general MOO with existing branch-and-bound search infrastructure")
+    print("Using general MOO with single-process branch-and-bound search")
+    print("Note: General MOO is optimized for single-process execution")
     
     items = list(config.optimization.items_to_assign)
     positions = list(config.optimization.positions_to_assign)
     
     scorer = GeneralMOOScorer(config, objectives, keypair_table, items, positions, weights, maximize)
     
-    print(f"\nRunning multi-objective search with {len(objectives)} objectives...")
-    
     pareto_front, nodes_processed, nodes_pruned = multi_objective_search(
-        config, 
-        scorer, 
+        config, scorer, 
         max_solutions=kwargs.get('max_solutions'),
         time_limit=kwargs.get('time_limit'),
-        processes=kwargs.get('processes')
+        processes=1  # Force single-process
     )
     
     if pareto_front and len(objectives) > 0:
