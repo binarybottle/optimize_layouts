@@ -117,34 +117,6 @@ The system is built with a modular, maintainable architecture:
     --brute-force --max-solutions 100
   ```
 
-  ### Goal Programming
-    - Algorithm: Single-objective minimization of total weighted deviations
-    - Goal: Minimize distance from target values across multiple objectives
-    - Input: Target values and deviation weights for each objective  
-    - Output: Solutions ranked by total weighted deviation from targets
-    - Best for: When you have specific target values you want to achieve
-
-  Goal programming converts a multi-objective problem into a single-objective problem by:
-    1. Defining target values for each objective
-    2. Assigning weights to deviations from these targets  
-    3. Minimizing the total weighted deviation: Σ(weight_i × |objective_i - target_i|)
-
-  ```bash
-  # Goal programming (minimize deviations from targets)
-  python optimize_layout_general.py --config config.yaml \
-      --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
-      --keypair-table input/keypair_scores_detailed.csv \
-      --goal-programming
-
-  # Goal programming with custom targets and deviation weights
-  python optimize_layout_general.py --config config.yaml \
-      --objectives engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized \
-      --keypair-table input/keypair_scores_detailed.csv \
-      --goal-programming \
-      --targets "1.0,1.0,1.0,1.0,1.0,1.0" \
-      --deviation-weights "2.0,1.0,1.0,2.0,1.0,1.0"
-  ```
-
 ## Inputs
 The system accepts normalized score files in CSV format.
 The code will accept any set of letters (or special characters) 
