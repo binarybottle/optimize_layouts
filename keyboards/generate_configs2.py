@@ -8,17 +8,14 @@ configuration files for the next round of optimization with specific
 letter-to-key constraints. If --remove-positions is specified, it will remove 
 positions from the global Pareto set, and remove redundant layouts.
 
-This is Step 2 in the process, but now using globally optimal solutions
-instead of processing thousands of individual result files.
+This is Step 2 in a process to optimally arrange the 24 most frequent letters 
+in the 24 keys of the home block of a keyboard. 
 
 Usage:
-    # Use all global Pareto solutions
-    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;OW"
+    # Use all global Pareto solutions, after removing items from specified positions
+    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
     
-    # Use top N solutions from global Pareto set
-    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 20 --remove-positions "A;"
-    
-    # Use solutions with specific ranking criteria
+    # Use "top" N solutions from global Pareto set with specific ranking criteria
     python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by global_rank
 
 See **README_keyboards.md** for a full description.
@@ -389,14 +386,11 @@ def parse_arguments():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Use all global Pareto solutions
+  # Use all global Pareto solutions, after removing items from specified positions
   python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
-  
-  # Use top 20 solutions by global rank
-  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 20 --remove-positions "A;"
-  
-  # Sort by item score and take top 50
-  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by item_score
+    
+  # Use "top" N solutions from global Pareto set with specific ranking criteria
+  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by global_rank
         """
     )
     
