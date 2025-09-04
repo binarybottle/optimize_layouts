@@ -94,6 +94,10 @@ class MOOConfig:
     default_max_solutions: Union[int, str] = 100
     default_time_limit: Union[float, str] = 3600.0
     
+    # Default file paths for validation
+    default_position_pair_score_table: str = "input/keypair_engram7_scores.csv"
+    default_item_pair_score_table: str = "input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv"
+    
     # Progress and output settings
     show_progress_bar: bool = True
     save_detailed_results: bool = True
@@ -317,8 +321,8 @@ def create_default_config(output_path: str = "config.yaml") -> None:
     """
     default_config = {
         'paths': {
-            'item_pair_scores_file': 'input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv',
-            'position_pair_scores_file': 'input/keypair_engram7_scores.csv',
+            'item_pair_score_table': 'input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv',
+            'position_pair_score_table': 'input/keypair_engram7_scores.csv',
             'layout_results_folder': 'output/layouts'
         },
         'optimization': {
@@ -330,6 +334,16 @@ def create_default_config(output_path: str = "config.yaml") -> None:
             'positions_to_constrain': ''  
         },
         'moo': {
+            'default_objectives': [
+                'engram7_load',
+                'engram7_strength',
+                'engram7_position',
+                'engram7_vspan',
+                'engram7_hspan',
+                'engram7_sequence'
+            ],
+            'default_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            'default_maximize': [True, True, True, True, True, True],
             'default_max_solutions': 100,
             'default_time_limit': 3600,
             'default_position_pair_score_table': 'input/keypair_engram7_scores.csv',

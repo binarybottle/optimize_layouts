@@ -238,8 +238,16 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
         total_perms = factorial(n_positions) // factorial(n_positions - n_items) if n_positions >= n_items else 0
         estimated_nodes = total_perms * 2  # Rough estimate including internal nodes
     
-    print(f"  Estimated search nodes: {estimated_nodes:,}")
-    
+    if verbose:
+        print("Starting Multi-Objective Pareto Search...")
+        print(f"  Items to assign: {items_list}")
+        print(f"  Available positions: {positions_list}")
+        print(f"  Search limits: {max_solutions or 'unlimited'} solutions, {time_limit or 'unlimited'} seconds")
+        print(f"  Estimated search nodes: {estimated_nodes:,}")
+    else:
+        print(f"Searching {n_items} items in {n_positions} positions...")
+        print(f"  Estimated search nodes: {estimated_nodes:,}")
+
     # Initialize search data structures
     pareto_front = []
     stats = SearchStats()
