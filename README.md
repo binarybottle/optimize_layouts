@@ -44,37 +44,51 @@ This framework discovers Pareto-optimal layouts by optimizing multiple objective
 
 ## Architecture
 optimize_layouts/
-├── README.md                          # This file
+├── README.md                            # This file
 │ 
-├── # Core MOO System
-├── optimize_moo.py                    # Main entry point for optimization
-├── moo_scoring.py                     # Frequency-weighted MOO scoring
-├── moo_search.py                      # Pareto-optimal search algorithms
-├── config.py                          # Configuration management
+│ # Core MOO system
+├── optimize_moo.py                      # Main entry point for optimization
+├── moo_scoring.py                       # Frequency-weighted MOO scoring
+├── moo_search.py                        # Pareto-optimal search algorithms
+├── config.py                            # Configuration management
 │
-├── # Analysis and Utilities
-├── normalize_input.py                 # Input data normalization
-├── analyze_input.py                   # Compare raw vs normalized input data
-├── analyze_results.py                 # Analyze MOO results with visualizations
-├── select_global_moo_solutions.py     # Global Pareto front selection
-├── analyze_global_moo_solutions.py    # Global Pareto analysis across files
-├── display_layout.py                  # Rich keyboard visualization
+│ # Configuration
+├── config.yaml                          # Main configuration file
 │
-├── # Job Running Scripts
-├── run_jobs_local.py                  # Local parallel job execution
-├── run_jobs_slurm.sh                  # SLURM cluster job submission
-│
-├── # Configuration
-├── config.yaml                        # Main configuration file
-│
-├── # Data Directories
+│ # Inputs
 ├── input/
-│   ├── keypair_engram7_scores.csv     # Position-pair scoring table (required)
+│   ├── keypair_engram7_scores.csv       # Position-pair scoring table (required)
 │   └── frequency/
 │       └── normalized-english-letter-pair-counts-google-ngrams.csv
 │
-└── output/                            # Generated results
-    └── layouts/                       # MOO optimization results
+│ # Outputs
+├── output/                              # Generated results
+│   └── layouts/                         # MOO optimization results
+│   └── layouts/                         # MOO optimization results
+│
+│ # Job-running scripts
+├── run_jobs.py                          # Local job execution
+├── run_jobs_slurm.sh                    # SLURM cluster job submission
+│
+│ # Analysis and utilities
+├── utilities/
+│   ├── normalize.py                     # Normalize data
+│   ├── analyze_raw_vs_norm.py           # Compare raw vs normalized data
+│   ├── analyze_frequencies.py           # Analyze item-pair frequencies
+│   ├── analyze_results.py               # Analyze MOO results with visualizations
+│   ├── select_global_moo_solutions.py   # Global Pareto front selection
+│   ├── analyze_global_moo_solutions.py  # Global Pareto analysis across files
+│   ├── generate_command.py              # Generate command to score and visualize layouts
+│   ├── calc_positions_items.py          # Calculate permutations
+│   └── count_files.py                   # Count files in a folder (with find command)
+│
+│   # Keyboard study
+└── keyboards/
+    ├── README_keyboards.md              # README for keyboard layout optimization study
+    ├── generate_configs1.py             # Generate config files for parallel optimization phase 1
+    ├── generate_configs1.py             # Generate config files for parallel optimization phase 2
+    └── display_layout.py                # Keyboard visualization
+
 
 ## Inputs
 The system accepts normalized score files in CSV format.
