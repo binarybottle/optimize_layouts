@@ -37,13 +37,13 @@ For the following, we:
   Use multi-objective optimization (MOO, with Engram-7 scoring objectives) 
   to find a Pareto front of equally viable, 14-letter/key layout candidates.
     1. To parallelize the branch-and-bound, depth-first search:
-       constrain the most frequent letter to the 7 top keys on the right side, 
-       then constrain the next 3 letters to the remaining 13 of 14 keys on both sides.
+       constrain the most frequent letter to the right side of the keyboard while 
+       constraining the next 3 letters to the remaining 13 of the top 14 keys on both sides.
        Create a configuration file for each of the (12,012) possible arrangements of 4 in 14. 
        ``generate_configs1.py``
     2. For each of the 12,012 configuration files, use MOO to optimally arrange 10 letters 
-       in the 10 available of 14 keys. The result is 12,012 Pareto fronts, each with 50-150 solutions.
-       ``run_jobs_local.py``
+       in the 10 available of 14 keys. The result is 12,012 Pareto fronts, each with many solutions.
+       ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 14-letter/key layouts.
        ``select_global_moo_solutions.py``
 2. Optimally arrange the remaining letters.
@@ -51,7 +51,7 @@ For the following, we:
        ``generate_configs2.py``
     2. For each configuration file, optimally arrange the 10 (out of 24) 
        remaining letters in the 10 remaining keys, again using MOO.
-       ``run_jobs_local.py``
+       ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
        ``select_global_moo_solutions.py``
 3. Select the final layout: ``analyze_global_moo_solutions.py``
@@ -106,7 +106,7 @@ For the following, we:
   Command for optimizing layouts, with constraints specified per configuration file:
 
   ```bash
-    bash run_jobs_local.sh
+    bash run_jobs.sh
   ```
 
   This optimally arranges 10 letters in 10 available keys 
@@ -134,7 +134,7 @@ For the following, we:
 
   Rerun the command in 1.2 above (after renaming the output folders): 
   ```bash
-  bash run_jobs_local.sh
+  bash run_jobs.sh
   ```
 
   ```
