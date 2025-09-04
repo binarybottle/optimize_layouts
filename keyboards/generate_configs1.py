@@ -27,37 +27,35 @@ import itertools
 OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
 
-# Items in configurations (16 letters to be assigned to keys)
-# Example with 24 items/positions: 
-#    etaoinsrhldcumfpgwybvkxj FDESVRWACQZX JKILMUO;,P/.
-# Optimize arrangements of 16 items by running fixed items in parallel:  
-# 11 items:         79,833,600 permutations (with 5 fixed items): 95,040 files
-# 12 items:        479,001,600 permutations (with 4 fixed items): 11,880 files
-# 13 items:      6,227,020,800 permutations (with 3 fixed items)
-# 14 items:     87,178,291,200 permutations (with 2 fixed items)
-# 16 items: 20,922,789,888,000 permutations
-nfixed_items = 5  # Number of fixed items in the first round (4 or 5)
-top_16_letters = "etaoinsrhldcumfpg" # 16 most frequent letters in English
-items_assigned  = top_16_letters[:nfixed_items]   # First letters to assign
-items_to_assign = top_16_letters[nfixed_items:16] # Remaining of 16 letters to assign
-n_assign_first_round = 1
+# Example with 14 letters to be arranged in 14 keys
+"""
+Number of permutations per config file, with some of the 14 items fixed per file: 
+    14 items (0 fixed):  87,178,291,200 permutations
+    13 items (1 fixed):   6,227,020,800 permutations
+    12 items (2 fixed):     479,001,600 permutations
+    11 items (3 fixed):      39,916,800 permutations
+    10 items (4 fixed):       3,628,800 permutations
+Number of permutations for 3 fixed items (after constraining the top item to one side):
+    3 fixed in 13 positions:      1,716 permutations
+Number of configuration files:
+    1,716 3-fixed-in-13 permutations x 7 1-fixed-in-7 permutations = 12,012 configuration files
+"""
+
+top_items = "etaoinsrhldcum"  # Most frequent letters (in English) for first configs
+top_positions = ["F","J","D","K","E","I","S","L","V","M","R","U","A",";"]
+ntop_items = len(top_items)
+if len(top_positions) < ntop_items:
+    raise ValueError("Not enough positions defined for the number of letters.")
+positions_for_item_1 = ["J","K","I","L","M","U",";"] # Positions for first item
+
+nfixed_items = 4  # Number of fixed items
+items_assigned  = top_items[:nfixed_items]           # First letters to assign
+items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
-# Position constraints for items_assigned
-top2positions  = ["F","D"]
-top12positions = ["F","D","E","S","V","R",
-                  "J","K","I","L","M","U"]
-top14positions = ["F","D","E","S","V","R","W",
-                  "J","K","I","L","M","U","O"]
-top16positions = ["F","D","E","S","V","R","W","A",
-                  "J","K","I","L","M","U","O",";"]
-positions_for_item_1 = top12positions 
-positions_for_items_2thruN = top12positions 
-all_positions_to_assign_later = top16positions
-
 # Keys to assign by the optimization process
-all_N_keys = "".join(all_positions_to_assign_later)
+all_N_keys = "".join(top_positions)
 
 # Base configuration from the original config file
 with open(CONFIG_FILE, 'r') as f:
@@ -71,17 +69,17 @@ def generate_constraint_sets():
     
     # Loop through all possible position combinations
     for pos1 in positions_for_item_1:
-        remaining_positions = [pos for pos in positions_for_items_2thruN if pos not in [pos1]]
+        remaining_positions = [pos for pos in top_positions if pos not in [pos1]]
 
-        # Generate all combinations of n_assigned positions
-        for comboN in itertools.combinations(remaining_positions, n_assigned - n_assign_first_round):
+        # Generate all combinations of n_assigned positions (1 indicates fixed item1)
+        for comboN in itertools.combinations(remaining_positions, n_assigned - 1):
 
             # Generate all permutations of these combinations
             for permN in itertools.permutations(comboN):
                 if nfixed_items == 4:
                     pos2, pos3, pos4 = permN
-                elif nfixed_items == 5:
-                    pos2, pos3, pos4, pos5 = permN
+                else:
+                    raise(ValueError("nfixed_items must be 4 in this script, unless modified."))
                 
                 # Create final position assignments
                 positions = {items_assigned[0]: pos1,
@@ -89,8 +87,6 @@ def generate_constraint_sets():
                              items_assigned[2]: pos3,
                              items_assigned[3]: pos4
                              }
-                if nfixed_items == 5:
-                    positions[items_assigned[4]] = pos5
 
                 # Create the positions_assigned string (must match the order of items_assigned)
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])
