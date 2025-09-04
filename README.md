@@ -8,38 +8,38 @@ A streamlined framework for finding Pareto-optimal layouts using frequency-weigh
 
 This framework discovers Pareto-optimal layouts by optimizing multiple objectives simultaneously using English bigram frequency weighting. It combines direct keypair score lookup with multi-objective search to find layouts that represent the best trade-offs across an arbitrary number of competing criteria.
 
-## Basic Multi-Objective Optimization
+## Multi-Objective Optimization (MOO)
   ```bash
     # Basic MOO with default settings in config.yaml
-    python optimize_moo.py --config config.yaml \\
+    python optimize_moo.py --config config.yaml
 
-    # Basic MOO with six of the Engram-7 objectives
-    python optimize_moo.py --config config.yaml \\
-        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence \\
+    # MOO with specific objectives (overrides config defaults)
+    python optimize_moo.py --config config.yaml \
+        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
 
-    # With custom settings
-    python optimize_moo.py --config config.yaml \\
-        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence \\
-        --keypair-table input/keypair_scores_detailed.csv \\
-        --frequency-file input/custom_frequencies.csv \\
-        --weights 1.0,2.0,0.5,0.5,0.5,0.5 --maximize true,true,false,false,false,false
+    # MOO with custom weights and directions
+    python optimize_moo.py --config config.yaml \
+        --objectives engram7_load,engram7_strength,engram7_position \
+        --weights 1.0,2.0,0.5 --maximize true,true,false \
         --max-solutions 50 --time-limit 1800
 
     # Validation run
-    python optimize_moo.py --config config.yaml \\
-        --validate --dry-run
+    python optimize_moo.py --config config.yaml --validate --dry-run
   ```
 
-## Optional visualization for keyboard layouts
+## Analysis and (keyboard layout) visualization
   ```bash
+    # Analyze optimization results
+    python analyze_results.py --results-dir output/layouts
+
+    # Compare input data (raw vs normalized)
+    python analyze_input.py --config config.yaml
+
     # Visualize keyboard layout as ASCII
     python display_layout.py --letters "etaoinsrhl" --positions "FDESVRJKIL"
 
     # Generate rich HTML keyboard
     python display_layout.py --letters "etaoinsrhl" --positions "FDESVRJKIL" --html
-
-    # Show empty key positions
-    python display_layout.py --letters "etao" --positions "FDES" --show-empty
   ```
 
 ## Architecture
@@ -52,21 +52,29 @@ optimize_layouts/
 ├── moo_search.py                      # Pareto-optimal search algorithms
 ├── config.py                          # Configuration management
 │
-├── # Optional Utilities
-├── display_layout.py                  # Rich keyboard visualization
+├── # Analysis and Utilities
 ├── normalize_input.py                 # Input data normalization
+├── analyze_input.py                   # Compare raw vs normalized input data
+├── analyze_results.py                 # Analyze MOO results with visualizations
+├── select_global_moo_solutions.py     # Global Pareto front selection
+├── analyze_global_moo_solutions.py    # Global Pareto analysis across files
+├── display_layout.py                  # Rich keyboard visualization
+│
+├── # Job Running Scripts
+├── run_jobs_local.py                  # Local parallel job execution
+├── run_jobs_slurm.sh                  # SLURM cluster job submission
 │
 ├── # Configuration
 ├── config.yaml                        # Main configuration file
 │
 ├── # Data Directories
-├── tables/
-│   ├── keypair_scores_detailed.csv    # Unified scoring table (required)
-│   └── english-letter-pair-frequencies-google-ngrams.csv
+├── input/
+│   ├── keypair_engram7_scores.csv     # Position-pair scoring table (required)
+│   └── frequency/
+│       └── normalized-english-letter-pair-counts-google-ngrams.csv
 │
 └── output/                            # Generated results
-    └── layouts/                       # MOO optimization results  
-
+    └── layouts/                       # MOO optimization results
 
 ## Inputs
 The system accepts normalized score files in CSV format.
@@ -88,31 +96,34 @@ and each position-pair is represented by two position characters.
     ```
   Position-pair (normalized multi-objective) scores file:       
     ```csv
-      key_pair,comfort_score,time_total,accuracy_score,engram8_columns,engram8_curl
-      qw,0.85,0.23,0.91,0.78,0.65
-      we,0.72,0.31,0.88,0.82,0.71
-      er,0.68,0.28,0.85,0.75,0.69
+      position_pair,engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
+      FD,0.85,0.72,0.91,0.78,0.65,0.88
+      DE,0.72,0.68,0.88,0.82,0.71,0.85
+      ES,0.68,0.71,0.85,0.75,0.69,0.82
     ```
 
-## Branch-and-bound optimization
-  - Calculates exact scores for placed items
-  - Uses provable upper bounds for unplaced items
-  - Prunes branches that cannot exceed best known solution
-  - Depth-first search maintains optimality & reduces search space
-  - Progress tracking and statistics
-  - Validation of input configurations
-  - Optional constraints for a subset of items
+## Multi-objective search algorithm
+  - Pareto-optimal search finds non-dominated solutions across multiple objectives
+  - Branch-and-bound optimization with exact score calculation and pruning
+  - Frequency-weighted scoring using English bigram frequencies
+  - Constraint handling for partial assignments and position restrictions
+  - Progress tracking with statistics and time limits
 
 ## Output
-  **Console Output**
+  **Console output**
   - Configuration summary and search space analysis
-  - Top item-to-position solutions
-  - Detailed score breakdowns (with --verbose)
-  - Performance metrics and timing
+  - Pareto front analysis with objective ranges
+  - Top solutions with detailed score breakdowns
+  - Performance metrics and timing statistics
   - Optional ASCII art visualization of keyboard layouts
 
-  **CSV Results**
-  - MOO: moo_results_config_YYYYMMDD_HHMMSS.csv
+  **CSV results**
+  - Complete Pareto front with all objectives: moo_results_config_YYYYMMDD_HHMMSS.csv
+
+  **Analysis outputs**
+  - Objective correlation plots and scatter visualizations
+  - Input data distribution comparisons
+  - Global Pareto front analysis across multiple runs
 
 ## Running many configurations
 You can generate configuration files
