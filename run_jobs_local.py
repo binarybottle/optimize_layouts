@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Automatically find optimal number of parallel processes based on local system resources
+Run sequential jobs for (moo general) layout optimization using configuration files.
 
 Usage:
 ``python3 run_jobs_local.py --start-config 1 --end-config 1000``    # ascending
@@ -24,8 +24,10 @@ import argparse
 CONFIG_PREFIX = "output/configs1/config_"
 CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
-TOTAL_CONFIGS = 95040
-SCRIPT_PATH = "optimize_layout.py"
+TOTAL_CONFIGS = 1000
+SCRIPT_PATH = "optimize_layout_general.py"
+OBJECTIVES = "engram7_load_normalized,engram7_strength_normalized,engram7_position_normalized,engram7_vspan_normalized,engram7_hspan_normalized,engram7_sequence_normalized"
+KEYPAIR_TABLE = "input/keypair_scores_detailed.csv"
 
 # Adaptive scaling parameters
 MAX_MEMORY_PERCENT = 90  # Scale down if memory exceeds this
@@ -165,7 +167,8 @@ class AdaptiveOptimizer:
         
         try:
             process = subprocess.Popen(
-                [sys.executable, SCRIPT_PATH, "--config", config_file, "--moo"],
+                [sys.executable, SCRIPT_PATH, "--config", config_file, "--moo", 
+                 "--objectives", OBJECTIVES, "--keypair-table", KEYPAIR_TABLE],
                 stdout=subprocess.PIPE if not self.show_output else None,
                 stderr=subprocess.PIPE if not self.show_output else None,
                 text=True
