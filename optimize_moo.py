@@ -40,8 +40,6 @@ Usage Examples:
 """
 
 import argparse
-from email import parser
-from logging import config
 import time
 import sys
 import pandas as pd

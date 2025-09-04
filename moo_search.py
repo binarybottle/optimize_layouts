@@ -184,15 +184,6 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
     n_items = len(items_list)
     n_positions = len(positions_list)
     
-    if verbose:
-        print("Starting Multi-Objective Pareto Search...")
-        print(f"  Items to assign: {items_list}")
-        print(f"  Available positions: {positions_list}")
-        print(f"  Search limits: {max_solutions or 'unlimited'} solutions, {time_limit or 'unlimited'} seconds")
-        print(f"  Estimated search nodes: {estimated_nodes:,}")
-    else:
-        print(f"Searching {n_items} items in {n_positions} positions...")
-            
     # Set up constraint arrays
     constrained_items = np.array([
         i for i, item in enumerate(items_list) 
