@@ -1,34 +1,48 @@
-# optimize_layouts/config.yaml
 # Configuration file for item-to-position layout optimization.
 
 #-----------------------------------------------------------------------
-# Paths (raw input files can be anywhere)
+# Paths
 #-----------------------------------------------------------------------
 paths:
-  input:
-    raw_item_pair_scores_file:     "input/frequency/english-letter-pair-counts-google-ngrams.csv"
-    raw_position_pair_scores_file: "input/comfort/keypair_engram7_scores.csv"
-    raw_item_scores_file:          "input/dummy-item-scores.csv"
-    raw_position_scores_file:      "input/dummy-position-scores.csv"
-  output:
-    layout_results_folder:         "output/layouts"
+  position_pair_score_table: "input/keypair_engram7_scores.csv"
+  item_pair_score_table:     "input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv"
+  layout_results_folder:     "output/layouts"
+
+#-----------------------------------------------------------------------
+# MOO (Multi-Objective Optimization) settings
+#-----------------------------------------------------------------------
+moo:
+  default_objectives: 
+    - "engram7_load"
+    - "engram7_strength"
+    - "engram7_position"
+    # "engram7_stretch"
+    - "engram7_vspan"
+    - "engram7_hspan"
+    - "engram7_sequence"
+  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true, true, true]
+  default_max_solutions: 10000
+  default_time_limit: 100000
+  show_progress_bar: true
+  save_detailed_results: true
 
 #-----------------------------------------------------------------------
 # Optimization settings
 #
 # Example keyboard optimization problem:
-#   Items (letters by frequency):    etaoin srhldc umfpgw ybvkxj
-#   Positions (keys by preference):  FDESVR JKILMU WOA;C, QPZ/X.
+#   Items (letters by frequency):  etaoin srhldc umfpgw ybvkxj
+#   Positions (keys by comfort):   FDESVR JKILMU WOA;C, QPZ/X.
 #-----------------------------------------------------------------------
-# _to_assign:    Items to arrange in available positions
-# _assigned:     Items already assigned to positions
-# _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
-#                and subset of positions_to_assign to constrain items_to_constrain
+#   _to_assign:    Items to arrange in available positions
+#   _assigned:     Items already assigned to positions
+#   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
+#                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_to_assign:      "etaoinsrhl"
-  positions_to_assign:  "FDESVRJKIL"
-  items_assigned:       ""   
-  positions_assigned:   ""  
+  items_to_assign:         "etaoinsrhl"
+  positions_to_assign:     "FDESVRJKIL"
+  items_assigned:          ""   
+  positions_assigned:      ""  
   items_to_constrain:      ""   
   positions_to_constrain:  ""  
 
@@ -36,4 +50,4 @@ optimization:
 # Visualization settings
 #-----------------------------------------------------------------------
 visualization: 
-  print_keyboard: False
+  print_keyboard: True

@@ -199,7 +199,7 @@ def normalize_and_save_data(config: Config, output_dir: str) -> None:
     logger.close()
 
 def main():
-    parser = argparse.ArgumentParser(description='Normalize keyboard layout data.')
+    parser = argparse.ArgumentParser(description='Normalize layout data.')
     parser.add_argument('--config', type=str, default='config.yaml', help='Path to config file')
     parser.add_argument('--output-dir', type=str, default='output/normalized_input', help='Directory to save normalized data')
     args = parser.parse_args()
