@@ -103,20 +103,38 @@ class AdaptiveOptimizer:
         try:
             # Updated command for new MOO system
             cmd = [sys.executable, SCRIPT_PATH, "--config", config_file,
-                   "--objectives", OBJECTIVES]
+                "--objectives", OBJECTIVES]
             
             print(" ".join(cmd))
+            
+            if self.show_output:
+                stdout_redirect = None
+                stderr_redirect = None
+            else:
+                # Create log directory if it doesn't exist
+                log_dir = Path("logs")
+                log_dir.mkdir(exist_ok=True)
+                
+                # Redirect to log files
+                log_file = log_dir / f"config_{config_id}.log"
+                stdout_redirect = open(log_file, 'w')
+                stderr_redirect = subprocess.STDOUT  # Combine stderr with stdout
+                
             process = subprocess.Popen(
                 cmd,
-                stdout=subprocess.PIPE if not self.show_output else None,
-                stderr=subprocess.PIPE if not self.show_output else None,
+                stdout=stdout_redirect,
+                stderr=stderr_redirect,
                 text=True
             )
+            
+            # Store the file handle so we can close it later
+            if not self.show_output and stdout_redirect:
+                process._log_file = stdout_redirect
             
             return process, "Started"
         except Exception as e:
             return None, f"Failed to start: {str(e)}"
-    
+
     def check_completed_processes(self):
         """Check for completed processes and collect results"""
         completed_pids = []
@@ -129,7 +147,9 @@ class AdaptiveOptimizer:
                 self.recent_completion_times.append(elapsed_time)
                 
                 try:
-                    stdout, stderr = process.communicate()
+                    # Close log file if we opened one
+                    if hasattr(process, '_log_file') and process._log_file:
+                        process._log_file.close()
                     
                     if process.returncode == 0:
                         print(f"✅ Config {config_id} completed in {elapsed_time:.1f}s")
@@ -150,7 +170,7 @@ class AdaptiveOptimizer:
         # Remove completed processes
         for pid in completed_pids:
             del self.active_processes[pid]
-    
+
     def run(self):
         """Main processing loop with adaptive scaling"""
         last_status_time = time.time()
