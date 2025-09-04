@@ -21,11 +21,11 @@ from collections import deque
 import argparse
 
 # Configuration - Updated for new MOO system
-CONFIG_PREFIX = "output/configs1/config_"
+CONFIG_PREFIX = "../output/configs1/config_"
 CONFIG_SUFFIX = ".yaml"
-OUTPUT_DIR = "output/layouts"
+OUTPUT_DIR = "../output/layouts"
 TOTAL_CONFIGS = 1000
-SCRIPT_PATH = "optimize_moo.py"  # Updated script name
+SCRIPT_PATH = "../optimize_moo.py"  # Updated script name
 OBJECTIVES = "engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence"
 
 # Adaptive scaling parameters

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate score_layouts.py commands from MOO analysis results for visualization workflow.
+Generate score_layouts.py commands from MOO analysis results for compare and visualize workflow.
 
 This script creates ready-to-run commands for the score_layouts.py → compare_layouts.py workflow
 using results from multi-objective optimization (MOO) analysis.
@@ -11,19 +11,8 @@ Usage:
         --additional-positions "['TYGHBN" \
         --csv moo_results.csv
 
-    Or incorparate in code:
-        from generate_command import generate_score_layouts_command
-        
-        # After MOO analysis
-        command_file = generate_score_layouts_command(
-            df=filtered_solutions_df,
-            output_dir=Path("output"),
-            additional_items="qz'\",.-?",
-            additional_positions="['TYGHBN"
-        )
-
 Then run the generated commands:
-    1. Copy/paste from output/layout_scorer_commands.txt
+    1. Copy/paste from the output file score_layout_commands.txt
     2. Run the score_layouts.py command
     3. Run the compare_layouts.py commands
 """
@@ -98,7 +87,7 @@ def generate_score_layouts_command(df: pd.DataFrame,
         layout_specs.append(f'{layout_name}:"{escaped_layout_string}"')
     
     # Write command file in the paste.txt format
-    command_file = output_dir / 'layout_scorer_commands.txt'
+    command_file = output_dir / 'score_layout_commands.txt'
     with open(command_file, 'w') as f:
         # Header comments matching paste.txt format
         f.write("# MOO Layout Analysis → score_layouts.py → compare_layouts.py Commands\n")
