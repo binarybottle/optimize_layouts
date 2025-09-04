@@ -9,7 +9,7 @@ in the 24 keys of the home block of a keyboard.
 
 There are two versions of this script:
   - generate_configs1.py generates an initial set of sparse keyboard layouts as config files.
-  - optimize_layout.py generates optimal keyboard layouts for a given config file.
+  - optimize_moo.py generates optimal keyboard layouts for a given config file.
   - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
 
 Usage: ``python generate_configs1.py``
@@ -24,8 +24,8 @@ import yaml
 import itertools
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = '../output/configs1'
-CONFIG_FILE = '../config.yaml'
+OUTPUT_DIR = '../../output/configs1'
+CONFIG_FILE = '../../config.yaml'
 
 # Example with 14 letters to be arranged in 14 keys
 """
