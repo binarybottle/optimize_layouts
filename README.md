@@ -67,7 +67,7 @@ optimize_layouts/
 ├── output/                              
 │   └── layouts/                         # MOO optimization results
 │
-│ # Utilities
+│ # Optional utilities
 ├── utilities/
 │   ├── normalize_and_analyze.py         # Normalize data and compare raw vs normalized data
 │   ├── consolidate_moo.py               # Select global Pareto solutions from separate files
@@ -76,7 +76,7 @@ optimize_layouts/
 │   ├── calc_positions_items.py          # Calculate permutations
 │   └── count_files.py                   # Count files in a folder (with find command)
 │
-│   # Keyboard study
+│ # Keyboard study
 └── keyboard_study/
     ├── README_keyboards.md              # README for keyboard layout optimization study
     ├── analyze_frequencies.py           # Analyze item-pair (bigram) frequencies
