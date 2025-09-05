@@ -155,10 +155,9 @@ def load_config(config_path: str = "config.yaml") -> Config:
         raise ValueError(f"Missing required configuration sections: {missing_sections}")
     
     # Create output directories
-    normalized_dir = "output/normalized_input"
     layout_results_dir = raw_config['paths']['layout_results_folder']
     
-    for directory in [layout_results_dir, normalized_dir]:
+    for directory in [layout_results_dir]:
         os.makedirs(directory, exist_ok=True)
 
     # Parse configuration sections

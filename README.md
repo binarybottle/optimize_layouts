@@ -56,24 +56,21 @@ optimize_layouts/
 ├── moo_scoring.py                       # Item-pair-weighted MOO scoring
 ├── moo_search.py                        # Pareto-optimal search algorithms
 ├── config.py                            # Configuration management
-│
-├── run_jobs.py                          # Local job execution
+├── visualize_moo.py                     # Analyze and visualize MOO results
 │
 │ # I/O
 ├── input/
 │   ├── keypair_engram7_scores.csv       # Position-pair scoring table (required)
 │   └── frequency/
 │       └── normalized-english-letter-pair-counts-google-ngrams.csv
+├── run_jobs.py                          # Run multiple jobs
 ├── output/                              
 │   └── layouts/                         # MOO optimization results
 │
-│ # Analysis and utilities
+│ # Utilities
 ├── utilities/
-│   ├── normalize.py                     # Normalize data
-│   ├── analyze_raw_vs_norm.py           # Compare raw vs normalized data
-│   ├── analyze_results.py               # Analyze MOO results with visualizations
-│   ├── select_global_moo.py             # Select global Pareto front solutions
-│   ├── analyze_results_global_moo.py    # Analyze global Pareto solutions
+│   ├── normalize_and_analyze.py         # Normalize data and compare raw vs normalized data
+│   ├── consolidate_moo.py               # Select global Pareto solutions from separate files
 │   ├── generate_command.py              # Generate command to score and visualize layouts
 │   ├── run_jobs_slurm.sh                # SLURM cluster job submission
 │   ├── calc_positions_items.py          # Calculate permutations
