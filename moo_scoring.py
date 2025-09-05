@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
-Frequency-Weighted Multi-Objective Scoring for Layout Optimization
+Weighted Multi-Objective Scoring for Layout Optimization
 
 This module provides a unified scoring system that combines direct 
-position-pair scoring table lookup with frequency weighting, 
+position-pair scoring table lookup with item-pair score weighting, 
 specifically designed for multi-objective optimization of layouts.
 
 Core Features:
 - Supports arbitrary number of objectives in a position-pair scoring table
-- Direct score lookup with frequency weighting
+- Direct score lookup with weighting
 - Optimized for partial layout scoring during search
 
 Usage:
-    scorer = FrequencyWeightedMOOScorer(
+    scorer = WeightedMOOScorer(
         objectives=['engram7_load', 'engram7_strength'],
         position_pair_score_table='input/keypair_engram7_scores.csv',
         items=['e', 't', 'a', 'o'],
@@ -41,13 +41,13 @@ class ScoringArrays:
         self.n_positions = self.position_matrix.shape[0]
 
 
-class FrequencyWeightedMOOScorer:
+class WeightedMOOScorer:
     """
-    Multi-objective scorer using frequency-weighted direct position-pair lookup.
+    Multi-objective scorer using weighted direct position-pair lookup.
     
     This scorer implements the approach from score_layouts.py:
-    1. Direct table lookup from position-pair scores with frequency weighting
-    3. Normalization by frequency totals
+    1. Direct table lookup from position-pair scores with item-pair score weighting
+    3. Normalization by item-pair score totals
     """
     
     def __init__(self, objectives: List[str], position_pair_score_table: str,
@@ -57,7 +57,7 @@ class FrequencyWeightedMOOScorer:
                  item_pair_score_table: str = "input/normalized-english-letter-pair-counts-google-ngrams.csv",
                  verbose: bool = False):
         """
-        Initialize frequency-weighted MOO scorer.
+        Initialize weighted MOO scorer.
         
         Args:
             objectives: List of objective names (must match position_pair table columns)
@@ -81,7 +81,7 @@ class FrequencyWeightedMOOScorer:
             raise ValueError(f"Maximize flags length ({len(self.objective_maximize)}) != objectives length ({len(objectives)})")
         
         if verbose:
-            print(f"Initializing FrequencyWeightedMOOScorer:")
+            print(f"Initializing WeightedMOOScorer:")
             print(f"  Objectives: {objectives}")
             print(f"  Items: {self.items}")
             print(f"  Positions: {self.positions}")
@@ -92,15 +92,15 @@ class FrequencyWeightedMOOScorer:
         self.position_pair_scores = self._load_position_pair_scores(position_pair_score_table)
             
         # Load English bigram frequencies
-        self.item_pair_frequencies = self._load_item_pair_frequencies(item_pair_score_table)
-        self.use_frequency_weighting = len(self.item_pair_frequencies) > 0
+        self.item_pair_scores = self._load_item_pair_scores(item_pair_score_table)
+        self.use_itempair_weighting = len(self.item_pair_scores) > 0
           
-        if self.use_frequency_weighting:
-            self.total_frequency = sum(self.item_pair_frequencies.values())
-            print(f"Frequency weighting: {len(self.item_pair_frequencies)} item-pairs, total frequency: {self.total_frequency:,.0f}")
+        if self.use_itempair_weighting:
+            self.item_pair_total_score = sum(self.item_pair_scores.values())
+            print(f"Item-pair weighting: {len(self.item_pair_scores)} item-pairs, total score: {self.item_pair_total_score:,.0f}")
         else:
-            print(f"Using unweighted scoring (no frequency file)")
-        
+            print(f"Using unweighted scoring (no item-pair score file)")
+
         # Create compatibility arrays for existing search infrastructure
         n_items, n_positions = len(self.items), len(self.positions)
         self.arrays = ScoringArrays(
@@ -144,16 +144,16 @@ class FrequencyWeightedMOOScorer:
         
         return position_pair_scores
     
-    def _load_item_pair_frequencies(self, item_pair_score_table: str) -> Dict[str, float]:
+    def _load_item_pair_scores(self, item_pair_score_table: str) -> Dict[str, float]:
         """Load item-pair frequencies for weighting."""
         if not Path(item_pair_score_table).exists():
-            print(f"    Warning: Frequency file not found: {item_pair_score_table}")
+            print(f"    Warning: Item-pair score file not found: {item_pair_score_table}")
             return {}
         
         try:
             df = pd.read_csv(item_pair_score_table)
         except Exception as e:
-            print(f"    Warning: Error reading frequency file: {e}")
+            print(f"    Warning: Error reading item-pair score file: {e}")
             return {}
         
         # Find appropriate columns
@@ -161,7 +161,7 @@ class FrequencyWeightedMOOScorer:
         freq_col = self._find_column(df, ['score', 'normalized_frequency', 'frequency'])
         
         if not item_pair_col or not freq_col:
-            print(f"    Warning: Required columns not found in frequency file")
+            print(f"    Warning: Required columns not found in item-pair score file")
             return {}
         
         frequencies = {}
@@ -181,8 +181,8 @@ class FrequencyWeightedMOOScorer:
     
     def score_layout(self, mapping: np.ndarray, return_components: bool = False) -> List[float]:
         """
-        Score layout for all objectives using frequency-weighted approach.
-        
+        Score layout for all objectives using item-pair score weighting.
+
         Args:
             mapping: Array where mapping[i] = position_index for items[i] (-1 for unassigned)
             return_components: If True, return scores + combined average
@@ -210,13 +210,13 @@ class FrequencyWeightedMOOScorer:
     
     def _score_single_objective(self, mapping: np.ndarray, objective: str) -> float:
         """
-        Score layout for single objective using frequency-weighted position-pair lookup.
+        Score layout for single objective using item-pair-score-weighted position-pair lookup.
         
         This implements the core scoring logic from score_layouts.py:
         1. Map item-pairs to position-pairs based on current layout
         2. Look up scores directly from position-pair scoring table
         3. Weight by item-pair scores (frequencies)
-        4. Return frequency-weighted average
+        4. Return item-pair-score-weighted average
         """
         position_pair_scores = self.position_pair_scores[objective]
         
@@ -232,19 +232,19 @@ class FrequencyWeightedMOOScorer:
         if len(placed_items) < 2:
             return 0.0  # Need at least 2 items for pairwise scoring
         
-        # Calculate frequency-weighted score
-        if self.use_frequency_weighting:
-            return self._calculate_frequency_weighted_score(
+        # Calculate item-pair-score-weighted score
+        if self.use_itempair_weighting:
+            return self._calculate_item_pair_weighted_score(
                 placed_items, placed_positions, position_pair_scores)
         else:
             return self._calculate_unweighted_score(
                 placed_items, placed_positions, position_pair_scores)
     
-    def _calculate_frequency_weighted_score(self, items: List[str], positions: List[str], 
+    def _calculate_item_pair_weighted_score(self, items: List[str], positions: List[str], 
                                           position_pair_scores: Dict[str, float]) -> float:
-        """Calculate score using item-pair frequency weighting."""
+        """Calculate score using item-pair score weighting."""
         weighted_total = 0.0
-        frequency_total = 0.0
+        item_pair_score_total = 0.0
         
         # Score all ordered pairs
         for i in range(len(items)):
@@ -253,17 +253,17 @@ class FrequencyWeightedMOOScorer:
                     letter_pair = items[i] + items[j]
                     key_pair = positions[i] + positions[j]
                     
-                    frequency = self.item_pair_frequencies.get(letter_pair, 0.0)
-                    if frequency > 0 and key_pair in position_pair_scores:
+                    item_pair_score = self.item_pair_scores.get(letter_pair, 0.0)
+                    if item_pair_score > 0 and key_pair in position_pair_scores:
                         score = position_pair_scores[key_pair]
-                        weighted_total += score * frequency
-                        frequency_total += frequency
+                        weighted_total += score * item_pair_score
+                        item_pair_score_total += item_pair_score
         
-        return weighted_total / frequency_total if frequency_total > 0 else 0.0
+        return weighted_total / item_pair_score_total if item_pair_score_total > 0 else 0.0
     
     def _calculate_unweighted_score(self, items: List[str], positions: List[str],
                                   position_pair_scores: Dict[str, float]) -> float:
-        """Calculate score without frequency weighting (all pairs equal)."""
+        """Calculate score without item_pair_score weighting (all pairs equal)."""
         total_score = 0.0
         pair_count = 0
         
@@ -300,11 +300,11 @@ class FrequencyWeightedMOOScorer:
         pass
 
 
-def validate_frequency_scoring_consistency(items: str, positions: str, objectives: List[str],
+def validate_item_pair_scoring_consistency(items: str, positions: str, objectives: List[str],
                                          position_pair_score_table: str, item_pair_score_table: str,
                                          verbose: bool = False) -> Dict[str, float]:
     """
-    Validate that FrequencyWeightedMOOScorer produces consistent results.
+    Validate that WeightedMOOScorer produces consistent results.
     
     This function can be used to compare results with score_layouts.py
     or to test scorer behavior on known layouts.
@@ -317,7 +317,7 @@ def validate_frequency_scoring_consistency(items: str, positions: str, objective
         raise ValueError(f"Items length ({len(items_list)}) != positions length ({len(positions_list)})")
     
     # Create scorer
-    scorer = FrequencyWeightedMOOScorer(
+    scorer = WeightedMOOScorer(
         objectives=objectives,
         position_pair_score_table=position_pair_score_table,
         items=items_list,
@@ -342,7 +342,7 @@ def validate_frequency_scoring_consistency(items: str, positions: str, objective
 
 if __name__ == "__main__":
     # Example usage and basic testing
-    print("Testing FrequencyWeightedMOOScorer...")
+    print("Testing WeightedMOOScorer...")
     
     # Test configuration
     test_objectives = ['engram7_load', 'engram7_strength']
@@ -350,7 +350,7 @@ if __name__ == "__main__":
     test_positions = ['F', 'D', 'S', 'J']
     
     try:
-        scorer = FrequencyWeightedMOOScorer(
+        scorer = WeightedMOOScorer(
             objectives=test_objectives,
             position_pair_score_table='input/keypair_engram7_scores.csv',
             items=test_items,
@@ -372,7 +372,7 @@ if __name__ == "__main__":
         for obj, stat in stats.items():
             print(f"  {obj}: range [{stat['min']:.3f}, {stat['max']:.3f}], mean {stat['mean']:.3f}")
         
-        print("\nFrequencyWeightedMOOScorer test completed successfully!")
+        print("\nWeightedMOOScorer test completed successfully!")
         
     except Exception as e:
         print(f"Test failed: {e}")

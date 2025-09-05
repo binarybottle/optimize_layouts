@@ -16,7 +16,7 @@ Key Features:
 Usage:
     pareto_front, stats = moo_search(
         config=config,
-        scorer=frequency_weighted_scorer,
+        scorer=weighted_scorer,
         max_solutions=100,
         time_limit=3600
     )
@@ -170,7 +170,7 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
     
     Args:
         config: Configuration object with optimization settings
-        scorer: Multi-objective scorer (FrequencyWeightedMOOScorer)
+        scorer: Multi-objective scorer (WeightedMOOScorer)
         max_solutions: Maximum number of solutions to find (None for unlimited)
         time_limit: Time limit in seconds (None for unlimited)
         progress_bar: Whether to show progress bar

@@ -136,37 +136,52 @@ def remove_specified_positions(positions, items, positions_to_remove):
 def generate_config_content(items_assigned, positions_assigned, items_to_assign, positions_to_assign):
     """Generate YAML configuration content for Step 2."""
     
-    config_template = f"""# optimize_layouts/config.yaml
-# Configuration file for item-to-position layout optimization - Step 2
-# Generated from global Pareto optimal solutions
+    config_template = f"""# Configuration file for item-to-position layout optimization.
 
 #-----------------------------------------------------------------------
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  input:
-    raw_item_scores_file:          "input/frequency/spanish-letter-counts-leipzig.csv"
-    raw_item_pair_scores_file:     "input/frequency/spanish-letter-pair-counts-leipzig.csv"
-    raw_position_scores_file:      "input/comfort/key-comfort-scores.csv"
-    raw_position_pair_scores_file: "input/comfort/key-pair-comfort-scores.csv"
-  output:
-    layout_results_folder:         "output/layouts"
+  position_pair_score_table: "input/keypair_engram7_scores.csv"
+  item_pair_score_table:     "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
+  layout_results_folder:     "output/layouts"
 
 #-----------------------------------------------------------------------
-# Optimization Settings
+# MOO (Multi-Objective Optimization) settings
 #-----------------------------------------------------------------------
+moo:
+  default_objectives: 
+    - "engram7_load"
+    - "engram7_strength"
+    - "engram7_position"
+    # "engram7_stretch"
+    - "engram7_vspan"
+    - "engram7_hspan"
+    - "engram7_sequence"
+  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true, true, true]
+  default_max_solutions: 10000
+  default_time_limit: 100000
+  show_progress_bar: true
+  save_detailed_results: true
+
+#-----------------------------------------------------------------------
+# Optimization settings
+#-----------------------------------------------------------------------
+#   _to_assign:    Items to arrange in available positions
+#   _assigned:     Items already assigned to positions
+#   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
+#                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
   items_assigned:       "{items_assigned}"
   positions_assigned:   "{positions_assigned}"
   items_to_assign:      "{items_to_assign}"
   positions_to_assign:  "{positions_to_assign}"
-
-  # Subset constraints (empty for Step 2)
   items_to_constrain:      ""   
   positions_to_constrain:  ""  
 
 #-----------------------------------------------------------------------
-# Visualization Settings
+# Visualization settings
 #-----------------------------------------------------------------------
 visualization: 
   print_keyboard: True
@@ -292,11 +307,11 @@ def main():
             else:
                 remaining_positions, remaining_items, removed_positions = positions, items, ""
 
-            # Get unassigned items and positions, maintaining original frequency order
+            # Get unassigned items and positions, maintaining original order
             all_positions = "FDESVRWACQZXJKILMUO;,P/."  # 24 positions
-            all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in frequency order
+            all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in order
             
-            # Build items_assigned and items_to_assign in correct frequency order
+            # Build items_assigned and items_to_assign in correct order
             items_assigned_ordered = ""
             items_to_assign_ordered = ""
             

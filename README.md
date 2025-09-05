@@ -1,12 +1,14 @@
 Multi-Objective Keyboard Layout Optimizer
 
-A streamlined framework for finding Pareto-optimal layouts using frequency-weighted multi-objective optimization.
+A streamlined framework for finding Pareto-optimal layouts using weighted multi-objective optimization.
 
 **Repository**: https://github.com/binarybottle/optimize_layouts.git  
 **Author**: Arno Klein (arnoklein.info)  
 **License**: MIT License (see LICENSE)
 
-This framework discovers Pareto-optimal layouts by optimizing multiple objectives simultaneously using English bigram frequency weighting. It combines direct keypair score lookup with multi-objective search to find layouts that represent the best trade-offs across an arbitrary number of competing criteria.
+This framework discovers Pareto-optimal layouts by optimizing multiple objectives simultaneously.
+It combines direct key-pair score lookup with multi-objective search to find layouts that represent 
+the best trade-offs across an arbitrary number of competing criteria.
 
 ## Multi-Objective Optimization (MOO)
   ```bash
@@ -46,45 +48,41 @@ This framework discovers Pareto-optimal layouts by optimizing multiple objective
 optimize_layouts/
 ├── README.md                            # This file
 │ 
+│ # Configuration
+├── config.yaml                          # Main configuration file
+│ 
 │ # Core MOO system
 ├── optimize_moo.py                      # Main entry point for optimization
-├── moo_scoring.py                       # Frequency-weighted MOO scoring
+├── moo_scoring.py                       # Item-pair-weighted MOO scoring
 ├── moo_search.py                        # Pareto-optimal search algorithms
 ├── config.py                            # Configuration management
 │
-│ # Configuration
-├── config.yaml                          # Main configuration file
+├── run_jobs.py                          # Local job execution
 │
-│ # Inputs
+│ # I/O
 ├── input/
 │   ├── keypair_engram7_scores.csv       # Position-pair scoring table (required)
 │   └── frequency/
 │       └── normalized-english-letter-pair-counts-google-ngrams.csv
-│
-│ # Outputs
-├── output/                              # Generated results
+├── output/                              
 │   └── layouts/                         # MOO optimization results
-│   └── layouts/                         # MOO optimization results
-│
-│ # Job-running scripts
-├── run_jobs.py                          # Local job execution
-├── run_jobs_slurm.sh                    # SLURM cluster job submission
 │
 │ # Analysis and utilities
 ├── utilities/
 │   ├── normalize.py                     # Normalize data
 │   ├── analyze_raw_vs_norm.py           # Compare raw vs normalized data
-│   ├── analyze_frequencies.py           # Analyze item-pair frequencies
 │   ├── analyze_results.py               # Analyze MOO results with visualizations
-│   ├── select_global_moo_solutions.py   # Global Pareto front selection
-│   ├── analyze_global_moo_solutions.py  # Global Pareto analysis across files
+│   ├── select_global_moo.py             # Select global Pareto front solutions
+│   ├── analyze_results_global_moo.py    # Analyze global Pareto solutions
 │   ├── generate_command.py              # Generate command to score and visualize layouts
+│   ├── run_jobs_slurm.sh                # SLURM cluster job submission
 │   ├── calc_positions_items.py          # Calculate permutations
 │   └── count_files.py                   # Count files in a folder (with find command)
 │
 │   # Keyboard study
-└── keyboards/
+└── keyboard_study/
     ├── README_keyboards.md              # README for keyboard layout optimization study
+    ├── analyze_frequencies.py           # Analyze item-pair (bigram) frequencies
     ├── generate_configs1.py             # Generate config files for parallel optimization phase 1
     ├── generate_configs1.py             # Generate config files for parallel optimization phase 2
     └── display_layout.py                # Keyboard visualization
@@ -98,7 +96,7 @@ so long as each item-pair is represented by two item characters
 and each position-pair is represented by two position characters.
 
   ### Normalized scores
-  Item-pair (normalized frequency) scores file:      
+  Item-pair (normalized) scores file:      
     ```csv
       item_pair, score
       ab, 0.1
@@ -119,7 +117,6 @@ and each position-pair is represented by two position characters.
 ## Multi-objective search algorithm
   - Pareto-optimal search finds non-dominated solutions across multiple objectives
   - Branch-and-bound optimization with exact score calculation and pruning
-  - Frequency-weighted scoring using English bigram frequencies
   - Constraint handling for partial assignments and position restrictions
   - Progress tracking with statistics and time limits
 

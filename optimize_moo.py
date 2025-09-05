@@ -2,12 +2,12 @@
 """
 Multi-Objective Layout Optimizer
 
-Finds Pareto-optimal item-position layouts using frequency-weighted scoring 
+Finds Pareto-optimal item-position layouts using weighted scoring 
 across multiple objectives. 
 
 Features:
     - Arbitrary number of objectives from position-pair scoring table
-    - Direct score lookup with frequency weighting
+    - Direct score lookup with weighting
     - Pareto-optimal solution discovery
     - Progress tracking and configurable search limits
 
@@ -49,7 +49,7 @@ from pathlib import Path
 
 # Local imports
 from config import Config, load_config, print_config_summary
-from moo_scoring import FrequencyWeightedMOOScorer, validate_frequency_scoring_consistency
+from moo_scoring import WeightedMOOScorer, validate_item_pair_scoring_consistency
 from moo_search import moo_search, analyze_pareto_front, validate_pareto_front
 
 def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str: str = None) -> Tuple[List[str], List[float], List[bool]]:
@@ -116,7 +116,7 @@ def validate_inputs(config: Config, objectives: List[str], position_pair_score_t
         config: Configuration object
         objectives: List of objective names
         position_pair_score_table: Path to position-pair scoring table
-        item_pair_score_table: Path to frequency file
+        item_pair_score_table: Path to item-pair scoring table
     """
     # Check position-pair scoring table exists and has required objectives
     if not Path(position_pair_score_table).exists():
@@ -282,10 +282,10 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
     positions = list(config.optimization.positions_to_assign)
     
     if verbose:
-        print(f"Creating frequency-weighted scorer...")
+        print(f"Creating weighted scorer...")
     
     # Create scorer
-    scorer = FrequencyWeightedMOOScorer(
+    scorer = WeightedMOOScorer(
         objectives=objectives,
         position_pair_score_table=position_pair_score_table,
         items=items,
@@ -417,7 +417,7 @@ def main() -> int:
                 test_items = config.optimization.items_to_assign[:4]  # Test with first 4 items
                 test_positions = config.optimization.positions_to_assign[:4]
                 
-                validation_scores = validate_frequency_scoring_consistency(
+                validation_scores = validate_item_pair_scoring_consistency(
                     items=test_items,
                     positions=test_positions,
                     objectives=objectives[:2],  # Test with first 2 objectives

@@ -8,7 +8,7 @@ CSV file with the globally optimal solutions.
 
 Leverages parsing functions from analyze_results.py for robust file handling.
 
-# Basic usage with your format and objectives
+# Basic usage
 python select_global_moo_solutions.py
 
 # Test with limited files first
@@ -18,7 +18,7 @@ python select_global_moo_solutions.py --max-files 100 --verbose
 python select_global_moo_solutions.py --file-pattern "moo_results_config_*.csv"
 
 # Different objectives if needed
-python select_global_moo_solutions.py --objectives "Opt Item Score" "Opt Item-Pair Score"
+python select_global_moo_solutions.py --objectives "engram7_load" "engram7_strength"
 """
 import os
 import pandas as pd
@@ -249,7 +249,7 @@ def load_all_solutions(input_dir: str, file_pattern: str = "moo_results_config_*
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Select global Pareto optimal keyboard layouts')
+    parser = argparse.ArgumentParser(description='Select global Pareto optimal layouts')
     parser.add_argument('--input-dir', default='output/layouts/', 
                        help='Directory containing MOO results CSV files')
     parser.add_argument('--output-file', default='output/global_moo_solutions.csv',

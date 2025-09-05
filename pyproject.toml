@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "optimize_layouts"
 version = "0.1.0"
-description = "Keyboard layout optimization tool"
+description = "Layout optimization tool"
 authors = ["Arno Klein"]
 package-mode = false
 license = "MIT"

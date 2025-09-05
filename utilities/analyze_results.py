@@ -2,16 +2,14 @@
 """
 Analyze Layout Optimization Results and Create Visualizations
 
-This script analyzes keyboard layout optimization results and creates scatter plots
-of scores. Updated for the refactored MOO system using optimize_moo.py output format.
+This script analyzes layout optimization results and creates scatter plots. 
 
-Analysis Features:
-- Supports new MOO result CSV format from optimize_moo.py
+Analysis features:
 - Creates scatter plots and correlation analysis 
 - Handles multiple objective scoring
 - Generates summary statistics and best layout identification
 
-Plot Types Generated:
+Plot types:
 - objective_scores_scatter.png (all objectives vs rank)
 - objective_correlation.png (correlation matrix if multiple objectives)
 - best_layouts_summary.png (top solutions visualization)
@@ -48,7 +46,7 @@ def apply_default_combination_vectorized(obj1_scores: np.ndarray, obj2_scores: n
         return np.sqrt(obj1_scores * obj2_scores)
 
 #-----------------------------------------------------------------------------
-# File processing utilities - updated for new MOO format
+# File processing utilities
 #-----------------------------------------------------------------------------
 def process_files_batch(results_dir, file_pattern="moo_results_*.csv", max_files=None):
     """Find MOO result files."""

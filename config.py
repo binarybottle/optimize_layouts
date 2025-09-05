@@ -96,7 +96,7 @@ class MOOConfig:
     
     # Default file paths for validation
     default_position_pair_score_table: str = "input/keypair_engram7_scores.csv"
-    default_item_pair_score_table: str = "input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv"
+    default_item_pair_score_table: str = "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
     
     # Progress and output settings
     show_progress_bar: bool = True
@@ -321,7 +321,7 @@ def create_default_config(output_path: str = "config.yaml") -> None:
     """
     default_config = {
         'paths': {
-            'item_pair_score_table': 'input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv',
+            'item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
             'position_pair_score_table': 'input/keypair_engram7_scores.csv',
             'layout_results_folder': 'output/layouts'
         },
@@ -347,7 +347,7 @@ def create_default_config(output_path: str = "config.yaml") -> None:
             'default_max_solutions': 100,
             'default_time_limit': 3600,
             'default_position_pair_score_table': 'input/keypair_engram7_scores.csv',
-            'default_item_pair_score_table': 'input/frequency/normalized-english-letter-pair-counts-google-ngrams.csv',
+            'default_item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
             'show_progress_bar': True,
             'save_detailed_results': True
         },
@@ -371,7 +371,7 @@ def validate_files_exist(config: Config, position_pair_score_table: Optional[str
     Args:
         config: Configuration object
         position_pair_score_table: Path to keypair scores table
-        item_pair_score_table: Path to frequency file
+        item_pair_score_table: Path to item-pair scoring table
     """
     # Check keypair table
     if position_pair_score_table:
@@ -381,15 +381,15 @@ def validate_files_exist(config: Config, position_pair_score_table: Optional[str
         print(f"Using default keypair table: {config.moo.default_position_pair_score_table}")
     else:
         raise FileNotFoundError(f"No keypair table found at default location: {config.moo.default_position_pair_score_table}")
-    
-    # Check frequency file (optional)
+
+    # Check item-pair scoring table (optional)
     if item_pair_score_table:
         if not os.path.exists(item_pair_score_table):
-            print(f"Warning: Frequency file not found: {item_pair_score_table}")
+            print(f"Warning: item-pair scoring table not found: {item_pair_score_table}")
     elif os.path.exists(config.moo.default_item_pair_score_table):
-        print(f"Using default frequency file: {config.moo.default_item_pair_score_table}")
+        print(f"Using default item-pair scoring table: {config.moo.default_item_pair_score_table}")
     else:
-        print(f"Warning: No frequency file found at default location: {config.moo.default_item_pair_score_table}")
+        print(f"Warning: No item-pair scoring table found at default location: {config.moo.default_item_pair_score_table}")
         print("Will use unweighted scoring")
 
 

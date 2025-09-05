@@ -54,10 +54,10 @@ def detect_data_type(df):
 def get_title_for_type(data_type):
     """Return a properly formatted title for a given data type."""
     titles = {
-        'item_scores': 'Item frequency scores',
-        'item_pair_scores': 'Item-pair frequency scores',
-        'position_scores': 'Position comfort scores',
-        'position_pair_scores': 'Position-pair comfort scores',
+        'item_scores': 'Item scores',
+        'item_pair_scores': 'Item-pair scores',
+        'position_scores': 'Position scores',
+        'position_pair_scores': 'Position-pair scores',
         'unknown': 'Data scores'
     }
     return titles.get(data_type, data_type.replace("_", " ").title())

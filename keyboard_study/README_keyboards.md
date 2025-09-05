@@ -84,7 +84,7 @@ For the following, we:
   Command for generating the 12,012 configuration files:
 
   ```bash
-    cd keyboards; python generate_configs1.py
+    python generate_configs1.py
   ```
 
   In the example below, the 4 most frequent letters (etao in English)
@@ -132,8 +132,9 @@ For the following, we:
 
   **2.1. Optimally arrange the 10 remaining letters in the 10 remaining keys.**
 
-  Rerun the command in 1.2 above (after renaming the output folders): 
+  Rerun the commands above (after renaming variables and folders): 
   ```bash
+  python generate_configs2.py
   bash run_jobs.sh
   ```
 
