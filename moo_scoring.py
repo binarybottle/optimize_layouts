@@ -13,7 +13,7 @@ Core Features:
 
 Usage:
     scorer = WeightedMOOScorer(
-        objectives=['engram7_load', 'engram7_strength'],
+        objectives=['engram6_strength', 'engram6_curl'],
         position_pair_score_table='input/engram6_2key_scores.csv',
         items=['e', 't', 'a', 'o'],
         positions=['F', 'D', 'S', 'J']
@@ -493,7 +493,7 @@ if __name__ == "__main__":
     print("Testing WeightedMOOScorer...")
     
     # Test configuration
-    test_objectives = ['engram7_load', 'engram7_strength']
+    test_objectives = ['engram6_strength', 'engram6_curl']
     test_items = ['e', 't', 'a', 'o']
     test_positions = ['F', 'D', 'S', 'J']
     

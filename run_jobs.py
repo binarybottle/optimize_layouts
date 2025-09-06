@@ -26,8 +26,8 @@ CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
 SCRIPT_PATH = "optimize_moo.py" 
-OBJECTIVES = "engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence"
-
+#OBJECTIVES = "engram6_strength,engram6_stretch,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order"
+OBJECTIVES = "engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order"
 # Adaptive scaling parameters
 MAX_MEMORY_PERCENT = 90  # Scale down if memory exceeds this
 MAX_CPU_PERCENT = 95     # Scale down if CPU exceeds this

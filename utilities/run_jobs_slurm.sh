@@ -7,10 +7,7 @@
 #   bash run_jobs_slurm.sh
 #   
 #   # MOO with custom objectives  
-#   bash run_jobs_slurm.sh --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
-#
-#   # MOO with custom weights and directions
-#   bash run_jobs_slurm.sh --objectives engram7_load,engram7_strength --weights 1.0,2.0 --maximize true,false
+#   bash run_jobs_slurm.sh --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
 #
 # Connect and set up the code environment: 
 #
@@ -132,10 +129,7 @@ Usage:
   bash run_jobs_slurm.sh
   
   # MOO with custom objectives
-  bash run_jobs_slurm.sh --objectives engram7_load,engram7_strength,engram7_position
-  
-  # MOO with custom weights and directions
-  bash run_jobs_slurm.sh --objectives engram7_load,engram7_strength --weights 1.0,2.0 --maximize true,false
+  bash run_jobs_slurm.sh --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
 
 Arguments:
   --objectives        Comma-separated objective names (use config defaults if not specified)

@@ -22,13 +22,13 @@ Usage Examples:
     # Basic MOO with default settings in config.yaml
     python optimize_moo.py --config config.yaml
 
-    # Basic MOO with six of the Engram-7 objectives
+    # Basic MOO with Engram-6 objectives
     python optimize_moo.py --config config.yaml \
-        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
+        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
 
     # With custom settings
     python optimize_moo.py --config config.yaml \
-        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence \
+        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
         --position-pair-score-table input/position_pair_score_table.csv \
         --item-pair-score-table input/item_pair_score_table.csv \
         --weights 1.0,2.0,0.5,0.5,0.5,0.5 --maximize true,true,false,false,false,false \

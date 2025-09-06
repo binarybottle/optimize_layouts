@@ -24,8 +24,8 @@ import yaml
 import itertools
 
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = '../../output/configs1'
-CONFIG_FILE = '../../config.yaml'
+OUTPUT_DIR = '../output/configs1'
+CONFIG_FILE = '../config.yaml'
 
 # Example with 14 letters to be arranged in 14 keys
 """

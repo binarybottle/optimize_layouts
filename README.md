@@ -107,7 +107,7 @@ and each position-pair is represented by two position characters.
     ```
   Position-pair (normalized multi-objective) scores file:       
     ```csv
-      position_pair,engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
+      position_pair,engram6_strength,engram6_stretch,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
       FD,0.85,0.72,0.91,0.78,0.65,0.88
       DE,0.72,0.68,0.88,0.82,0.71,0.85
       ES,0.68,0.71,0.85,0.75,0.69,0.82
