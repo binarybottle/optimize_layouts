@@ -1,8 +1,6 @@
 #!/bin/bash
 #
 # SLURM job submission script for MOO Layout Optimization
-# 
-# Updated for the refactored MOO system using optimize_moo.py
 #
 # Usage:
 #   # Basic MOO with default objectives from config
@@ -75,7 +73,6 @@ CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
 TOTAL_CONFIGS=1
 
-# Updated settings for refactored MOO system
 SCRIPT_PATH="optimize_moo.py"
 OBJECTIVES=""
 WEIGHTS=""
@@ -162,7 +159,7 @@ validate_args() {
 }
 
 #--------------------------------------------------------------
-# Output file detection - updated for new MOO system
+# Output file detection
 #--------------------------------------------------------------
 is_config_completed() {
     local config_id=$1
@@ -172,7 +169,7 @@ is_config_completed() {
 }
 
 #--------------------------------------------------------------
-# Job submission - updated for new MOO system
+# Job submission
 #--------------------------------------------------------------
 build_optimization_command() {
     local config_id=$1

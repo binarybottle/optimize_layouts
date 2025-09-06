@@ -491,7 +491,7 @@ class UnifiedMOOAnalyzer:
     
     def save_results(self, top_solutions):
         """Save analysis results to files."""
-        # Save enhanced dataset with rankings
+        # Save dataset with rankings
         output_csv = self.output_dir / 'moo_analysis_results.csv'
         self.df.to_csv(output_csv, index=False)
         print(f"\nComplete results saved to: {output_csv}")

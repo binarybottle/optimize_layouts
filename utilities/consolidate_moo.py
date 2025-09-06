@@ -27,7 +27,7 @@ import glob
 
 def parse_individual_moo_file(filepath: str, debug: bool = False) -> pd.DataFrame:
     """
-    Parse a single MOO results CSV file with enhanced metadata preservation.
+    Parse a single MOO results CSV file with metadata preservation.
     
     Args:
         filepath: Path to CSV file
@@ -353,7 +353,7 @@ def optimized_pareto_selection(solutions: pd.DataFrame,
 def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str, 
                        processing_stats: Dict) -> None:
     """
-    Save Pareto results with enhanced metadata and column ordering.
+    Save Pareto results with metadata and column ordering.
     """
     if len(pareto_solutions) == 0:
         print("Warning: No Pareto solutions to save")

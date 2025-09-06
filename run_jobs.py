@@ -20,12 +20,12 @@ from pathlib import Path
 from collections import deque
 import argparse
 
-# Configuration - Updated for new MOO system
+# Configuration
 CONFIG_PREFIX = "output/configs1/config_"
 CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
-SCRIPT_PATH = "optimize_moo.py"  # Updated script name
+SCRIPT_PATH = "optimize_moo.py" 
 OBJECTIVES = "engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence"
 
 # Adaptive scaling parameters
@@ -86,12 +86,12 @@ class AdaptiveOptimizer:
         }
     
     def config_already_completed(self, config_id):
-        """Check if a config has already been processed - updated pattern for new MOO system."""
+        """Check if a config has already been processed."""
         pattern = f"{OUTPUT_DIR}/moo_results_config_{config_id}_*.csv"
         return len(glob.glob(pattern)) > 0
     
     def start_config_process(self, config_id):
-        """Start processing a single config - updated for new MOO system."""
+        """Start processing a single config"""
         config_file = f"{CONFIG_PREFIX}{config_id}{CONFIG_SUFFIX}"
         
         if not os.path.exists(config_file):
@@ -101,7 +101,6 @@ class AdaptiveOptimizer:
             return None, "Already completed"
         
         try:
-            # Updated command for new MOO system
             cmd = [sys.executable, SCRIPT_PATH, "--config", config_file,
                 "--objectives", OBJECTIVES]
             
@@ -112,7 +111,7 @@ class AdaptiveOptimizer:
                 stderr_redirect = None
             else:
                 # Create log directory if it doesn't exist
-                log_dir = Path("logs")
+                log_dir = Path("output/logs")
                 log_dir.mkdir(exist_ok=True)
                 
                 # Redirect to log files
