@@ -142,7 +142,7 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  position_pair_score_table: "input/keypair_engram7_scores.csv"
+  position_pair_score_table: "input/engram6_2key_scores.csv"
   item_pair_score_table:     "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
   layout_results_folder:     "output/layouts"
 

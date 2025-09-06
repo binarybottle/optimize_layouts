@@ -60,7 +60,7 @@ optimize_layouts/
 │
 │ # I/O
 ├── input/
-│   ├── keypair_engram7_scores.csv       # Position-pair scoring table (required)
+│   ├── engram6_2key_scores.csv       # Position-pair scoring table (required)
 │   └── frequency/
 │       └── normalized-english-letter-pair-counts-google-ngrams.csv
 ├── run_jobs.py                          # Run multiple jobs

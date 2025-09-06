@@ -95,7 +95,7 @@ class MOOConfig:
     default_time_limit: Union[float, str] = 3600.0
     
     # Default file paths for validation
-    default_position_pair_score_table: str = "input/keypair_engram7_scores.csv"
+    default_position_pair_score_table: str = "input/engram6_2key_scores.csv"
     default_item_pair_score_table: str = "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
     
     # Progress and output settings
@@ -321,7 +321,7 @@ def create_default_config(output_path: str = "config.yaml") -> None:
     default_config = {
         'paths': {
             'item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
-            'position_pair_score_table': 'input/keypair_engram7_scores.csv',
+            'position_pair_score_table': 'input/engram6_2key_scores.csv',
             'layout_results_folder': 'output/layouts'
         },
         'optimization': {
@@ -345,7 +345,7 @@ def create_default_config(output_path: str = "config.yaml") -> None:
             'default_maximize': [True, True, True, True, True, True],
             'default_max_solutions': 100,
             'default_time_limit': 3600,
-            'default_position_pair_score_table': 'input/keypair_engram7_scores.csv',
+            'default_position_pair_score_table': 'input/engram6_2key_scores.csv',
             'default_item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
             'show_progress_bar': True,
             'save_detailed_results': True

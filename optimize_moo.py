@@ -40,6 +40,7 @@ Usage Examples:
 """
 
 import argparse
+from html import parser
 import time
 import sys
 import pandas as pd
@@ -292,7 +293,9 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
         positions=positions,
         weights=weights,
         maximize=maximize,
-        item_pair_score_table=item_pair_score_table
+        item_pair_score_table=item_pair_score_table,
+        position_triple_score_table="input/keytriple_engram7_sequence_scores.csv",
+        verbose=verbose
     )
     
     if verbose:
@@ -342,10 +345,12 @@ def create_cli_parser() -> argparse.ArgumentParser:
                        help='Comma-separated true/false for each objective (default: all true)')
 
     # Optional input file overrides
-    parser.add_argument('--position-pair-score-table',
-                        help='Override position-pair scoring table path from config')
     parser.add_argument('--item-pair-score-table', 
                         help='Override item-pair scoring table path from config')
+    parser.add_argument('--position-pair-score-table',
+                        help='Override position-pair scoring table path from config')
+    parser.add_argument('--position-triple-score-table',
+                        help='Override position-triple scoring table path from config')
 
     # Search limits
     parser.add_argument('--max-solutions', type=int, default=None,
