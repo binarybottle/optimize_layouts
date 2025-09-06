@@ -17,13 +17,13 @@ the best trade-offs across an arbitrary number of competing criteria.
 
     # MOO with specific objectives (overrides config defaults)
     python optimize_moo.py --config config.yaml \
-        --objectives engram7_load,engram7_strength,engram7_position,engram7_vspan,engram7_hspan,engram7_sequence
+        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order
 
     # MOO with custom weights and directions
     python optimize_moo.py --config config.yaml \
-        --objectives engram7_load,engram7_strength,engram7_position \
-        --weights 1.0,2.0,0.5 --maximize true,true,false \
-        --max-solutions 50 --time-limit 1800
+        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order \
+        --weights 1.0,2.0,0.5,0.75 --maximize true,true,false,true \
+        --max-solutions 100 --time-limit 3600 --verbose
 
     # Validation run
     python optimize_moo.py --config config.yaml --validate --dry-run
@@ -58,11 +58,13 @@ optimize_layouts/
 ├── config.py                            # Configuration management
 ├── visualize_moo.py                     # Analyze and visualize MOO results
 │
-│ # I/O
+│ # I/O (inputs are for a keyboard optimization study)
 ├── input/
-│   ├── engram6_2key_scores.csv       # Position-pair scoring table (required)
+│   ├── engram6_2key_scores.csv          # Position-pair scoring (bigram)
+│   ├── engram6_3key_order_scores.csv    # Position-triple scoring (trigram)
 │   └── frequency/
-│       └── normalized-english-letter-pair-counts-google-ngrams.csv
+│       ├── english-letter-pair-counts-google-ngrams_normalized.csv
+│       └── english-letter-triple-counts-google-ngrams_normalized.csv
 ├── run_jobs.py                          # Run multiple jobs
 ├── output/                              
 │   └── layouts/                         # MOO optimization results
@@ -116,6 +118,14 @@ and each position-pair is represented by two position characters.
   - Branch-and-bound optimization with exact score calculation and pruning
   - Constraint handling for partial assignments and position restrictions
   - Progress tracking with statistics and time limits
+
+## Bigram and Trigram Scoring
+The system supports both bigram (2-key) and trigram (3-key) objective scoring; 
+it automatically detects which objectives are bigram vs trigram based on input scoring tables.
+
+- **Bigram objectives**: Scored using position-pair table (e.g., `engram6_strength`,...)
+- **Trigram objectives**: Scored using position-triple table (e.g., `engram6_3key_order`)
+- **Weighting**: Bigram and trigram scores are weighted by item-pair/triple scores
 
 ## Output
   **Console output**
