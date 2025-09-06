@@ -151,13 +151,13 @@ paths:
 #-----------------------------------------------------------------------
 moo:
   default_objectives: 
-    - "engram7_load"
-    - "engram7_strength"
-    - "engram7_position"
-    # "engram7_stretch"
-    - "engram7_vspan"
-    - "engram7_hspan"
-    - "engram7_sequence"
+    - "engram6_strength"
+    # "engram6_stretch"
+    - "engram6_curl"
+    - "engram6_rows"
+    - "engram6_columns"
+    - "engram6_order"
+    - "engram6_3key_order"
   default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
   default_maximize: [true, true, true, true, true, true]
   default_max_solutions: 10000
@@ -337,10 +337,9 @@ def main():
                 'layout': layout
             }
             
-            # Debug: ensure we have the right counts
+            # Ensure we have the right counts
             total_items = len(items_assigned_ordered) + len(items_to_assign_ordered)
             total_positions = len(remaining_positions) + len(unassigned_positions)
-            
             if total_items != 24:
                 print(f"Warning: Item count mismatch in config {config_num}. Assigned: {len(items_assigned_ordered)}, Unassigned: {len(items_to_assign_ordered)}, Total: {total_items}")
             if total_positions != 24:

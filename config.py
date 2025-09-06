@@ -79,7 +79,8 @@ class PathConfig:
     position_pair_score_table: str
     item_pair_score_table: str
     layout_results_folder: str
-
+    item_triple_score_table: Optional[str] = None
+    position_triple_score_table: Optional[str] = None
     
 @dataclass
 class MOOConfig:
@@ -165,7 +166,9 @@ def load_config(config_path: str = "config.yaml") -> Config:
         paths = PathConfig(
             position_pair_score_table=raw_config['paths']['position_pair_score_table'],
             item_pair_score_table=raw_config['paths']['item_pair_score_table'],
-            layout_results_folder=raw_config['paths']['layout_results_folder']
+            layout_results_folder=raw_config['paths']['layout_results_folder'],
+            item_triple_score_table=raw_config['paths'].get('item_triple_score_table'),
+            position_triple_score_table=raw_config['paths'].get('position_triple_score_table')
         )
     except (KeyError, TypeError) as e:
         raise ValueError(f"Error parsing paths configuration: {e}")
@@ -311,57 +314,6 @@ def print_config_summary(config: Config) -> None:
     print(f"  Visualization: keyboard={config.visualization.print_keyboard}, verbose={config.visualization.verbose_output}")
 
 
-def create_default_config(output_path: str = "config.yaml") -> None:
-    """
-    Create a default configuration file with common settings.
-    
-    Args:
-        output_path: Path where to save the default config
-    """
-    default_config = {
-        'paths': {
-            'item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
-            'position_pair_score_table': 'input/engram6_2key_scores.csv',
-            'layout_results_folder': 'output/layouts'
-        },
-        'optimization': {
-            'items_to_assign': 'etaoinsrhl',
-            'positions_to_assign': 'FDESVRJKIL',
-            'items_assigned': '',   
-            'positions_assigned': '',  
-            'items_to_constrain': '',   
-            'positions_to_constrain': ''  
-        },
-        'moo': {
-            'default_objectives': [
-                'engram7_load',
-                'engram7_strength',
-                'engram7_position',
-                'engram7_vspan',
-                'engram7_hspan',
-                'engram7_sequence'
-            ],
-            'default_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
-            'default_maximize': [True, True, True, True, True, True],
-            'default_max_solutions': 100,
-            'default_time_limit': 3600,
-            'default_position_pair_score_table': 'input/engram6_2key_scores.csv',
-            'default_item_pair_score_table': 'input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv',
-            'show_progress_bar': True,
-            'save_detailed_results': True
-        },
-        'visualization': {
-            'print_keyboard': False,
-            'verbose_output': False
-        }
-    }
-    
-    with open(output_path, 'w') as f:
-        yaml.dump(default_config, f, default_flow_style=False, indent=2)
-    
-    print(f"Default configuration saved to: {output_path}")
-
-
 def validate_files_exist(config: Config, position_pair_score_table: Optional[str] = None, 
                         item_pair_score_table: Optional[str] = None) -> None:
     """
@@ -397,11 +349,7 @@ if __name__ == "__main__":
     print("Configuration Management for MOO Layout Optimization")
     
     # Test configuration creation
-    try:
-        if not os.path.exists("config.yaml"):
-            print("Creating default configuration...")
-            create_default_config()
-        
+    try:        
         print("Loading configuration...")
         config = load_config()
         

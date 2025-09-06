@@ -95,15 +95,11 @@ class WeightedMOOScorer:
         self.position_triple_scores = {}
         if position_triple_score_table:
             self.position_triple_scores = self._load_position_triple_scores(position_triple_score_table)
-            
+
         # Determine which objectives are trigram-based
         self.trigram_objectives = set(self.position_triple_scores.keys())
         self.bigram_objectives = set(obj for obj in objectives if obj not in self.trigram_objectives)
-        
-        if verbose and self.trigram_objectives:
-            print(f"  Trigram objectives: {list(self.trigram_objectives)}")
-            print(f"  Bigram objectives: {list(self.bigram_objectives)}")
-            
+
         # Load item pair/triple frequencies for weighting
         self.item_pair_scores = self._load_item_pair_scores(item_pair_score_table)
         self.use_bigram_weighting = len(self.item_pair_scores) > 0
@@ -172,13 +168,13 @@ class WeightedMOOScorer:
             return {}
 
         try:
-            df = pd.read_csv(position_triple_score_table, dtype={'key_triple': str})
+            df = pd.read_csv(position_triple_score_table, dtype={'position_triple': str})
         except Exception as e:
             print(f"    Warning: Error reading position-triple table: {e}")
             return {}
 
-        if 'key_triple' not in df.columns:
-            print(f"    Warning: Position-triple table must have 'key_triple' column")
+        if 'position_triple' not in df.columns:
+            print(f"    Warning: Position-triple table must have 'position_triple' column")
             return {}
         
         # Find trigram objectives in this table
@@ -190,9 +186,9 @@ class WeightedMOOScorer:
             valid_triples = 0
             
             for _, row in df.iterrows():
-                key_triple = str(row['key_triple']).strip("'\"")
-                if len(key_triple) == 3 and not pd.isna(row[obj]):
-                    scores[key_triple.upper()] = float(row[obj])
+                position_triple = str(row['position_triple']).strip("'\"")
+                if len(position_triple) == 3 and not pd.isna(row[obj]):
+                    scores[position_triple.upper()] = float(row[obj])
                     valid_triples += 1
             
             position_triple_scores[obj] = scores
@@ -390,11 +386,11 @@ class WeightedMOOScorer:
                 for k in range(len(items)):
                     if i != j and j != k and i != k:  # All different
                         letter_triple = items[i] + items[j] + items[k]
-                        key_triple = positions[i] + positions[j] + positions[k]
+                        position_triple = positions[i] + positions[j] + positions[k]
                         
                         item_triple_score = self.item_triple_scores.get(letter_triple, 0.0)
-                        if item_triple_score > 0 and key_triple in position_triple_scores:
-                            score = position_triple_scores[key_triple]
+                        if item_triple_score > 0 and position_triple in position_triple_scores:
+                            score = position_triple_scores[position_triple]
                             weighted_total += score * item_triple_score
                             item_triple_score_total += item_triple_score
         
@@ -410,9 +406,9 @@ class WeightedMOOScorer:
             for j in range(len(items)):
                 for k in range(len(items)):
                     if i != j and j != k and i != k:  # All different
-                        key_triple = positions[i] + positions[j] + positions[k]
-                        if key_triple in position_triple_scores:
-                            total_score += position_triple_scores[key_triple]
+                        position_triple = positions[i] + positions[j] + positions[k]
+                        if position_triple in position_triple_scores:
+                            total_score += position_triple_scores[position_triple]
                             triple_count += 1
         
         return total_score / triple_count if triple_count > 0 else 0.0
@@ -452,18 +448,6 @@ class WeightedMOOScorer:
         pass
 
 
-@dataclass
-class ScoringArrays:
-    """Minimal compatibility wrapper for existing search infrastructure."""
-    item_scores: np.ndarray
-    item_pair_matrix: np.ndarray  
-    position_matrix: np.ndarray
-    
-    def __post_init__(self):
-        self.n_items = len(self.item_scores)
-        self.n_positions = self.position_matrix.shape[0]
-
-        
 def validate_item_pair_scoring_consistency(items: str, positions: str, objectives: List[str],
                                          position_pair_score_table: str, item_pair_score_table: str,
                                          verbose: bool = False) -> Dict[str, float]:

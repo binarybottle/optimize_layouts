@@ -130,12 +130,6 @@ def analyze_letter_bigram_frequencies(letter_file: str, bigram_file: str):
               f"+{new_bigram_freq/total_bigram_freq*100:4.1f}%), "
               f"cumulative: {cumulative_freq:>15,} ({cumulative_percentage:5.1f}%)")
 
-    # Debug: Check which bigrams are missing
-    print(f"\nDEBUGGING:")
-    print(f"Total bigrams in input: {len(bigram_dict)}")
-    print(f"Total bigrams found: {len(cumulative_bigrams)}")
-    print(f"Missing bigrams: {len(bigram_dict) - len(cumulative_bigrams)}")
-
     if len(cumulative_bigrams) < len(bigram_dict):
         missing_bigrams = set(bigram_dict.keys()) - cumulative_bigrams
         print(f"First 10 missing bigrams: {list(missing_bigrams)[:10]}")

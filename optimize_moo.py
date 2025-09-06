@@ -109,7 +109,7 @@ def parse_inf_value(value, default_val):
 
 
 def validate_inputs(config: Config, objectives: List[str], position_pair_score_table: str,
-                   item_pair_score_table_path: str) -> None:
+                   item_pair_score_table_path: str, position_triple_score_table: str = None) -> None:
     """
     Validate all input files and configuration.
     
@@ -118,19 +118,37 @@ def validate_inputs(config: Config, objectives: List[str], position_pair_score_t
         objectives: List of objective names
         position_pair_score_table: Path to position-pair scoring table
         item_pair_score_table: Path to item-pair scoring table
+        position_triple_score_table: Path to position-triple scoring table (optional)
     """
-    # Check position-pair scoring table exists and has required objectives
+    # Load position-pair scoring table and check which objectives are available
     if not Path(position_pair_score_table).exists():
         raise FileNotFoundError(f"Position-pair scoring table not found: {position_pair_score_table}")
     
     try:
         pp_df = pd.read_csv(position_pair_score_table, dtype={'key_pair': str})
-        missing = [obj for obj in objectives if obj not in pp_df.columns]
-        if missing:
-            raise ValueError(f"Missing objectives in position-pair scoring table: {missing}")
-        #print(f"Position-pair scoring table validation: {len(pp_df)} rows, objectives {objectives} found")
+        bigram_objectives = [obj for obj in objectives if obj in pp_df.columns]
+        print(f"Position-pair scoring table validation: {len(pp_df)} rows, {len(bigram_objectives)} bigram objectives found")
     except Exception as e:
-        raise ValueError(f"Error validating position-pair scoring table: {e}")
+        raise ValueError(f"Error reading position-pair scoring table: {e}")
+
+    # Load position-triple scoring table if provided and check which objectives are available
+    trigram_objectives = []
+    if position_triple_score_table and Path(position_triple_score_table).exists():
+        try:
+            pt_df = pd.read_csv(position_triple_score_table, dtype={'position_triple': str})
+            trigram_objectives = [obj for obj in objectives if obj in pt_df.columns]
+            print(f"Position-triple scoring table validation: {len(pt_df)} rows, {len(trigram_objectives)} trigram objectives found")
+        except Exception as e:
+            print(f"Warning: Error reading position-triple scoring table: {e}")
+    elif position_triple_score_table:
+        print(f"Warning: Position-triple scoring table not found: {position_triple_score_table}")
+    
+    # Check that all objectives are found in either table
+    all_found_objectives = set(bigram_objectives + trigram_objectives)
+    missing_objectives = [obj for obj in objectives if obj not in all_found_objectives]
+    
+    if missing_objectives:
+        raise ValueError(f"Missing objectives not found in any scoring table: {missing_objectives}")
 
     # Check item-pair scoring table (optional but warn if missing)
     if not Path(item_pair_score_table_path).exists():
@@ -152,7 +170,7 @@ def validate_inputs(config: Config, objectives: List[str], position_pair_score_t
         raise ValueError(f"More items ({n_items}) than positions ({n_positions})")
     if n_items < 2:
         raise ValueError("Need at least 2 items for meaningful optimization")
-
+    
 
 def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[str]) -> str:
     """
@@ -189,12 +207,12 @@ def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[
             'layout': layout_display
         }
         
-        # Add objective scores
+        # Objective scores
         for j, obj in enumerate(objectives):
             score = obj_scores[j] if j < len(obj_scores) else 0.0
             row[obj] = f"{score:.9f}"
         
-        # Add combined score
+        # Combined score
         combined_score = sum(obj_scores) / len(obj_scores) if obj_scores else 0.0
         row['combined_score'] = f"{combined_score:.9f}"
         
@@ -256,24 +274,14 @@ def print_results_summary(pareto_front: List[Dict], objectives: List[str],
 
 def run_moo_optimization(config: Config, objectives: List[str], position_pair_score_table: str,
                         weights: List[float], maximize: List[bool],
-                        item_pair_score_table: str, max_solutions: int = None, 
+                        item_pair_score_table: str, 
+                        position_triple_score_table: str = None,
+                        item_triple_score_table: str = None,
+                        max_solutions: int = None, 
                         time_limit: float = None,
                         verbose=False) -> Tuple[List[Dict], object]:
     """
     Run multi-objective optimization with given parameters.
-    
-    Args:
-        config: Configuration object
-        objectives: List of objective names
-        position_pair_score_table: Path to position-pair scoring table
-        weights: Weights for each objective
-        maximize: Maximize flags for each objective
-        item_pair_score_table: Path to item-pair scoring table
-        max_solutions: Maximum solutions to find
-        time_limit: Time limit in seconds
-        
-    Returns:
-        Tuple of (pareto_front, search_stats)
     """
     if verbose:
         print("Initializing Multi-Objective Optimizer...")
@@ -285,7 +293,7 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
     if verbose:
         print(f"Creating weighted scorer...")
     
-    # Create scorer
+    # Create scorer - use config path instead of hard-coded path
     scorer = WeightedMOOScorer(
         objectives=objectives,
         position_pair_score_table=position_pair_score_table,
@@ -294,10 +302,10 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
         weights=weights,
         maximize=maximize,
         item_pair_score_table=item_pair_score_table,
-        position_triple_score_table="input/keytriple_engram7_sequence_scores.csv",
+        position_triple_score_table=position_triple_score_table,
+        item_triple_score_table=item_triple_score_table,
         verbose=verbose
-    )
-    
+    )    
     if verbose:
         print(f"Scorer initialization complete")
     
@@ -349,6 +357,8 @@ def create_cli_parser() -> argparse.ArgumentParser:
                         help='Override item-pair scoring table path from config')
     parser.add_argument('--position-pair-score-table',
                         help='Override position-pair scoring table path from config')
+    parser.add_argument('--item-triple-score-table',
+                        help='Override item-triple scoring table path from config')
     parser.add_argument('--position-triple-score-table',
                         help='Override position-triple scoring table path from config')
 
@@ -378,7 +388,7 @@ def main() -> int:
         # Load configuration
         print(f"Loading configuration from: {args.config}")
         config = load_config(args.config)
-        
+
         if args.verbose:
             print_config_summary(config)
         
@@ -396,6 +406,7 @@ def main() -> int:
         # Use config paths unless overridden
         position_pair_score_table = args.position_pair_score_table or config.paths.position_pair_score_table
         item_pair_score_table = args.item_pair_score_table or config.paths.item_pair_score_table
+        position_triple_score_table = args.position_triple_score_table or config.paths.position_triple_score_table  # Add this line
 
         if args.verbose:
             print(f"Multi-Objective Configuration:")
@@ -405,12 +416,13 @@ def main() -> int:
                 print(f"    {i+1}. {obj} (weight: {weights[i]:.2f}, {direction})")
             print(f"  Position-pair scoring table: {position_pair_score_table}")
             print(f"  Item-pair scoring table: {item_pair_score_table}")
+            print(f"  Position-triple scoring table: {position_triple_score_table}")  # Add this line
 
         # Validate inputs
         if args.verbose:
             print(f"\nValidating inputs...")
-        validate_inputs(config, objectives, position_pair_score_table, item_pair_score_table)
-        
+            validate_inputs(config, objectives, position_pair_score_table, item_pair_score_table, position_triple_score_table)        
+
         if args.dry_run:
             print(f"\nDry run - configuration validation successful!")
             return 0
@@ -440,7 +452,9 @@ def main() -> int:
         max_solutions = args.max_solutions or parse_inf_value(config.moo.default_max_solutions, 100000)
         time_limit = args.time_limit or parse_inf_value(config.moo.default_time_limit, 100000.0)
 
-        # Run optimization
+        item_triple_score_table = args.item_triple_score_table or config.paths.item_triple_score_table
+
+        # Then pass it to run_moo_optimization:
         pareto_front, search_stats = run_moo_optimization(
             config=config,
             objectives=objectives,
@@ -448,6 +462,8 @@ def main() -> int:
             weights=weights,
             maximize=maximize,
             item_pair_score_table=item_pair_score_table,
+            position_triple_score_table=position_triple_score_table,
+            item_triple_score_table=item_triple_score_table,  # Add this line
             max_solutions=max_solutions,
             time_limit=time_limit,
             verbose=args.verbose
@@ -467,14 +483,13 @@ def main() -> int:
         
     except KeyboardInterrupt:
         print(f"\nOptimization interrupted by user")
-        return 1
+        return 1        
     except Exception as e:
         print(f"Error: {e}")
         if args.verbose:
             import traceback
             traceback.print_exc()
         return 1
-
 
 if __name__ == "__main__":
     sys.exit(main())
