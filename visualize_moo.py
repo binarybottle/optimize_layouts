@@ -49,6 +49,37 @@ class UnifiedMOOAnalyzer:
         self.item_col = None
         self.pair_col = None
         
+        # High-contrast color palette (excludes yellow, light colors)
+        self.colors = [
+            '#1f77b4',  # Blue
+            '#ff7f0e',  # Orange  
+            '#2ca02c',  # Green
+            '#d62728',  # Red
+            '#9467bd',  # Purple
+            '#8c564b',  # Brown
+            '#e377c2',  # Pink
+            '#7f7f7f',  # Gray
+            '#17becf',  # Cyan
+            '#bcbd22',  # Olive
+            '#ff9896',  # Light Red
+            '#c5b0d5',  # Light Purple
+            '#c49c94',  # Light Brown
+            '#f7b6d3',  # Light Pink
+            '#dbdb8d',  # Light Olive
+            '#9edae5',  # Light Cyan
+            '#1a1a1a',  # Near Black
+            '#800080',  # Purple
+            '#008080',  # Teal
+            '#800000'   # Maroon
+        ]
+
+    def get_colors(self, n_colors):
+        """Get high-contrast colors, cycling if needed."""
+        if n_colors <= len(self.colors):
+            return self.colors[:n_colors]
+        else:
+            return [self.colors[i % len(self.colors)] for i in range(n_colors)]
+        
     def detect_input_type(self, input_path):
         """Detect whether input is directory or file."""
         path = Path(input_path)
@@ -280,7 +311,7 @@ class UnifiedMOOAnalyzer:
         else:
             df_sorted = self.df
         
-        colors = plt.cm.Set1(np.linspace(0, 1, len(self.objective_columns)))
+        colors = self.get_colors(len(self.objective_columns))
         x_positions = range(len(df_sorted))
         
         for i, obj_col in enumerate(self.objective_columns):
@@ -291,7 +322,9 @@ class UnifiedMOOAnalyzer:
         plt.xlabel('Solution Index (sorted by ranking)')
         plt.ylabel('Objective Score')
         plt.title(f'Multi-Objective Scores ({len(df_sorted):,} solutions)')
-        plt.legend()
+        # Create legend with larger markers
+        legend = plt.legend(markerscale=20, frameon=True, fancybox=True, shadow=True)
+        legend.get_frame().set_alpha(0.9)
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
         plt.savefig(self.output_dir / 'objective_scores_scatter.png', dpi=300, bbox_inches='tight')
@@ -309,7 +342,7 @@ class UnifiedMOOAnalyzer:
         if has_source_files:
             # Color by source file
             unique_sources = self.df['source_file'].unique()
-            colors = plt.cm.tab20(np.linspace(0, 1, len(unique_sources)))
+            colors = self.get_colors(len(unique_sources))
             source_color_map = dict(zip(unique_sources, colors))
             
             for source in unique_sources:
@@ -318,7 +351,9 @@ class UnifiedMOOAnalyzer:
                            alpha=0.6, s=50, label=f'{source} ({len(source_data)})',
                            color=source_color_map[source])
             
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            legend = plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left', 
+                            markerscale=3, frameon=True, fancybox=True, shadow=True)
+            legend.get_frame().set_alpha(0.9)
             title_suffix = " - Colored by Source"
         else:
             plt.scatter(self.df[self.item_col], self.df[self.pair_col], 
@@ -434,7 +469,7 @@ class UnifiedMOOAnalyzer:
         
         plt.figure(figsize=(12, 6))
         top_sources = file_counts.head(20)
-        plt.bar(range(len(top_sources)), top_sources.values)
+        plt.bar(range(len(top_sources)), top_sources.values, color=self.colors[0])
         plt.xlabel('Source File Rank')
         plt.ylabel('Number of Solutions')
         plt.title(f'Distribution of Solutions by Source File (Top 20)')

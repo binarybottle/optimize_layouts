@@ -200,11 +200,12 @@ class AdaptiveOptimizer:
                     else:
                         self.active_processes[process.pid] = (config_id, process, time.time())
                         print(f"🔄 Started config {config_id} (worker {len(self.active_processes)}/{self.current_workers})")
+                        self.show_status()
                 
                 # Show status periodically (every 60 seconds)
-                if time.time() - last_status_time > 60:
-                    self.show_status()
-                    last_status_time = time.time()
+                #if time.time() - last_status_time > 60:
+                #    self.show_status()
+                #    last_status_time = time.time()
                 
                 # Small sleep to prevent busy waiting
                 time.sleep(5)

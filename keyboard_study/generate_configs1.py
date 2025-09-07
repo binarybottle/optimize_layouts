@@ -38,7 +38,7 @@ Number of permutations per config file, with some of the 14 items fixed per file
 Number of permutations for 3 fixed items (after constraining the top item to one side):
     3 fixed in 13 positions:      1,716 permutations
 Number of configuration files:
-    1,716 3-fixed-in-13 permutations x 7 1-fixed-in-7 permutations = 12,012 configuration files
+    1,716 3-fixed-in-13 permutations x 2 1-fixed-in-2 permutations = 3,432 configuration files
 """
 
 top_items = "etaoinsrhldcum"  # Most frequent letters (in English) for first configs
@@ -46,7 +46,7 @@ top_positions = ["F","J","D","K","E","I","S","L","V","M","R","U","A",";"]
 ntop_items = len(top_items)
 if len(top_positions) < ntop_items:
     raise ValueError("Not enough positions defined for the number of letters.")
-positions_for_item_1 = ["J","K","I","L","M","U",";"] # Positions for first item
+positions_for_item_1 = ["J","K"] # Positions for first item
 
 nfixed_items = 4  # Number of fixed items
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
