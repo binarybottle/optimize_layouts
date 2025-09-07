@@ -19,12 +19,11 @@ Output:
 
 Usage Examples:
 
-    # Basic MOO with default settings in config.yaml
+    # Basic MOO with default settings in config.yaml (including exhaustive search)
     python optimize_moo.py --config config.yaml
 
-    # Basic MOO with Engram-6 objectives
-    python optimize_moo.py --config config.yaml \
-        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
+   # Branch-and-bound
+    poetry run python optimize_moo.py --config config.yaml --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order --search-mode branch-bound
 
     # With custom settings
     python optimize_moo.py --config config.yaml \
@@ -172,21 +171,28 @@ def validate_inputs(config: Config, objectives: List[str], position_pair_score_t
         raise ValueError("Need at least 2 items for meaningful optimization")
     
 
-def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[str]) -> str:
+def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[str], 
+                     weights: List[float] = None, maximize: List[bool] = None) -> str:
     """
-    Save MOO results to CSV file with comprehensive information.
-    
-    Args:
-        pareto_front: List of Pareto-optimal solutions
-        config: Configuration object
-        objectives: List of objective names
-        
-    Returns:
-        Path to saved CSV file
+    Save MOO results to CSV file with comprehensive information including configuration metadata.
     """
     if not pareto_front:
         print("No solutions to save")
         return ""
+    
+    # Get configuration metadata
+    opt = config.optimization
+    config_metadata = {
+        'config_items_to_assign': ''.join(opt.items_to_assign),
+        'config_positions_to_assign': ''.join(opt.positions_to_assign),
+        'config_items_assigned': ''.join(opt.items_assigned) if opt.items_assigned else '',
+        'config_positions_assigned': ''.join(opt.positions_assigned) if opt.positions_assigned else '',
+        'config_items_constrained': ''.join(opt.items_to_constrain_set) if opt.items_to_constrain_set else '',
+        'config_positions_constrained': ''.join(opt.positions_to_constrain_set) if opt.positions_to_constrain_set else '',
+        'objectives_used': ','.join(objectives),
+        'weights_used': ','.join(map(str, weights)) if weights else '',
+        'maximize_used': ','.join(map(str, maximize)) if maximize else ''
+    }
     
     # Prepare results data
     results_data = []
@@ -194,17 +200,25 @@ def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[
         mapping = solution['mapping']
         obj_scores = solution['objectives']
         
-        # Create layout strings
-        items_str = ''.join(sorted(mapping.keys()))
-        positions_str = ''.join(mapping[item] for item in sorted(mapping.keys()))
+        # Build the order that matches what's shown in console output
+        opt = config.optimization
+        items_assigned = list(opt.items_assigned) if opt.items_assigned else []
+        items_to_assign = list(opt.items_to_assign) if opt.items_to_assign else []
+
+        # Use the same order as the complete problem space: assigned + to_assign
+        expected_order = items_assigned + items_to_assign  # etao + insrhldcum = etaoinsrhldcum
+
+        items_str = ''.join(expected_order)
+        positions_str = ''.join(mapping[item] for item in expected_order)
         layout_display = f"{items_str} -> {positions_str}"
         
-        # Build result row
+        # Build result row with configuration metadata
         row = {
             'rank': i,
-            'items': items_str,
-            'positions': positions_str,
-            'layout': layout_display
+            'items': items_str,           # Now shows complete layout
+            'positions': positions_str,   # Now shows complete positions
+            'layout': layout_display,     # Now shows complete mapping
+            **config_metadata
         }
         
         # Objective scores
@@ -236,15 +250,7 @@ def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[
 
 def print_results_summary(pareto_front: List[Dict], objectives: List[str], 
                          search_stats, config: Config) -> None:
-    """
-    Print comprehensive summary of optimization results.
-    
-    Args:
-        pareto_front: Pareto-optimal solutions found
-        objectives: List of objective names  
-        search_stats: Search statistics object
-        config: Configuration object
-    """
+    """Print comprehensive summary of optimization results."""
     print(f"\n" + "="*80)
     print("MULTI-OBJECTIVE OPTIMIZATION RESULTS")
     print("="*80)
@@ -252,6 +258,9 @@ def print_results_summary(pareto_front: List[Dict], objectives: List[str],
     print(f"\nSearch Summary:")
     print(f"  Time elapsed: {search_stats.elapsed_time:.2f}s")
     print(f"  Nodes processed: {search_stats.nodes_processed:,}")
+    if hasattr(search_stats, 'nodes_pruned') and search_stats.nodes_pruned > 0:
+        prune_rate = search_stats.nodes_pruned / search_stats.nodes_processed * 100
+        print(f"  Nodes pruned: {search_stats.nodes_pruned:,} ({prune_rate:.1f}%)")
     print(f"  Solutions evaluated: {search_stats.solutions_found:,}")
     print(f"  Pareto front size: {len(pareto_front)}")
     
@@ -261,7 +270,7 @@ def print_results_summary(pareto_front: List[Dict], objectives: List[str],
         print(f"  Search rate: {rate:.0f} nodes/sec")
         print(f"  Solution efficiency: {efficiency:.2f}% nodes yielded solutions")
     
-    # Analyze and display Pareto front
+    # Use the new analysis function
     analyze_pareto_front(pareto_front, objectives)
     
     # Validate Pareto front
@@ -279,26 +288,49 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
                         item_triple_score_table: str = None,
                         max_solutions: int = None, 
                         time_limit: float = None,
+                        search_mode: str = 'branch-bound',
                         verbose=False) -> Tuple[List[Dict], object]:
     """
-    Run multi-objective optimization with given parameters.
+    Run multi-objective optimization with selectable search algorithm.
     """
     if verbose:
         print("Initializing Multi-Objective Optimizer...")
     
-    # Extract items and positions
-    items = list(config.optimization.items_to_assign)
-    positions = list(config.optimization.positions_to_assign)
+    # Handle the config semantics correctly
+    opt = config.optimization
+    
+    # Extract the separate sets from config
+    items_assigned = list(opt.items_assigned) if opt.items_assigned else []
+    items_to_assign = list(opt.items_to_assign) if opt.items_to_assign else []
+    positions_assigned = list(opt.positions_assigned) if opt.positions_assigned else []
+    positions_to_assign = list(opt.positions_to_assign) if opt.positions_to_assign else []
+    
+    # Combine to create the full problem space
+    all_items = items_assigned + items_to_assign
+    all_positions = positions_assigned + positions_to_assign
+    
+    if verbose:
+        print(f"\nCombining problem space:")
+        print(f"  Pre-assigned items: {items_assigned}")
+        print(f"  Items to optimize: {items_to_assign}")
+        print(f"  -> Complete item set: {all_items}")
+        print(f"  Pre-assigned positions: {positions_assigned}")
+        print(f"  Positions available: {positions_to_assign}")
+        print(f"  -> Complete position set: {all_positions}")
+    
+    # Use the combined sets for the scorer (this is what was missing!)
+    items = all_items
+    positions = all_positions
     
     if verbose:
         print(f"Creating weighted scorer...")
     
-    # Create scorer - use config path instead of hard-coded path
+    # Create scorer with the COMPLETE problem space
     scorer = WeightedMOOScorer(
         objectives=objectives,
         position_pair_score_table=position_pair_score_table,
-        items=items,
-        positions=positions,
+        items=items,           # Now includes pre-assigned + to-be-optimized
+        positions=positions,   # Now includes pre-assigned + available
         weights=weights,
         maximize=maximize,
         item_pair_score_table=item_pair_score_table,
@@ -308,7 +340,7 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
     )    
     if verbose:
         print(f"Scorer initialization complete")
-    
+
     # Print objective statistics
     if verbose:
         stats = scorer.get_objective_stats()
@@ -317,16 +349,41 @@ def run_moo_optimization(config: Config, objectives: List[str], position_pair_sc
             for obj, stat in stats.items():
                 print(f"  {obj}: [{stat['min']:.3f}, {stat['max']:.3f}] mean={stat['mean']:.3f} (n={stat['count']})")
     
-    # Run search
-    if verbose:
-        print(f"\nStarting search...")
-
+    # Verify the pre-assignments will work
+    if items_assigned and positions_assigned:
+        print(f"\nPre-assignment verification:")
+        print(f"  Pre-assigned: {items_assigned} -> {positions_assigned}")
+        
+        # Check that all pre-assigned items exist in the full item set
+        missing_items = [item for item in items_assigned if item not in items]
+        if missing_items:
+            print(f"  ERROR: Pre-assigned items not in full item set: {missing_items}")
+        
+        # Check that all pre-assigned positions exist in the full position set  
+        missing_positions = [pos for pos in positions_assigned if pos.upper() not in [p.upper() for p in positions]]
+        if missing_positions:
+            print(f"  ERROR: Pre-assigned positions not in full position set: {missing_positions}")
+        
+        if not missing_items and not missing_positions:
+            print(f"  ✓ Pre-assignments are valid")
+            
+            # Calculate actual search space
+            remaining_items = len(items_to_assign)
+            remaining_positions = len(positions_to_assign)
+            from math import factorial
+            if remaining_positions >= remaining_items:
+                search_space = factorial(remaining_positions) // factorial(remaining_positions - remaining_items)
+                print(f"  ✓ Search space: {remaining_items} items in {remaining_positions} positions = {search_space:,} permutations")
+    
+    # Run search with selected algorithm
     pareto_front, search_stats = moo_search(
         config=config,
         scorer=scorer,
         max_solutions=max_solutions,
         time_limit=time_limit,
-        progress_bar=True
+        progress_bar=True,
+        verbose=verbose,
+        search_mode=search_mode  # PASS THE SEARCH MODE
     )
     
     return pareto_front, search_stats
@@ -346,6 +403,19 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--objectives', required=False,
                        help='Comma-separated objectives from position-pair scoring table (default from config)')
     
+    # Search method options
+    parser.add_argument('--search-mode', choices=['branch-bound', 'exhaustive'], 
+                       default='exhaustive',
+                       help='Search algorithm: branch-bound (default, faster) or exhaustive (guaranteed complete)')
+    parser.add_argument('--search-all', action='store_true',
+                       help='Force exhaustive search (same as --search-mode exhaustive)')
+
+    # Search limits
+    parser.add_argument('--max-solutions', type=int, default=None,
+                       help='Maximum Pareto solutions (default: from config)')
+    parser.add_argument('--time-limit', type=float, default=None,
+                       help='Time limit in seconds (default: from config)')
+    
     # Optional objective configuration
     parser.add_argument('--weights', 
                        help='Comma-separated weights for objectives (default: all 1.0)')
@@ -362,12 +432,6 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument('--position-triple-score-table',
                         help='Override position-triple scoring table path from config')
 
-    # Search limits
-    parser.add_argument('--max-solutions', type=int, default=None,
-                       help='Maximum Pareto solutions (default: from config)')
-    parser.add_argument('--time-limit', type=float, default=None,
-                       help='Time limit in seconds (default: from config)')
-    
     # Utility options
     parser.add_argument('--validate', action='store_true',
                        help='Validate scorer consistency before optimization')
@@ -447,14 +511,20 @@ def main() -> int:
             except Exception as e:
                 print(f"Validation failed: {e}")
                 return 1
+
+        item_triple_score_table = args.item_triple_score_table or config.paths.item_triple_score_table
+
+        # Determine search mode
+        search_mode = args.search_mode
+        if args.search_all:
+            search_mode = 'exhaustive'
+            print("Using exhaustive search (--search-all specified)")
         
         # Handle Inf values for limits
         max_solutions = args.max_solutions or parse_inf_value(config.moo.default_max_solutions, 100000)
         time_limit = args.time_limit or parse_inf_value(config.moo.default_time_limit, 100000.0)
 
-        item_triple_score_table = args.item_triple_score_table or config.paths.item_triple_score_table
-
-        # Then pass it to run_moo_optimization:
+        # Run optimization with search mode
         pareto_front, search_stats = run_moo_optimization(
             config=config,
             objectives=objectives,
@@ -463,18 +533,19 @@ def main() -> int:
             maximize=maximize,
             item_pair_score_table=item_pair_score_table,
             position_triple_score_table=position_triple_score_table,
-            item_triple_score_table=item_triple_score_table,  # Add this line
+            item_triple_score_table=item_triple_score_table,
             max_solutions=max_solutions,
             time_limit=time_limit,
+            search_mode=search_mode,  # ADD THIS
             verbose=args.verbose
         )
 
-        # Display results
+        # Display results (use the new analyze_pareto_front function)
         print_results_summary(pareto_front, objectives, search_stats, config)
         
         # Save results
         if pareto_front:
-            csv_path = save_moo_results(pareto_front, config, objectives)
+            csv_path = save_moo_results(pareto_front, config, objectives, weights, maximize)
             print(f"\nResults saved to: {csv_path}")
         else:
             print(f"\nNo solutions found!")
@@ -490,6 +561,6 @@ def main() -> int:
             import traceback
             traceback.print_exc()
         return 1
-
+    
 if __name__ == "__main__":
     sys.exit(main())

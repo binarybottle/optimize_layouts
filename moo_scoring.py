@@ -80,14 +80,6 @@ class WeightedMOOScorer:
         if len(self.objective_maximize) != len(objectives):
             raise ValueError(f"Maximize flags length ({len(self.objective_maximize)}) != objectives length ({len(objectives)})")
         
-        if verbose:
-            print(f"Initializing Extended WeightedMOOScorer:")
-            print(f"  Objectives: {objectives}")
-            print(f"  Items: {self.items}")
-            print(f"  Positions: {self.positions}")
-        else:
-            print(f"Loading {len(objectives)} objectives, {len(items)} items...")
-
         # Load bigram position scores
         self.position_pair_scores = self._load_position_pair_scores(position_pair_score_table)
         
@@ -99,6 +91,15 @@ class WeightedMOOScorer:
         # Determine which objectives are trigram-based
         self.trigram_objectives = set(self.position_triple_scores.keys())
         self.bigram_objectives = set(obj for obj in objectives if obj not in self.trigram_objectives)
+
+        if verbose:
+            print(f"Initializing Extended WeightedMOOScorer:")
+            print(f"  Objectives: {objectives}")
+            print(f"  Items: {self.items}")
+            print(f"  Positions: {self.positions}")
+        else:
+            print(f"Loading {len(self.bigram_objectives)} bigram objectives, {len(items)} items...")
+            print(f"Loading {len(self.trigram_objectives)} trigram objectives, {len(items)} items...")
 
         # Load item pair/triple frequencies for weighting
         self.item_pair_scores = self._load_item_pair_scores(item_pair_score_table)

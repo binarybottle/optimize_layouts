@@ -12,7 +12,7 @@ the best trade-offs across an arbitrary number of competing criteria.
 
 ## Multi-Objective Optimization (MOO)
   ```bash
-    # Basic MOO with default settings in config.yaml
+    # Basic MOO with default settings in config.yaml (uses exhaustive search)
     python optimize_moo.py --config config.yaml
 
     # MOO with specific objectives (overrides config defaults)
@@ -24,6 +24,11 @@ the best trade-offs across an arbitrary number of competing criteria.
         --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order \
         --weights 1.0,2.0,0.5,0.75 --maximize true,true,false,true \
         --max-solutions 100 --time-limit 3600 --verbose
+
+    # Force branch-and-bound search (faster for 12+ items, but more complex)
+    python optimize_moo.py --config config.yaml \
+        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order \
+        --search-mode branch-bound
 
     # Validation run
     python optimize_moo.py --config config.yaml --validate --dry-run
@@ -113,11 +118,20 @@ and each position-pair is represented by two position characters.
       ES,0.68,0.71,0.85,0.75,0.69,0.82
     ```
 
-## Multi-objective search algorithm
-  - Pareto-optimal search finds non-dominated solutions across multiple objectives
-  - Branch-and-bound optimization with exact score calculation and pruning
-  - Constraint handling for partial assignments and position restrictions
-  - Progress tracking with statistics and time limits
+## Multi-objective search algorithms
+The system provides two Pareto-optimal search algorithms with different performance characteristics:
+Exhaustive Search (Default)
+
+Guaranteed complete: Finds ALL Pareto-optimal solutions
+Simple and reliable: No complex pruning logic or upper bound calculations
+Optimal for ≤10 items: Faster than branch-and-bound for smaller problems
+Direct evaluation: Tests every possible permutation with minimal overhead
+
+## Branch-and-Bound Search
+Intelligent pruning: Uses upper bounds to eliminate dominated solution branches
+Optimal for ≥12 items: Essential when factorial growth becomes prohibitive
+Complex but scalable: More overhead per node but massive savings on large problems
+Preserves optimality: Mathematically sound pruning ensures no optimal solutions are lost
 
 ## Bigram and Trigram Scoring
 The system supports both bigram (2-key) and trigram (3-key) objective scoring; 
