@@ -644,7 +644,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     return pareto_front, stats
 
 
-def exhaustive_moo_search(config: Config, scorer, max_solutions: Optional[int] = None, 
+def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions: Optional[int] = None, 
                          time_limit: Optional[float] = None, progress_bar: bool = True,
                          verbose: bool = False) -> Tuple[List[Dict], SearchStats]:
     """
@@ -851,8 +851,11 @@ def exhaustive_moo_search(config: Config, scorer, max_solutions: Optional[int] =
             rate = stats.nodes_processed / stats.elapsed_time
             efficiency = stats.solutions_found / stats.nodes_processed * 100
             print(f"  Search rate: {rate:.0f} nodes/sec")
-            print(f"  Solution efficiency: {efficiency:.2f}% nodes yielded solutions")
-    
+            if search_mode == 'exhaustive':
+                print(f"  Exhaustive tree traversal efficiency: {efficiency:.2f}% nodes were complete solutions")
+            else:
+                print(f"  Solution efficiency: {efficiency:.2f}% nodes yielded solutions")
+ 
     return pareto_front, stats
 
 
@@ -883,7 +886,7 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
         print("")
         
         return exhaustive_moo_search(
-            config, scorer, max_solutions, time_limit, progress_bar, verbose)
+            config, scorer, search_mode, max_solutions, time_limit, progress_bar, verbose)
     
     elif search_mode == 'branch-bound':
         print("Using branch-and-bound search:")

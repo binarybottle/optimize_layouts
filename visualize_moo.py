@@ -175,12 +175,30 @@ class UnifiedMOOAnalyzer:
     
     def detect_objective_columns(self, df):
         """Detect objective columns and special item/pair columns."""
-        # Common metadata columns to exclude
-        metadata_cols = ['config_id', 'rank', 'source_rank', 'items', 'positions', 'layout', 
-                        'combined_score', 'source_file', 'global_rank', 'item_rank', 'pair_rank']
+        # Comprehensive metadata columns to exclude
+        metadata_cols = [
+            'config_id', 'rank', 'source_rank', 'items', 'positions', 'layout', 
+            'combined_score', 'source_file', 'global_rank', 'item_rank', 'pair_rank',
+            # Config metadata columns
+            'config_items_to_assign', 'config_positions_to_assign', 
+            'config_items_assigned', 'config_positions_assigned',
+            'config_items_constrained', 'config_positions_constrained',
+            'objectives_used', 'weights_used', 'maximize_used',
+            # Other potential metadata
+            'source_config', 'timestamp', 'run_id'
+        ]
         
-        # Find objective columns
-        objective_cols = [col for col in df.columns if col not in metadata_cols]
+        # Find objective columns (likely numeric and not metadata)
+        potential_objectives = []
+        for col in df.columns:
+            if col not in metadata_cols:
+                # Check if column contains numeric data
+                try:
+                    pd.to_numeric(df[col], errors='raise')
+                    potential_objectives.append(col)
+                except (ValueError, TypeError):
+                    # Skip non-numeric columns
+                    continue
         
         # Try to identify specific item/pair columns for Pareto analysis
         item_possibilities = ['Complete Item', 'item_score', 'Opt Item Score']
@@ -199,8 +217,93 @@ class UnifiedMOOAnalyzer:
                 pair_col = col
                 break
         
-        return objective_cols, item_col, pair_col
+        return potential_objectives, item_col, pair_col
     
+    def plot_objective_scatter(self):
+        """Create scatter plot of objective scores."""
+        if not self.objective_columns:
+            return
+            
+        plt.figure(figsize=(14, 8))
+        
+        # Sort by global rank or combined score
+        sort_col = 'global_rank' if 'global_rank' in self.df.columns else 'combined_score'
+        if sort_col in self.df.columns:
+            df_sorted = self.df.sort_values(sort_col, ascending=False if sort_col == 'combined_score' else True)
+        else:
+            df_sorted = self.df
+        
+        colors = self.get_colors(len(self.objective_columns))
+        x_positions = range(len(df_sorted))
+        
+        for i, obj_col in enumerate(self.objective_columns):
+            plt.scatter(x_positions, df_sorted[obj_col], 
+                    marker='.', s=1, alpha=0.7, 
+                    label=obj_col, color=colors[i])
+        
+        plt.xlabel('Solution Index (sorted by ranking)')
+        plt.ylabel('Objective Score')
+        plt.title(f'Multi-Objective Scores ({len(df_sorted):,} solutions)')
+        
+        # Fixed legend creation - remove problematic parameters
+        try:
+            legend = plt.legend(markerscale=10, frameon=True)
+            if legend:
+                legend.get_frame().set_alpha(0.9)
+        except Exception as e:
+            print(f"Warning: Could not create legend: {e}")
+            
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(self.output_dir / 'objective_scores_scatter.png', dpi=300, bbox_inches='tight')
+        plt.show()
+    
+    def plot_pareto_front_2d(self):
+        """Create 2D Pareto front if we have item/pair objectives."""
+        if not (self.item_col and self.pair_col):
+            return
+            
+        has_source_files = 'source_file' in self.df.columns
+        
+        plt.figure(figsize=(12, 8))
+        
+        if has_source_files:
+            # Color by source file
+            unique_sources = self.df['source_file'].unique()
+            colors = self.get_colors(len(unique_sources))
+            source_color_map = dict(zip(unique_sources, colors))
+            
+            for source in unique_sources:
+                source_data = self.df[self.df['source_file'] == source]
+                plt.scatter(source_data[self.item_col], source_data[self.pair_col], 
+                        alpha=0.6, s=50, label=f'{source} ({len(source_data)})',
+                        color=source_color_map[source])
+            
+            # Fixed legend positioning
+            try:
+                legend = plt.legend(loc='center left', bbox_to_anchor=(1, 0.5), 
+                                frameon=True)
+                if legend:
+                    legend.get_frame().set_alpha(0.9)
+            except Exception as e:
+                print(f"Warning: Could not create legend: {e}")
+                plt.legend()  # Fallback to default legend
+                
+            title_suffix = " - Colored by Source"
+        else:
+            plt.scatter(self.df[self.item_col], self.df[self.pair_col], 
+                    alpha=0.6, s=50, color='blue')
+            title_suffix = ""
+        
+        plt.xlabel(self.item_col)
+        plt.ylabel(self.pair_col)
+        plt.title(f'Pareto Front{title_suffix} ({len(self.df):,} solutions)')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(self.output_dir / f'pareto_front_2d{"_colored" if has_source_files else ""}.png', 
+                dpi=300, bbox_inches='tight')
+        plt.show()
+            
     def add_global_rankings(self, df):
         """Add global ranking columns based on objectives."""
         if self.item_col and self.pair_col:

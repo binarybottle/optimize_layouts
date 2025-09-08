@@ -42,6 +42,7 @@ import argparse
 from html import parser
 import time
 import sys
+from networkx import efficiency
 import pandas as pd
 import datetime
 from typing import List, Dict, Tuple
@@ -249,7 +250,7 @@ def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[
 
 
 def print_results_summary(pareto_front: List[Dict], objectives: List[str], 
-                         search_stats, config: Config) -> None:
+                         search_mode, search_stats, config: Config) -> None:
     """Print comprehensive summary of optimization results."""
     print(f"\n" + "="*80)
     print("MULTI-OBJECTIVE OPTIMIZATION RESULTS")
@@ -268,8 +269,11 @@ def print_results_summary(pareto_front: List[Dict], objectives: List[str],
         rate = search_stats.nodes_processed / search_stats.elapsed_time
         efficiency = search_stats.solutions_found / search_stats.nodes_processed * 100
         print(f"  Search rate: {rate:.0f} nodes/sec")
-        print(f"  Solution efficiency: {efficiency:.2f}% nodes yielded solutions")
-    
+        if search_mode == 'exhaustive':
+            print(f"  Exhaustive tree traversal efficiency: {efficiency:.2f}% nodes were complete solutions")
+        else:
+            print(f"  Solution efficiency: {efficiency:.2f}% nodes yielded solutions")
+        
     # Use the new analysis function
     analyze_pareto_front(pareto_front, objectives)
     
@@ -541,7 +545,7 @@ def main() -> int:
         )
 
         # Display results (use the new analyze_pareto_front function)
-        print_results_summary(pareto_front, objectives, search_stats, config)
+        print_results_summary(pareto_front, objectives, search_mode, search_stats, config)
         
         # Save results
         if pareto_front:
