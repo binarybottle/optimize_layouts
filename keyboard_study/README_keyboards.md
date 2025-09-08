@@ -24,7 +24,7 @@ For the following, we:
   and the remaining 10 keys have much lower comfort scores than the top 14 keys.)
   Use multi-objective optimization (MOO, with Engram-6 scoring objectives -- see below) 
   to find a Pareto front of equally viable, 14-letter/key layout candidates.
-    1. To parallelize the branch-and-bound, depth-first search:
+    1. To parallelize the exhaustive search:
        constrain the most frequent letter to the two strongest keys (JK) while 
        constraining the next 3 letters to the remaining 13 of the top 14 keys.
        Create a configuration file for each of the (3,432) possible arrangements of 4 in 14. 
