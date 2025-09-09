@@ -213,30 +213,32 @@ Display modes:
 
 Examples:
   python display_layout.py --letters "etaoin" --positions "FDESGH"
-  python display_layout.py --letters "test" --positions "RTSG" --html
+  python display_layout.py --items "etaoin" --keys "FDESGH" --html
         """
-    )
+)
     
-    parser.add_argument('--letters', 
-                       required=True,
-                       help='Characters to place on keyboard (up to 32 characters)')
+    parser.add_argument('--letters', '--items',
+                        dest='letters',
+                        required=True,
+                        help='Characters to place on keyboard (up to 32 characters)')
 
-    parser.add_argument('--positions',      
-                       required=False,
-                       help='Corresponding QWERTY positions (e.g., "QWERTY" for top row)')
+    parser.add_argument('--positions', '--keys',      
+                        dest='positions',
+                        required=False,
+                        help='Corresponding QWERTY positions (e.g., "QWERTY" for top row)')
     
     # Display mode options
     parser.add_argument('--html', action='store_true',
-                       help='Generate clean HTML file')
+                        help='Generate clean HTML file')
     
     parser.add_argument('--output', default='keyboard_layout.html',
-                       help='Output filename for HTML mode (default: keyboard_layout.html)')
+                        help='Output filename for HTML mode (default: keyboard_layout.html)')
     
     parser.add_argument('--show-empty', action='store_true',
-                       help='Show positions of empty keys')
+                        help='Show positions of empty keys')
 
     parser.add_argument('--quiet', action='store_true',
-                       help='Only show keyboard layout')
+                        help='Only show keyboard layout')
     
     args = parser.parse_args()
     
