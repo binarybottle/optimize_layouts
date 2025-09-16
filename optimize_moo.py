@@ -23,11 +23,11 @@ Usage Examples:
     python optimize_moo.py --config config.yaml
 
    # Branch-and-bound
-    poetry run python optimize_moo.py --config config.yaml --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order --search-mode branch-bound
+    poetry run python optimize_moo.py --config config.yaml --objectives engram_keys,engram_rows,engram_columns,engram_order --search-mode branch-bound
 
     # With custom settings
     python optimize_moo.py --config config.yaml \
-        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
+        --objectives engram_keys,engram_rows,engram_columns,engram_order
         --position-pair-score-table input/position_pair_score_table.csv \
         --item-pair-score-table input/item_pair_score_table.csv \
         --weights 1.0,2.0,0.5,0.5,0.5,0.5 --maximize true,true,false,false,false,false \

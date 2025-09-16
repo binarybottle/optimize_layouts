@@ -17,17 +17,17 @@ the best trade-offs across an arbitrary number of competing criteria.
 
     # MOO with specific objectives (overrides config defaults)
     python optimize_moo.py --config config.yaml \
-        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order
+        --objectives engram_keys,engram_rows,engram_columns,engram_order
 
     # MOO with custom weights and directions
     python optimize_moo.py --config config.yaml \
-        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order \
+        --objectives engram_keys,engram_rows,engram_columns,engram_order \
         --weights 1.0,2.0,0.5,0.75 --maximize true,true,false,true \
         --max-solutions 100 --time-limit 3600 --verbose
 
     # Force branch-and-bound search (faster for 12+ items, but more complex)
     python optimize_moo.py --config config.yaml \
-        --objectives engram6_strength,engram6_curl,engram6_rows,engram6_3key_order \
+        --objectives engram_keys,engram_rows,engram_columns,engram_order \
         --search-mode branch-bound
 
     # Validation run
@@ -65,8 +65,8 @@ optimize_layouts/
 │
 │ # I/O (inputs are for a keyboard optimization study)
 ├── input/
-│   ├── engram6_2key_scores.csv          # Position-pair scoring (bigram)
-│   ├── engram6_3key_order_scores.csv    # Position-triple scoring (trigram)
+│   ├── engram_2key_scores.csv          # Position-pair scoring (bigram)
+│   ├── engram_3key_order_scores.csv    # Position-triple scoring (trigram)
 │   └── frequency/
 │       ├── english-letter-pair-counts-google-ngrams_normalized.csv
 │       └── english-letter-triple-counts-google-ngrams_normalized.csv
@@ -112,7 +112,7 @@ and each position-pair is represented by two position characters.
     ```
   Position-pair (normalized multi-objective) scores file:       
     ```csv
-      position_pair,engram6_strength,engram6_stretch,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order
+      position_pair,engram_keys,engram_rows,engram_columns,engram_order
       FD,0.85,0.72,0.91,0.78,0.65,0.88
       DE,0.72,0.68,0.88,0.82,0.71,0.85
       ES,0.68,0.71,0.85,0.75,0.69,0.82
@@ -137,8 +137,8 @@ Preserves optimality: Mathematically sound pruning ensures no optimal solutions 
 The system supports both bigram (2-key) and trigram (3-key) objective scoring; 
 it automatically detects which objectives are bigram vs trigram based on input scoring tables.
 
-- **Bigram objectives**: Scored using position-pair table (e.g., `engram6_strength`,...)
-- **Trigram objectives**: Scored using position-triple table (e.g., `engram6_3key_order`)
+- **Bigram objectives**: Scored using position-pair table (e.g., `engram_keys,engram_rows,engram_columns,engram_order`,...)
+- **Trigram objectives**: Scored using position-triple table (e.g., `engram_3key_order`)
 - **Weighting**: Bigram and trigram scores are weighted by item-pair/triple scores
 
 ## Output

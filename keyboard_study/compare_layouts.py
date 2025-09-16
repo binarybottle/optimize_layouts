@@ -8,10 +8,10 @@ Layouts are automatically sorted by average performance across selected metrics.
 
 Examples:
     # Create plots with specific metrics and save summary
-    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --tables layouts.csv --summary summary.csv
+    poetry run python3 compare_layouts.py --metrics engram_keys,engram_rows,engram_columns,engram_order --tables layouts.csv --summary summary.csv
     
     # Compare multiple tables of layouts
-    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
+    poetry run python3 compare_layouts.py --metrics engram_keys,engram_rows,engram_columns,engram_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
 
 Expected input CSV format: layout,letters,positions,scorer1,scorer2,...
   - One row per layout with all scores in columns
@@ -622,10 +622,10 @@ def main():
     epilog="""
 Examples:
     # Create plots with specific metrics and save summary
-    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --tables layouts.csv --summary summary.csv
+    poetry run python3 compare_layouts.py --metrics engram_keys engram_rows engram_columns engram_order --tables layouts.csv --summary summary.csv
     
     # Compare multiple tables of layouts
-    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
+    poetry run python3 compare_layouts.py --metrics engram_keys engram_rows engram_columns engram_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
 
 Expected input CSV format: layout,letters,positions,scorer1,scorer2,...
   - One row per layout with all scores in columns

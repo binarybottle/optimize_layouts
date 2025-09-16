@@ -3,9 +3,9 @@
 Run sequential jobs for MOO layout optimization using configuration files.
 
 Usage:
-``python3 run_jobs_local.py --start-config 1 --end-config 1000``    # ascending
-``python3 run_jobs_local.py --start-config 1000 --end-config 500``    # descending
-``python3 run_jobs_local.py --reserve-cpus 2``    # reserve 2 CPUs for system
+``python3 run_jobs.py --start-config 1 --end-config 1000``    # ascending
+``python3 run_jobs.py --start-config 1000 --end-config 500``    # descending
+``python3 run_jobs.py --reserve-cpus 2``    # reserve 2 CPUs for system
 """
 
 import os
@@ -26,8 +26,8 @@ CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
 SCRIPT_PATH = "optimize_moo.py" 
-#OBJECTIVES = "engram6_strength,engram6_stretch,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order"
-OBJECTIVES = "engram6_strength,engram6_curl,engram6_rows,engram6_columns,engram6_order,engram6_3key_order"
+#OBJECTIVES = "engram_keys,engram_rows,engram_columns,engram_order"
+OBJECTIVES = "engram_keys,engram_rows,engram_columns,engram_order"
 # Adaptive scaling parameters
 MAX_MEMORY_PERCENT = 90  # Scale down if memory exceeds this
 MAX_CPU_PERCENT = 95     # Scale down if CPU exceeds this

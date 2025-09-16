@@ -142,7 +142,7 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  position_pair_score_table: "input/engram6_2key_scores.csv"
+  position_pair_score_table: "input/engram_2key_scores.csv"
   item_pair_score_table:     "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
   layout_results_folder:     "output/layouts"
 
@@ -151,15 +151,12 @@ paths:
 #-----------------------------------------------------------------------
 moo:
   default_objectives: 
-    - "engram6_strength"
-    # "engram6_stretch"
-    - "engram6_curl"
-    - "engram6_rows"
-    - "engram6_columns"
-    - "engram6_order"
-    - "engram6_3key_order"
-  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-  default_maximize: [true, true, true, true, true, true]
+    - "engram_keys"
+    - "engram_rows"
+    - "engram_columns"
+    - "engram_order"
+  default_weights: [1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true

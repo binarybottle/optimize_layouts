@@ -96,7 +96,7 @@ class MOOConfig:
     default_time_limit: Union[float, str] = 3600.0
     
     # Default file paths for validation
-    default_position_pair_score_table: str = "input/engram6_2key_scores.csv"
+    default_position_pair_score_table: str = "input/engram_2key_scores.csv"
     default_item_pair_score_table: str = "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
     
     # Progress and output settings

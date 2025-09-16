@@ -13,8 +13,8 @@ Core Features:
 
 Usage:
     scorer = WeightedMOOScorer(
-        objectives=['engram6_strength', 'engram6_curl'],
-        position_pair_score_table='input/engram6_2key_scores.csv',
+        objectives=['engram_rows', 'engram_keys'],
+        position_pair_score_table='input/engram_2key_scores.csv',
         items=['e', 't', 'a', 'o'],
         positions=['F', 'D', 'S', 'J']
     )
@@ -494,14 +494,14 @@ if __name__ == "__main__":
     print("Testing WeightedMOOScorer...")
     
     # Test configuration
-    test_objectives = ['engram6_strength', 'engram6_curl']
+    test_objectives = ['engram_keys', 'engram_rows']
     test_items = ['e', 't', 'a', 'o']
     test_positions = ['F', 'D', 'S', 'J']
     
     try:
         scorer = WeightedMOOScorer(
             objectives=test_objectives,
-            position_pair_score_table='input/engram6_2key_scores.csv',
+            position_pair_score_table='input/engram_2key_scores.csv',
             items=test_items,
             positions=test_positions
         )
@@ -525,4 +525,4 @@ if __name__ == "__main__":
         
     except Exception as e:
         print(f"Test failed: {e}")
-        print("Make sure 'input/engram6_2key_scores.csv' exists with required objectives.")
+        print("Make sure 'input/engram_2key_scores.csv' exists with required objectives.")

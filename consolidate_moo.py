@@ -13,7 +13,7 @@ python consolidate_moo.py
 python consolidate_moo.py --max-files 100 --verbose
 
 # Custom pattern and objectives
-python consolidate_moo.py --file-pattern "moo_results_config_*.csv" --objectives "engram6_strength" "engram6_curl
+python consolidate_moo.py --file-pattern "moo_results_config_*.csv" --objectives "engram_keys"
 """
 import os
 import pandas as pd
@@ -412,15 +412,15 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
 
 def main():
     parser = argparse.ArgumentParser(description='Select global Pareto optimal layouts')
-    parser.add_argument('--input-dir', default='../output/layouts/', 
+    parser.add_argument('--input-dir', default='output/layouts/', 
                        help='Directory containing MOO results CSV files')
-    parser.add_argument('--output-file', default='../output/global_moo_solutions.csv',
+    parser.add_argument('--output-file', default='output/global_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
-                       default=['engram6_strength','engram6_curl','engram6_rows','engram6_columns','engram6_order','engram6_3key_order'],
+                       default=['engram_keys','engram_rows','engram_columns','engram_order'],
                        help='Objective columns to use for Pareto filtering')
     parser.add_argument('--maximize', nargs='+', type=lambda x: x.lower() == 'true',
-                       default=[True, True, True, True, True, True],
+                       default=[True, True, True, True],
                        help='Whether to maximize each objective (true/false for each)')
     parser.add_argument('--chunk-size', type=int, default=50000,
                        help='Chunk size for hierarchical processing')
