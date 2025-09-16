@@ -15,7 +15,7 @@ Usage:
         --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 
     # To generate a realistic HTML image:
-    python display_layout.py --letters "test" --positions "RTSG" --html
+    python display_layout.py --letters "abcd" --positions "RTSG" --html
 
     # Arbitrary letters and positions:
     python display_layout.py --letters "abc" --positions "P;/"

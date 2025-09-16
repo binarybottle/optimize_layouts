@@ -230,16 +230,17 @@ def fast_pareto_filter_numpy(solutions: pd.DataFrame,
     # Use efficient numpy-based Pareto filtering
     n_solutions = len(obj_matrix)
     is_pareto = np.ones(n_solutions, dtype=bool)
-    
+
+    # For each solution, check if ANY other solution dominates it
     for i in range(n_solutions):
         if not is_pareto[i]:
             continue
-            
-        # Find solutions dominated by current
         current = obj_matrix[i]
-        dominates = np.all(obj_matrix <= current, axis=1) & np.any(obj_matrix < current, axis=1)
-        is_pareto[dominates] = False
-        
+        # Check if current solution is dominated by any other solution
+        dominated_by = np.all(obj_matrix >= current, axis=1) & np.any(obj_matrix > current, axis=1)
+        if np.any(dominated_by & is_pareto):
+            is_pareto[i] = False
+
         # Progress reporting
         if i % 5000 == 0 and i > 0:
             remaining = np.sum(is_pareto)
@@ -411,9 +412,9 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
 
 def main():
     parser = argparse.ArgumentParser(description='Select global Pareto optimal layouts')
-    parser.add_argument('--input-dir', default='output/layouts/', 
+    parser.add_argument('--input-dir', default='../output/layouts/', 
                        help='Directory containing MOO results CSV files')
-    parser.add_argument('--output-file', default='output/global_moo_solutions.csv',
+    parser.add_argument('--output-file', default='../output/global_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
                        default=['engram6_strength','engram6_curl','engram6_rows','engram6_columns','engram6_order','engram6_3key_order'],

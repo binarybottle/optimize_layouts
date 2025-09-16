@@ -42,7 +42,6 @@ import argparse
 from html import parser
 import time
 import sys
-from networkx import efficiency
 import pandas as pd
 import datetime
 from typing import List, Dict, Tuple

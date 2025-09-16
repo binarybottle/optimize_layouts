@@ -6,33 +6,14 @@ Creates parallel coordinates and heatmap plots comparing keyboard layouts
 across performance metrics, and allows filtering to specific metrics in a specified order.
 Layouts are automatically sorted by average performance across selected metrics.
 
-Core metrics are recommended by default. Experimental distance/efficiency 
-and time/speed metrics can be included but have significant limitations:
-- Distance metrics oversimplify biomechanics (ignore lateral stretching, finger strength, etc.)
-- Time metrics contain QWERTY practice bias from empirical data
-
 Examples:
-    # All available metrics (core metrics by default)
-    poetry run python3 compare_layouts.py --tables layout_scores.csv
-
-    # Core metrics only (recommended)
-    poetry run python3 compare_layouts.py --metrics engram6 dvorak7 comfort_combo comfort comfort_key --tables layout_scores.csv
-
-    # Include experimental distance/time metrics (caution: limitations noted above)
-    poetry run python3 compare_layouts.py --metrics engram6 comfort comfort_key dvorak7 efficiency speed --tables layout_scores.csv --experimental-metrics
-
     # Create plots with specific metrics and save summary
-    poetry run python3 compare_layouts.py --tables layouts.csv --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order  --summary summary.csv
+    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --tables layouts.csv --summary summary.csv
     
-    # Compare multiple tables with core metrics
-    poetry run python3 compare_layouts.py --metrics engram6 comfort comfort_key dvorak7 --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
+    # Compare multiple tables of layouts
+    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
 
-    # Detailed comparison with Dvorak-7 breakdown
-    poetry run python3 compare_layouts.py --metrics engram6 comfort comfort_key dvorak7 dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward --output output/layout_comparison_detailed.png --tables layout_scores.csv
-
-Input format:
-  CSV files should be output from: score_layouts.py --csv
-  Expected format: layout,letters,positions,scorer1,scorer2,...
+Expected input CSV format: layout,letters,positions,scorer1,scorer2,...
   - One row per layout with all scores in columns
   - Compatible with display_layouts.py
 
@@ -157,28 +138,9 @@ def find_available_metrics(dfs: List[pd.DataFrame], verbose: bool = False) -> Li
     if verbose:
         print(f"\nFound {len(available_metrics)} scorer metrics available:")
         
-        # Categorize metrics for better display
-        core_metrics = []
-        experimental_metrics = []
-        
-        for metric in available_metrics:
-            metric_lower = metric.lower()
-            if (metric_lower.startswith('distance') or metric_lower.startswith('efficiency') or
-                metric_lower.startswith('time') or metric_lower.startswith('speed') or
-                metric_lower == 'distance' or metric_lower == 'efficiency' or
-                metric_lower == 'time' or metric_lower == 'speed'):
-                experimental_metrics.append(metric)
-            else:
-                core_metrics.append(metric)
-        
-        if core_metrics:
-            print(f"  Core metrics ({len(core_metrics)}):")
-            for i, metric in enumerate(core_metrics):
-                print(f"    {i+1:2d}. {metric}")
-        
-        if experimental_metrics:
-            print(f"  Experimental metrics ({len(experimental_metrics)}) - use with caution:")
-            for i, metric in enumerate(experimental_metrics):
+        if available_metrics:
+            print(f"  Available metrics ({len(available_metrics)}):")
+            for i, metric in enumerate(available_metrics):
                 print(f"    {i+1:2d}. {metric}")
     
     return available_metrics
@@ -659,27 +621,13 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     epilog="""
 Examples:
-  # All available metrics (core metrics by default)
-  python compare_layouts.py --tables layouts.csv
-  
-  # Core metrics only (recommended)
-  python compare_layouts.py --tables layouts.csv --metrics engram6 dvorak7 comfort_combo comfort comfort_key
-  
-  # Include experimental distance/time metrics (caution: limitations)
-  python compare_layouts.py --tables layouts.csv --metrics engram6 comfort efficiency --experimental-metrics
-  
-  # Create summary table with performance sorting
-  python compare_layouts.py --tables layouts.csv --metrics engram6 comfort dvorak7 --summary layout_summary.csv
-  
-  # Create both plots and summary with performance-based coloring
-  python compare_layouts.py --tables layouts.csv --metrics engram6 comfort comfort_key dvorak7 --output comparison.png --summary summary.csv
-  
-  # Multiple tables with filtered metrics and summary
-  python compare_layouts.py --tables scores1.csv scores2.csv --metrics comfort engram6 --summary combined_summary.csv
+    # Create plots with specific metrics and save summary
+    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --tables layouts.csv --summary summary.csv
+    
+    # Compare multiple tables of layouts
+    poetry run python3 compare_layouts.py --metrics engram6_strength engram6_curl engram6_rows engram6_columns engram6_order engram6_3key_order --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
 
-Input format:
-  CSV files from: score_layouts.py --csv
-  Expected format: layout,letters,positions,scorer1,scorer2,...
+Expected input CSV format: layout,letters,positions,scorer1,scorer2,...
   - One row per layout with all scores in columns
   - Compatible with display_layouts.py
 
@@ -691,15 +639,7 @@ Summary output:
   Layouts ordered by average performance across selected metrics (higher = better)
   
 Performance-based coloring:
-  When --summary is used, parallel plot lines are colored from dark red (best) to light red (worst) based on average performance.
-
-Core vs Experimental Metrics:
-  Core metrics (recommended): engram6, comfort, comfort_key, dvorak7
-  Experimental metrics (use with caution): efficiency*, speed*
-  
-  Experimental metrics have significant limitations:
-  - Distance/efficiency metrics oversimplify biomechanics (ignore lateral stretching, finger strength, etc.)
-  - Time/speed metrics contain QWERTY practice bias from empirical data
+  Parallel plot lines are colored from dark red (best) to light red (worst) based on average performance.
         """
     )
     

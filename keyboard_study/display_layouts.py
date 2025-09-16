@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Display multiple keyboard layouts from CSV file
+Display multiple keyboard layouts from CSV file using display_layout.py
 
 Takes a CSV with 'layout', and either ('letters'/'items') and ('positions'/'keys') columns.
 

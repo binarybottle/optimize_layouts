@@ -33,7 +33,7 @@ For the following, we:
        in the 10 available of 14 keys. The result is 3,432 Pareto fronts, each with many solutions.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 14-letter/key layouts.
-       ``select_global_moo_solutions.py``
+       ``consolidate_moo.py``
 2. Optimally arrange the remaining letters.
     1. For each selected 14-letter/key layout, generate a new configuration file.
        ``generate_configs2.py``
@@ -41,8 +41,8 @@ For the following, we:
        remaining letters in the 10 remaining keys, again using MOO.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
-       ``select_global_moo_solutions.py``
-3. Select the final layout: ``analyze_global_moo_solutions.py``
+       ``consolidate_moo.py``
+3. Select the final layout: ``visualize_moo.py``
     1. For each MOO objective, replace scores with their rankings.
     2. Sum the rankings for each layout.
     3. Sort layouts by these sums.
@@ -97,7 +97,7 @@ For the following, we:
 
   **1.3. Select the global Pareto front of 14-letter/key layouts.**
 
-  `python select_global_moo_solutions.py`
+  `python consolidate_moo.py`
 
 ### Step 2. Optimally arrange the remaining letters.
 
@@ -119,7 +119,7 @@ For the following, we:
   **2.2. Select the global Pareto front from the 24-letter/key layouts.**
 
   Rerun the commands in 1.3 above (after renaming the output files):
-  `python select_global_moo_solutions.py; python analyze_global_moo_solutions.py output/global_moo_solutions.csv`
+  `python consolidate_moo.py; python visualize_moo.py output/global_moo_solutions.csv`
 
 
 ## Scoring keyboard layouts
@@ -161,8 +161,8 @@ that is responsible for precomputing scores for all possible key-pairs/triples.
    fingers 1,4 prefer row 3; finger 3 prefers row 1; finger 2 no preference
    For each key:
   -  1.0: home key
-  -  0.5: alternate key
-  -  0.0: any other key (unpreferred, no preference, or stretch)
+  -  0.5: alternate key or no preference
+  -  0.0: any other key (unpreferred or stretch)
   ```python
   curl_score = 0
   if homekey1 == 1:
@@ -216,35 +216,18 @@ that is responsible for precomputing scores for all possible key-pairs/triples.
       scores['columns'] = 0.0          # same finger
   ```
 
-6. Finger order: Finger sequence toward the thumb
-  - 1.0: inward roll on the same row (or 2 hands)
-  - 0.5: outward roll, or inward roll on different rows
-  - 0.0: same finger
-  ```python
-  if hand1 != hand2:
-      scores['order'] = 1.0       # opposite hands always score well
-  elif finger1 == finger2:
-      scores['order'] = 0.0       # same finger scores zero
-  elif row1 == row2:
-      # Inward roll: toward thumb (finger number increases: 1→2→3→4)
-      # Both hands are bilaterally symmetric, so same sequence logic
-      scores['order'] = 1.0 if finger1 < finger2 else 0.5
-  else:
-      scores['order'] = 0.5
-  ```
-
 ## Engram-6 3-key scoring criterion
 
   6. Finger order: Finger sequence toward the thumb
     - 1.0: inward roll
-    - 0.5: outward roll
+    - 0.5: outward roll, or alternating hands
     - 0.0: mixed roll, or same finger
   ```python
   scores['order'] = 0.0  # Default for mixed patterns or unhandled cases
   if finger1 == finger2 == finger3:
-      scores['order'] = 0.0          # same finger scores zero
+      scores['order'] = 0.0          # same finger
   elif hand1 != hand2 and hand1 == hand3:
-      scores['order'] = 1.0          # alternating hands
+      scores['order'] = 0.5          # alternating hands
   elif hand1 == hand2 == hand3:
       if finger1 < finger2 < finger3:
           scores['order'] = 1.0      # inward roll

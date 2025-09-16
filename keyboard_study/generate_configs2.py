@@ -3,7 +3,7 @@
 --------------------------------------------------------------------------------
 Generate configuration files from global Pareto optimal keyboard layouts.
 
-This script takes the output from select_global_moo_solutions.py and generates
+This script takes the output from consolidate_moo.py and generates
 configuration files for the next round of optimization with specific 
 letter-to-key constraints. If --remove-positions is specified, it will remove 
 positions from the global Pareto set, and remove redundant layouts.
