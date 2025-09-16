@@ -7,7 +7,7 @@ paths:
   item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
   item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
   position_pair_score_table:    "input/engram_2key_scores.csv"
-  position_triple_score_table:  "input/engram_3key_order_scores.csv"
+  position_triple_score_table:  None  # "input/engram_3key_order_scores.csv"
   layout_results_folder:        "output/layouts"
 
 #-----------------------------------------------------------------------
