@@ -61,6 +61,7 @@ optimize_layouts/
 ├── moo_scoring.py                       # Item-pair-weighted MOO scoring
 ├── moo_search.py                        # Pareto-optimal search algorithms
 ├── config.py                            # Configuration management
+├── consolidate_moo.py                   # Select global Pareto solutions from separate files
 ├── visualize_moo.py                     # Analyze and visualize MOO results
 │
 │ # I/O (inputs are for a keyboard optimization study)
@@ -77,7 +78,6 @@ optimize_layouts/
 │ # Optional utilities
 ├── utilities/
 │   ├── normalize_and_analyze.py         # Normalize data and compare raw vs normalized data
-│   ├── consolidate_moo.py               # Select global Pareto solutions from separate files
 │   ├── generate_command.py              # Generate command to score and visualize layouts
 │   ├── run_jobs_slurm.sh                # SLURM cluster job submission
 │   ├── calc_positions_items.py          # Calculate permutations

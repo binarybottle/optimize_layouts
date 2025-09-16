@@ -125,122 +125,117 @@ For the following, we:
 ## Scoring keyboard layouts
 Keyboard layouts are defined by letters assigned to keys.
 While letters and letter-pairs and their frequencies are language-dependent, 
-keys, key-pairs, and key-triples are not. For each of the MOO objectives, 
-an average base score is calculated over all possible key-pairs/triples:
-  1.  Finger strength: Typing with the stronger two fingers
-  2.  Finger stretch: Typing within the 8 finger columns (NOT USED IN THIS STUDY)
-  3.  Finger curl: Typing within the 8 home keys, or preferred alternate keys
-  4.  Row span: Same row, reaches, and hurdles
-  5.  Column span: Adjacent columns in the same row
-  6.  Finger order: Finger sequence toward the thumb
+keys and key-pairs are not. For each of the MOO objectives, 
+an average base score is calculated over all possible key-pairs:
 
-For this study, #2 is excluded, as only finger-column keys are considered,
-and #6 has two variants: one for 2 keys, and the other for 3 key combinations.
-A layout's score is the average product of each key-pair/triple's base score 
-and the corresponding letter-pair/triple's frequency. 
+    1. Finger positions (key preferences)
+    2. Row separation (same row, reaches, hurdles)
+    3. Same-row column separation (adjacent, remote columns)
+    4. Same-row finger order (inward roll toward the thumb vs. outward roll)
+    5. Side reach (lateral stretch outside finger-columns)
+
+For this study, #5 is excluded, as only finger-column keys are considered.
+A layout's score is the average product of each key-pair's base score 
+and the corresponding letter-pair's frequency. 
 
 Below is a code excerpt from https://github.com/binarybottle/keyboard_layout_scorers.git
 that is responsible for precomputing scores for all possible key-pairs/triples.
   
-1. Finger strength: Typing with the stronger two fingers
-  - 1.0: 2 keys typed with strong fingers
-  - 0.5: 1 key typed with 1 strong finger
-  - 0.0: 0 keys typed with strong finger
-  ```python
-  strong_count = sum(1 for finger in [finger1, finger2] if finger in STRONG_FINGERS)
-  if strong_count == 2:
-      scores['strength'] = 1.0      # 2 keys typed with strong fingers
-  elif strong_count == 1:
-      scores['strength'] = 0.5      # 1 key typed with 1 strong finger
-  else:
-      scores['strength'] = 0.0      # 0 keys typed with strong finger
-  ```
+```python
+    #----------------------------------------------------------------------------------
+    # Engram's 5 bigram scoring criteria
+    #----------------------------------------------------------------------------------    
+    # 1. Finger positions (key preferences)
+    # 2. Row separation (same row, reaches, hurdles)
+    # 3. Same-row column separation (adjacent, remote columns)
+    # 4. Same-row finger order (inward roll toward the thumb vs. outward roll)
+    # 5. Side reach (lateral stretch outside finger-columns)
+    #----------------------------------------------------------------------------------    
+   
+    # 1. Finger positions: Typing in preferred positions/keys 
+    #    (empirical Bradley-Terry tiers)
+    tier_values = {
+        'F': 1.000,
+        'D': 0.870,
+        'E': 0.646,
+        'S': 0.646,
+        'V': 0.568,
+        'R': 0.568,
+        'W': 0.472,
+        'A': 0.410,
+        'C': 0.410,
+        'Z': 0.137,
+        'Q': 0.137,
+        'X': 0.137
+    }
 
-3. Finger curl: Typing within the 8 home keys, or preferred alternate keys
-   above/below the home keys: 
-   fingers 1,4 prefer row 3; finger 3 prefers row 1; finger 2 no preference
-   For each key:
-  -  1.0: home key
-  -  0.5: alternate key or no preference
-  -  0.0: any other key (unpreferred or stretch)
-  ```python
-  curl_score = 0
-  if homekey1 == 1:
-      curl_score += 1
-  else:
-      if in_column1:
-          # UPPER_FINGERS prefer the upper row 1; LOWER_FINGERS prefer lower row 3
-          if finger1 in UPPER_FINGERS and row1 == 1 or finger1 in LOWER_FINGERS and row1 == 3:
-              curl_score = 0.5
-  if homekey2 == 1:
-      curl_score += 1
-  else:
-      if in_column2:
-          # UPPER_FINGERS prefer the upper row 1; LOWER_FINGERS prefer lower row 3
-          if finger2 in UPPER_FINGERS and row2 == 1 or finger2 in LOWER_FINGERS and row2 == 3:
-              curl_score = 0.5
-  scores['curl'] = curl_score / 2.0
-  ```
+    key_score = 0
+    for key in [char1, char2]:
+        key_score += tier_values.get(key, 0)  # Get tier value or 0 if not found
 
-4. Row span: Same row, reaches, and hurdles 
-  - 1.0: 2 keys in the same row (or 2 hands)
-  - 0.5: 2 keys in adjacent rows (reach)
-  - 0.0: 2 keys straddling home row (hurdle)
-  ```python
-  if hand1 != hand2:
-      scores['rows'] = 1.0          # opposite hands always score well
-  else:
-      if row1 == row2:
-          scores['rows'] = 1.0      # 2 keys in the same row
-      elif abs(row1 - row2) == 1:
-          scores['rows'] = 0.5      # 2 keys in adjacent rows (reach)
-      else:
-          scores['rows'] = 0.0      # 2 keys straddling home row (hurdle)
-  ```
+    scores['keys'] = key_score / 2.0  # Average over 2 keys
 
-5. Column span: Adjacent columns in the same row
-  - 1.0: adjacent columns in same row, or non-adjacent columns in different rows (or 2 hands)
-  - 0.5: non-adjacent columns in the same row, or adjacent columns in different rows
-  - 0.0: same finger
-  ```python
-  if hand1 != hand2:
-      scores['columns'] = 1.0          # opposite hands always score well
-  elif finger1 != finger2:
-      column_gap = abs(column1 - column2)
-      finger_gap = abs(finger1 - finger2)
-      if (column_gap == 1 and row1 == row2) or (column_gap > 1 and finger_gap > 1 and row1 != row2):
-          scores['columns'] = 1.0      # adjacent columns, same row / non-adjacent, different rows
-      else:
-          scores['columns'] = 0.5      # non-adjacent columns, same row / adjacent, different rows
-  else:
-      scores['columns'] = 0.0          # same finger
-  ```
+    # 2. Row separation: same row, reaches, and hurdles 
+    #    (empirical meta-analysis of left-hand bigrams) 
+    #    1.000: 2 keys in the same row
+    #    0.588: 2 keys in adjacent rows (reach)
+    #    0.000: 2 keys straddling home row (hurdle)
+    if hand1 != hand2:
+        scores['rows'] = 1.0        # Opposite hands
+    else:
+        if row_gap == 0:
+            scores['rows'] = 1.0    # Same-row
+        elif row_gap == 1:
+            scores['rows'] = 0.588  # Adjacent row (reach)
+        else:
+            scores['rows'] = 0.0    # Hurdle
 
-## Engram-6 3-key scoring criterion
+    # 3. Column span: Adjacent columns in the same row and other separations 
+    #    (empirical meta-analysis of left-hand bigrams)
+    #    1.000: adjacent columns in the same row (or 2 hands)
+    #    0.811: remote columns in the same row
+    #    0.500: other
+    scores['columns'] = 0.5    # Neutral score by default
+    if hand1 != hand2:
+        scores['columns'] = 1.0    # High score for opposite hands
+    elif finger1 != finger2:
+        if column_gap == 1 and row_gap == 0:
+            scores['columns'] = 1.0    # Adjacent same-row (baseline)
+        elif column_gap >= 2 and row_gap == 0:
+            scores['columns'] = 0.811    # Distant same-row (empirical penalty)
 
-  6. Finger order: Finger sequence toward the thumb
-    - 1.0: inward roll
-    - 0.5: outward roll, or alternating hands
-    - 0.0: mixed roll, or same finger
-  ```python
-  scores['order'] = 0.0  # Default for mixed patterns or unhandled cases
-  if finger1 == finger2 == finger3:
-      scores['order'] = 0.0          # same finger
-  elif hand1 != hand2 and hand1 == hand3:
-      scores['order'] = 0.5          # alternating hands
-  elif hand1 == hand2 == hand3:
-      if finger1 < finger2 < finger3:
-          scores['order'] = 1.0      # inward roll
-      elif finger1 > finger2 > finger3:
-          scores['order'] = 0.5      # outward roll
-  elif hand1 == hand2 and hand2 != hand3:
-      if finger1 < finger2:
-          scores['order'] = 1.0      # inward roll
-      elif finger1 > finger2:
-          scores['order'] = 0.5      # outward roll
-  elif hand1 != hand2 and hand2 == hand3:
-      if finger2 < finger3:
-          scores['order'] = 1.0      # inward roll
-      elif finger2 > finger3:
-          scores['order'] = 0.5      # outward roll
-  ```
+    # 4. Same-row finger order (inward roll toward the thumb vs. outward roll)
+    #    (empirical analysis of left-hand bigrams)
+    #    1.000: same-row inward roll (or 2 hands)
+    #    0.779: same-row outward roll
+    #    0.500: other
+    #    0.000: same finger
+    scores['order'] = 0.5    # Neutral score by default   
+    if hand1 != hand2:
+        scores['order'] = 1.0    # Opposite hands
+    elif finger1 == finger2:
+        scores['order'] = 0.0    # Same finger
+    elif (hand1 == hand2 and finger1 != finger2 and row_gap == 0):
+        if finger2 > finger1:    # Same-row inward roll (pinky → index)
+            scores['order'] = 1.0
+        elif finger2 < finger1:    # Same-row outward roll (index → pinky)
+            scores['order'] = 0.779    # 100 - 22.1% effect penalty
+
+    # 5. Side reach (lateral stretch outside finger-columns)
+    #    (empirical analysis of left-hand bigrams)
+    #    1.000: 0 outside keys
+    #    0.846: 1 outside key
+    #    0.716: 2 outside keys
+    
+    # Convert to set for O(1) lookup performance
+    qwerty_home_blocks_set = set(qwerty_home_blocks)
+
+    # Count how many keys are outside the home blocks
+    outside_count = sum(1 for key in [char1, char2] if key not in qwerty_home_blocks_set)
+
+    # Apply score based on count
+    outside_scores = {0: 1.0, 1: 0.846, 2: 0.716}
+    scores['outside'] = outside_scores[outside_count]
+
+    return scores
+```
