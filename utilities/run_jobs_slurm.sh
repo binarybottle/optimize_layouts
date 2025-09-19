@@ -7,7 +7,7 @@
 #   bash run_jobs_slurm.sh
 #   
 #   # MOO with custom objectives  
-#   bash run_jobs_slurm.sh --objectives engram_keys,engram_rows,engram_columns,engram_order
+#   bash run_jobs_slurm.sh --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger
 #
 # Connect and set up the code environment: 
 #
@@ -129,7 +129,7 @@ Usage:
   bash run_jobs_slurm.sh
   
   # MOO with custom objectives
-  bash run_jobs_slurm.sh --objectives engram_keys,engram_rows,engram_columns,engram_order
+  bash run_jobs_slurm.sh --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger
 
 Arguments:
   --objectives        Comma-separated objective names (use config defaults if not specified)
