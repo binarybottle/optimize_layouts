@@ -1,4 +1,4 @@
-key_pair,engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_outside,engram_scissor,engram_half_scissor
+position_pair,engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_outside,engram_scissor,engram_half_scissor
 '',0,1,0,0,0.716,1,1
 "',",0.205,0.588,0.5,1,0.846,1,1
 '.,0.0685,0.588,0.5,1,0.846,1,1
