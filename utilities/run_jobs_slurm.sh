@@ -70,7 +70,7 @@ CONFIG_SUFFIX=".yaml"
 OUTPUT_DIR="output/layouts"
 TOTAL_CONFIGS=1
 
-SCRIPT_PATH="optimize_moo.py"
+SCRIPT_PATH="optimize_layouts.py"
 OBJECTIVES=""
 WEIGHTS=""
 MAXIMIZE=""
