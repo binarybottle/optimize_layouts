@@ -52,23 +52,23 @@ class UnifiedMOOAnalyzer:
         # High-contrast color palette (excludes yellow, light colors)
         self.colors = [
             '#1f77b4',  # Blue
-            '#ff7f0e',  # Orange  
-            '#2ca02c',  # Green
-            '#d62728',  # Red
+            "#000000",  # Black  
+            '#800080',  # Purple
+            '#ff9896',  # Light Red
             '#9467bd',  # Purple
+            '#d62728',  # Red
+            '#2ca02c',  # Green
             '#8c564b',  # Brown
             '#e377c2',  # Pink
             '#7f7f7f',  # Gray
             '#17becf',  # Cyan
             '#bcbd22',  # Olive
-            '#ff9896',  # Light Red
             '#c5b0d5',  # Light Purple
             '#c49c94',  # Light Brown
             '#f7b6d3',  # Light Pink
             '#dbdb8d',  # Light Olive
             '#9edae5',  # Light Cyan
             '#1a1a1a',  # Near Black
-            '#800080',  # Purple
             '#008080',  # Teal
             '#800000'   # Maroon
         ]

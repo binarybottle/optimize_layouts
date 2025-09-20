@@ -13,7 +13,7 @@ python consolidate_moo.py
 python consolidate_moo.py --max-files 100 --verbose
 
 # Custom pattern and objectives
-python consolidate_moo.py --file-pattern "moo_results_config_*.csv" --objectives "engram_keys"
+python consolidate_moo.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
 """
 import os
 import pandas as pd
@@ -417,7 +417,7 @@ def main():
     parser.add_argument('--output-file', default='output/global_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
-                       default=['engram_keys','engram_rows','engram_columns','engram_order'],
+                       default=['engram_key_preference','engram_row_separation','engram_same_row','engram_same_finger'],
                        help='Objective columns to use for Pareto filtering')
     parser.add_argument('--maximize', nargs='+', type=lambda x: x.lower() == 'true',
                        default=[True, True, True, True],
