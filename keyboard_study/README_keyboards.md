@@ -1,10 +1,10 @@
 # README_keyboards
 
-Optimize an English language keyboard layout
+Example application: Optimize an English language keyboard layout
 
-**Repository**: https://github.com/binarybottle/optimize_layouts.git  
-**Author**: Arno Klein (arnoklein.info)  
-**License**: MIT License (see LICENSE)
+Repository: https://github.com/binarybottle/optimize_layouts.git  
+Author: Arno Klein (arnoklein.info)  
+License: MIT License (see LICENSE)
 
 ## Introduction
 Let's apply the optimize_layouts software to the challenge of optimizing the 
@@ -33,7 +33,7 @@ For the following, we:
        in the 10 available of 14 keys. The result is 3,432 Pareto fronts, each with many solutions.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 14-letter/key layouts.
-       ``consolidate_moo.py``
+       ``optimize_layouts.py``
 2. Optimally arrange the remaining letters.
     1. For each selected 14-letter/key layout, generate a new configuration file.
        ``generate_configs2.py``
@@ -41,12 +41,8 @@ For the following, we:
        remaining letters in the 10 remaining keys, again using MOO.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
-       ``consolidate_moo.py``
-3. Select the final layout: ``visualize_moo.py``
-    1. For each MOO objective, replace scores with their rankings.
-    2. Sum the rankings for each layout.
-    3. Sort layouts by these sums.
-    4. Select layout(s) with the lowest sum (lowest is best).
+       ``optimize_layouts.py``
+3. Select the final layout: ``layouts_filter.py``
 4. Arrange periphery of the 24-letter/key home blocks.
     1. Assign the two least frequent letters (q & z in English) 
        to the two upper-right corner keys.
@@ -97,7 +93,7 @@ For the following, we:
 
   **1.3. Select the global Pareto front of 14-letter/key layouts.**
 
-  `python consolidate_moo.py`
+  `python optimize_layouts.py`
 
 ### Step 2. Optimally arrange the remaining letters.
 
@@ -119,7 +115,7 @@ For the following, we:
   **2.2. Select the global Pareto front from the 24-letter/key layouts.**
 
   Rerun the commands in 1.3 above (after renaming the output files):
-  `python consolidate_moo.py; python visualize_moo.py output/global_moo_solutions.csv`
+  `python optimize_layouts.py; python layouts_filter.py output/global_moo_solutions.csv`
 
 
 ## Scoring keyboard layouts
@@ -128,114 +124,112 @@ While letters and letter-pairs and their frequencies are language-dependent,
 keys and key-pairs are not. For each of the MOO objectives, 
 an average base score is calculated over all possible key-pairs:
 
-    1. Finger positions (key preferences)
-    2. Row separation (same row, reaches, hurdles)
-    3. Same-row column separation (adjacent, remote columns)
-    4. Same-row finger order (inward roll toward the thumb vs. outward roll)
-    5. Side reach (lateral stretch outside finger-columns)
+    1. Key preferences (empirical Bradley-Terry tiers inside left finger-columns)
+    2. Row separation (empirical meta-analysis of left same-row, reach, and hurdle key-pairs) 
+    3. Same-row finger order and column separation
+       - (empirical analysis of left key-pairs toward vs. away from the thumb)
+       - (empirical meta-analysis of left key-pairs in adjacent vs. remote columns) 
+    4. Same-finger (empirical analysis of left same- vs. different finger inside finger-columns)
+    5. Outside reach (empirical analysis of left-hand lateral stretches outside finger-columns)
 
 For this study, #5 is excluded, as only finger-column keys are considered.
 A layout's score is the average product of each key-pair's base score 
 and the corresponding letter-pair's frequency. 
 
-Below is a code excerpt from https://github.com/binarybottle/keyboard_layout_scorers.git
-that is responsible for precomputing scores for all possible key-pairs/triples.
+Below is a code excerpt of the first four key-pair scoring criteria from 
+https://github.com/binarybottle/keyboard_layout_scorers/blob/main/prep/prep_keypair_engram_scores.py
   
 ```python
     #----------------------------------------------------------------------------------
-    # Engram's 5 bigram scoring criteria
+    # Engram's bigram scoring criteria
     #----------------------------------------------------------------------------------    
-    # 1. Finger positions (key preferences)
-    # 2. Row separation (same row, reaches, hurdles)
-    # 3. Same-row column separation (adjacent, remote columns)
-    # 4. Same-row finger order (inward roll toward the thumb vs. outward roll)
-    # 5. Side reach (lateral stretch outside finger-columns)
+    # 1. Key preferences (empirical Bradley-Terry tiers inside left finger-columns)
+    # 2. Row separation (empirical meta-analysis of left same-row, reach, and hurdle key-pairs) 
+    # 3. Same-row finger order and column separation
+    #    - (empirical analysis of left key-pairs toward vs. away from the thumb)
+    #    - (empirical meta-analysis of left key-pairs in adjacent vs. remote columns) 
+    # 4. Same-finger (empirical analysis of left same- vs. different finger inside finger-columns)
+    # 5. Outside reach (empirical analysis of left-hand lateral stretches outside finger-columns)
+    # 6. Scissor (adjacent column hurdle; ignores all other awkward finger mechanics)
+    # 7. Half-scissor (adjacent column reach; ignores all other awkward finger mechanics)
     #----------------------------------------------------------------------------------    
    
-    # 1. Finger positions: Typing in preferred positions/keys 
-    #    (empirical Bradley-Terry tiers)
+    # 1. Key preferences (empirical Bradley-Terry tiers inside left finger-columns)
+    #    0.137 - 1.000: keys inside the 8 finger-columns
+    #    0.000: keys outside the 8 finger-columns 
     tier_values = {
-        'F': 1.000,
-        'D': 0.870,
-        'E': 0.646,
-        'S': 0.646,
-        'V': 0.568,
-        'R': 0.568,
-        'W': 0.472,
-        'A': 0.410,
-        'C': 0.410,
-        'Z': 0.137,
-        'Q': 0.137,
-        'X': 0.137
+        'F': 1.000, 'J': 1.000,
+        'D': 0.870, 'K': 0.870,
+        'E': 0.646, 'I': 0.646,
+        'S': 0.646, 'L': 0.646,
+        'V': 0.568, 'M': 0.568,
+        'R': 0.568, 'U': 0.568,
+        'W': 0.472, 'O': 0.472,
+        'A': 0.410, ';': 0.410,
+        'C': 0.410, ',': 0.410,
+        'Z': 0.137, '/': 0.137,
+        'Q': 0.137, 'P': 0.137,
+        'X': 0.137, '.': 0.137
     }
 
     key_score = 0
     for key in [char1, char2]:
         key_score += tier_values.get(key, 0)  # Get tier value or 0 if not found
 
-    scores['keys'] = key_score / 2.0  # Average over 2 keys
+    scores['key_preference'] = key_score / 2.0  # Average over 2 keys
 
-    # 2. Row separation: same row, reaches, and hurdles 
-    #    (empirical meta-analysis of left-hand bigrams) 
+    # 2. Row separation (empirical meta-analysis of left same-row, reach, and hurdle key-pairs) 
+    #    1.000: 2 hands
     #    1.000: 2 keys in the same row
     #    0.588: 2 keys in adjacent rows (reach)
     #    0.000: 2 keys straddling home row (hurdle)
     if hand1 != hand2:
-        scores['rows'] = 1.0        # Opposite hands
+        scores['row_separation'] = 1.0        # Two hands
     else:
         if row_gap == 0:
-            scores['rows'] = 1.0    # Same-row
+            scores['row_separation'] = 1.0    # Same row
         elif row_gap == 1:
-            scores['rows'] = 0.588  # Adjacent row (reach)
+            scores['row_separation'] = 0.588  # Adjacent row (reach)
         else:
-            scores['rows'] = 0.0    # Hurdle
+            scores['row_separation'] = 0.0    # Skip row (hurdle)
 
-    # 3. Column span: Adjacent columns in the same row and other separations 
-    #    (empirical meta-analysis of left-hand bigrams)
-    #    1.000: adjacent columns in the same row (or 2 hands)
-    #    0.811: remote columns in the same row
-    #    0.500: other
-    scores['columns'] = 0.5    # Neutral score by default
-    if hand1 != hand2:
-        scores['columns'] = 1.0    # High score for opposite hands
-    elif finger1 != finger2:
-        if column_gap == 1 and row_gap == 0:
-            scores['columns'] = 1.0    # Adjacent same-row (baseline)
-        elif column_gap >= 2 and row_gap == 0:
-            scores['columns'] = 0.811    # Distant same-row (empirical penalty)
-
-    # 4. Same-row finger order (inward roll toward the thumb vs. outward roll)
-    #    (empirical analysis of left-hand bigrams)
-    #    1.000: same-row inward roll (or 2 hands)
-    #    0.779: same-row outward roll
-    #    0.500: other
+    # 3. Same-row finger order and column separation
+    #    - (empirical analysis of left key-pairs toward vs. away from the thumb)
+    #    - (empirical meta-analysis of left key-pairs in adjacent vs. remote columns) 
+    #    1.000: 2 hands
+    #    1.000: adjacent columns, inward roll, in the same row
+    #    0.779: adjacent columns, outward roll, in the same row
+    #    0.750: remote columns, inward roll, in the same row
+    #    0.779 x 0.750: remote columns, outward roll, in the same row
+    #    0.500: different rows, different fingers
     #    0.000: same finger
-    scores['order'] = 0.5    # Neutral score by default   
     if hand1 != hand2:
-        scores['order'] = 1.0    # Opposite hands
+        scores['same_row'] = 1.0        # Two hands
     elif finger1 == finger2:
-        scores['order'] = 0.0    # Same finger
-    elif (hand1 == hand2 and finger1 != finger2 and row_gap == 0):
-        if finger2 > finger1:    # Same-row inward roll (pinky → index)
-            scores['order'] = 1.0
-        elif finger2 < finger1:    # Same-row outward roll (index → pinky)
-            scores['order'] = 0.779    # 100 - 22.1% effect penalty
+        scores['same_row'] = 0.0        # Same finger
+    elif row_gap == 0:  # Same row logic
 
-    # 5. Side reach (lateral stretch outside finger-columns)
-    #    (empirical analysis of left-hand bigrams)
-    #    1.000: 0 outside keys
-    #    0.846: 1 outside key
-    #    0.716: 2 outside keys
-    
-    # Convert to set for O(1) lookup performance
-    qwerty_home_blocks_set = set(qwerty_home_blocks)
+        # Apply same-row finger order/direction (stronger effect)
+        if finger2 > finger1:           # Inward
+            scores['same_row'] = 1.0
+        elif finger2 < finger1:         # Outward  
+            scores['same_row'] = 0.779
+        
+        # Apply column separation penalty (weaker effect)
+        if column_gap >= 2:             # Remote columns
+            scores['same_row'] *= 0.750
 
-    # Count how many keys are outside the home blocks
-    outside_count = sum(1 for key in [char1, char2] if key not in qwerty_home_blocks_set)
+    else:
+        scores['same_row'] = 0.5        # Different rows, different fingers
 
-    # Apply score based on count
-    outside_scores = {0: 1.0, 1: 0.846, 2: 0.716}
-    scores['outside'] = outside_scores[outside_count]
-
-    return scores
+    # 4. Same-finger (empirical analysis of left same- vs. different finger inside finger-columns)
+    #    1.0: 2 hands
+    #    1.0: 2 fingers
+    #    0.0: 1 finger
+    if hand1 != hand2:
+        scores['same_finger'] = 1.0          # Two hands
+    elif finger1 != finger2:
+        scores['same_finger'] = 1.0          # Two fingers
+    else:
+        scores['same_finger'] = 0.0          # Same finger
 ```

@@ -29,22 +29,22 @@ FILTERING METHODS:
 
 Usage:
     # Intersection filtering (layouts excellent in ALL objectives)
-    python filter_moo_layouts.py --input moo_analysis_results.csv --method intersection --top-percent 10
+    python layouts_filter.py --input moo_analysis_results.csv --method intersection --top-percent 10
     
     # Score filtering (by any scoring method)
-    python filter_moo_layouts.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 10
+    python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 10
     
     # Combined intersection + any score filtering  
-    python filter_moo_layouts.py --input moo_analysis_results.csv --method intersection_score --intersection-percent 15 --score-type engram_3key_order --score-percent 10
+    python layouts_filter.py --input moo_analysis_results.csv --method intersection_score --intersection-percent 15 --score-type engram_3key_order --score-percent 10
     
     # Generate report and visualization
-    python filter_moo_layouts.py --input moo_analysis_results.csv --method intersection --top-percent 15 --report --plot
+    python layouts_filter.py --input moo_analysis_results.csv --method intersection --top-percent 15 --report --plot
 
     # Add multiple scores to score-based filtering
-    python filter_moo_layouts.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 15 --include-scores-in-output "comfort_total,dvorak_effort,qwerty_distance"
+    python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 15 --include-scores-in-output "comfort_total,dvorak_effort,qwerty_distance"
 
     # Example used in study
-    poetry run python3 filter_moo_layouts.py --input output/consolidate_visualize_moo1/moo_analysis_results.csv --method intersection --top-percent 75 --include-scores-in-output "engram_3key_order"
+    poetry run python3 layouts_filter.py --input output/consolidate_visualize_moo1/moo_analysis_results.csv --method intersection --top-percent 75 --include-scores-in-output "engram_3key_order"
 
 """
 

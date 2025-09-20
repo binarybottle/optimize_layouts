@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Multi-Objective Optimization Analysis Tool
+Multi-Objective Optimization Analysis/Plotting Tool
 
-This script analyzes MOO results with automatic input detection:
+This script analyzes/visualizes MOO results with automatic input detection:
 - Directory input: Analyzes multiple individual CSV files from separate optimization runs
 - File input: Analyzes consolidated global Pareto CSV file
 
@@ -15,13 +15,13 @@ Features:
 
 Usage:
     # Analyze directory of individual files
-    python moo_analyze.py output/layouts/ 
+    python layouts_plot.py output/layouts/ 
     
     # Analyze consolidated Pareto file
-    python moo_analyze.py output/global_moo_solutions.csv
+    python layouts_plot.py output/global_moo_solutions.csv
     
     # With constraints and options
-    python moo_analyze.py data.csv --filter-assignments "e:J,t:F,a:S" --output-dir analysis_output
+    python layouts_plot.py data.csv --filter-assignments "e:J,t:F,a:S" --output-dir analysis_output
 """
 
 import pandas as pd

@@ -13,25 +13,25 @@ the best trade-offs across an arbitrary number of competing criteria.
 ## Multi-Objective Optimization (MOO)
   ```bash
     # Basic MOO with default settings in config.yaml (uses exhaustive search)
-    python optimize_moo.py --config config.yaml
+    python optimize_layouts.py --config config.yaml
 
     # MOO with specific objectives (overrides config defaults)
-    python optimize_moo.py --config config.yaml \
+    python optimize_layouts.py --config config.yaml \
         --objectives engram_keys,engram_rows,engram_columns,engram_order
 
     # MOO with custom weights and directions
-    python optimize_moo.py --config config.yaml \
+    python optimize_layouts.py --config config.yaml \
         --objectives engram_keys,engram_rows,engram_columns,engram_order \
         --weights 1.0,2.0,0.5,0.75 --maximize true,true,false,true \
         --max-solutions 100 --time-limit 3600 --verbose
 
     # Force branch-and-bound search (faster for 12+ items, but more complex)
-    python optimize_moo.py --config config.yaml \
+    python optimize_layouts.py --config config.yaml \
         --objectives engram_keys,engram_rows,engram_columns,engram_order \
         --search-mode branch-bound
 
     # Validation run
-    python optimize_moo.py --config config.yaml --validate --dry-run
+    python optimize_layouts.py --config config.yaml --validate --dry-run
   ```
 
 ## Analysis and (keyboard layout) visualization
@@ -57,12 +57,15 @@ optimize_layouts/
 ├── config.yaml                          # Main configuration file
 │ 
 │ # Core MOO system
-├── optimize_moo.py                      # Main entry point for optimization
+├── optimize_layouts.py                  # Main entry point for optimization
 ├── moo_scoring.py                       # Item-pair-weighted MOO scoring
 ├── moo_search.py                        # Pareto-optimal search algorithms
 ├── config.py                            # Configuration management
-├── consolidate_moo.py                   # Select global Pareto solutions from separate files
-├── visualize_moo.py                     # Analyze and visualize MOO results
+│
+│ # MOO results analysis
+├── layouts_consolidate.py               # Select global Pareto solutions from separate files
+├── layouts_filter.py                    # Filter MOO results
+├── layouts_plot.py                      # Analyze and plot MOO results
 │
 │ # I/O (inputs are for a keyboard optimization study)
 ├── input/
@@ -77,19 +80,21 @@ optimize_layouts/
 │
 │ # Optional utilities
 ├── utilities/
-│   ├── normalize_and_analyze.py         # Normalize data and compare raw vs normalized data
-│   ├── generate_command.py              # Generate command to score and visualize layouts
-│   ├── run_jobs_slurm.sh                # SLURM cluster job submission
 │   ├── calc_positions_items.py          # Calculate permutations
-│   └── count_files.py                   # Count files in a folder (with find command)
+│   ├── count_files.py                   # Count files in a folder (with find command)
+│   ├── generate_command.py              # Generate command to score and visualize layouts
+│   ├── normalize_and_analyze.py         # Normalize data and compare raw vs normalized data
+│   └── run_jobs_slurm.sh                # SLURM cluster job submission
 │
 │ # Keyboard study
 └── keyboard_study/
     ├── README_keyboards.md              # README for keyboard layout optimization study
     ├── analyze_frequencies.py           # Analyze item-pair (bigram) frequencies
+    ├── compare_layouts.py               # Keyboard comparisons with filtering and plotting
+    ├── display_layout.py                # Keyboard visualization from single layout
+    ├── display_layouts.py               # Keyboard visualization from table of layouts
     ├── generate_configs1.py             # Generate config files for parallel optimization phase 1
-    ├── generate_configs1.py             # Generate config files for parallel optimization phase 2
-    └── display_layout.py                # Keyboard visualization
+    └── generate_configs2.py             # Generate config files for parallel optimization phase 2
 
 
 ## Inputs

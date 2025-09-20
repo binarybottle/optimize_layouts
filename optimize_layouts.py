@@ -20,13 +20,13 @@ Output:
 Usage Examples:
 
     # Basic MOO with default settings in config.yaml (including exhaustive search)
-    python optimize_moo.py --config config.yaml
+    python optimize_layouts.py --config config.yaml
 
    # Branch-and-bound
-    poetry run python optimize_moo.py --config config.yaml --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger --search-mode branch-bound
+    poetry run python optimize_layouts.py --config config.yaml --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger --search-mode branch-bound
 
     # With custom settings
-    python optimize_moo.py --config config.yaml \
+    python optimize_layouts.py --config config.yaml \
         --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger
         --position-pair-score-table input/position_pair_score_table.csv \
         --item-pair-score-table input/item_pair_score_table.csv \
@@ -34,7 +34,7 @@ Usage Examples:
         --max-solutions 50 --time-limit 1800
 
     # Validation run
-    python optimize_moo.py --config config.yaml --validate --dry-run
+    python optimize_layouts.py --config config.yaml --validate --dry-run
 
 """
 

@@ -7,13 +7,13 @@ finds the global Pareto front across all solutions, and outputs a single
 CSV file with the globally optimal solutions.
 
 # Basic usage
-python consolidate_moo.py
+python layouts_consolidate.py
 
 # Test with limited files first
-python consolidate_moo.py --max-files 100 --verbose
+python layouts_consolidate.py --max-files 100 --verbose
 
 # Custom pattern and objectives
-python consolidate_moo.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
+python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
 """
 import os
 import pandas as pd
