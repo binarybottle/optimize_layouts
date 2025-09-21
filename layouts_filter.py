@@ -44,7 +44,7 @@ Usage:
     python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 15 --include-scores-in-output "comfort_total,dvorak_effort,qwerty_distance"
 
     # Example used in study
-    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --method intersection --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order"
+    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --method intersection --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --verbose
 
 """
 
@@ -1353,18 +1353,61 @@ def main():
             # Update original_df to include any scores that were computed
             original_df = filter_tool.df.copy()
         
-        # Add additional scores to both output datasets if requested
+        # Add additional scores efficiently to avoid double scoring
         if args.include_scores_in_output:
             additional_scores = [s.strip() for s in args.include_scores_in_output.split(',') if s.strip()]
             if additional_scores:
                 print(f"\nAdding additional scores to output: {', '.join(additional_scores)}")
+                
+                # Step 1: Score the filtered layouts
                 filtered_df = filter_tool.add_multiple_scores(
                     filtered_df, additional_scores, use_poetry=not args.no_poetry)
                 
-                # Also add scores to original dataset for consistent columns in removed dataset
-                original_df = filter_tool.add_multiple_scores(
-                    original_df, additional_scores, use_poetry=not args.no_poetry)
-        
+                # Step 2: If saving removed layouts, handle the remaining layouts efficiently
+                if args.save_removed:
+                    # Calculate which layouts need scoring (removed layouts only)
+                    filtered_indices = set(filtered_df.index)
+                    original_indices = set(original_df.index)
+                    removed_indices = original_indices - filtered_indices
+                    
+                    if removed_indices:
+                        print(f"Computing additional scores for {len(removed_indices)} removed layouts...")
+                        
+                        # Create subset of removed layouts for scoring
+                        removed_layouts_to_score = original_df.loc[list(removed_indices)].copy()
+                        
+                        # Score only the removed layouts
+                        scored_removed = filter_tool.add_multiple_scores(
+                            removed_layouts_to_score, additional_scores, use_poetry=not args.no_poetry)
+                        
+                        # Merge scored filtered + scored removed back into original_df
+                        original_df = original_df.copy()
+                        
+                        # Add the additional score columns to original_df (initialize with NaN)
+                        for score_type in additional_scores:
+                            original_df[score_type] = float('nan')
+                        
+                        # Update with filtered scores
+                        for score_type in additional_scores:
+                            if score_type in filtered_df.columns:
+                                original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
+                        
+                        # Update with removed scores  
+                        for score_type in additional_scores:
+                            if score_type in scored_removed.columns:
+                                original_df.loc[scored_removed.index, score_type] = scored_removed[score_type]
+                        
+                        print(f"Successfully merged scores for all {len(original_df)} layouts")
+                    else:
+                        # No removed layouts, just copy additional columns to original_df
+                        for score_type in additional_scores:
+                            if score_type in filtered_df.columns:
+                                original_df[score_type] = float('nan')  # Initialize
+                                original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
+                else:
+                    # Not saving removed layouts, so we don't need to score anything else
+                    print("Not saving removed layouts - additional scoring complete")
+                            
         # Calculate removed layouts
         filtered_indices = set(filtered_df.index)
         original_indices = set(original_df.index)
