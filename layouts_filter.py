@@ -44,7 +44,7 @@ Usage:
     python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 15 --include-scores-in-output "comfort_total,dvorak_effort,qwerty_distance"
 
     # Example used in study
-    poetry run python3 layouts_filter.py --input output/consolidate_visualize_moo1/moo_analysis_results.csv --method intersection --top-percent 75 --include-scores-in-output "engram_3key_order"
+    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --method intersection --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order"
 
 """
 
@@ -1288,6 +1288,8 @@ def main():
     parser = argparse.ArgumentParser(description='Filter MOO keyboard layout results')
     parser.add_argument('--input', required=True, help='Input CSV file (MOO results)')
     parser.add_argument('--output', help='Output CSV file (filtered results)')
+    parser.add_argument('--save-removed', action='store_true', 
+                       help='Save removed layouts to a separate CSV file')
     parser.add_argument('--method', choices=['intersection', 'score', 'intersection_score'],
                        default='intersection_score', help='Filtering method')
     
@@ -1332,6 +1334,7 @@ def main():
         
         # Initialize filter
         filter_tool = MOOLayoutFilter(args.input, args.verbose, args.score_layouts_path)
+        original_df = filter_tool.df.copy()  # Keep original for removed layouts calculation
         
         # Apply filtering method
         if args.method == 'intersection':
@@ -1341,28 +1344,75 @@ def main():
             # First add scores to full dataset
             enhanced_df = filter_tool.add_scores(args.score_type, use_poetry=not args.no_poetry)
             filter_tool.df = enhanced_df  # Update the main dataframe
+            original_df = enhanced_df.copy()  # Update original to include scores
             filtered_df = filter_tool.filter_by_score(enhanced_df, args.score_type, args.top_percent)
         
         elif args.method == 'intersection_score':
             filtered_df = filter_tool.filter_intersection_score(
                 args.intersection_percent, args.score_type, args.score_percent)
+            # Update original_df to include any scores that were computed
+            original_df = filter_tool.df.copy()
         
-        # Add additional scores to output if requested
+        # Add additional scores to both output datasets if requested
         if args.include_scores_in_output:
             additional_scores = [s.strip() for s in args.include_scores_in_output.split(',') if s.strip()]
             if additional_scores:
                 print(f"\nAdding additional scores to output: {', '.join(additional_scores)}")
                 filtered_df = filter_tool.add_multiple_scores(
                     filtered_df, additional_scores, use_poetry=not args.no_poetry)
+                
+                # Also add scores to original dataset for consistent columns in removed dataset
+                original_df = filter_tool.add_multiple_scores(
+                    original_df, additional_scores, use_poetry=not args.no_poetry)
         
-        # Save results
-        output_file = args.output or f"output/filtered_{Path(args.input).stem}_{args.method}.csv"
+        # Calculate removed layouts
+        filtered_indices = set(filtered_df.index)
+        original_indices = set(original_df.index)
+        removed_indices = original_indices - filtered_indices
+        removed_df = original_df.loc[list(removed_indices)].copy()
+        
+        # Generate output filenames
+        if args.output:
+            output_file = args.output
+            # Generate removed filename based on output filename
+            output_path = Path(args.output)
+            removed_file = output_path.parent / f"removed_{output_path.name}"
+        else:
+            # Generate both filenames based on input filename and method
+            input_stem = Path(args.input).stem
+            output_file = f"output/filtered_{input_stem}_{args.method}.csv"
+            removed_file = f"output/removed_{input_stem}_{args.method}.csv"
+        
+        # Save filtered results
         filtered_df.to_csv(output_file, index=False)
         
+        # Save removed results if requested
+        if args.save_removed and len(removed_df) > 0:
+            removed_df.to_csv(removed_file, index=False)
+            print(f"Removed layouts saved to: {removed_file}")
+        
         print(f"\nFiltering complete!")
-        print(f"Input: {len(filter_tool.df)} layouts")
-        print(f"Output: {len(filtered_df)} layouts ({len(filtered_df)/len(filter_tool.df)*100:.1f}%)")
-        print(f"Saved to: {output_file}")
+        print(f"Input: {len(original_df)} layouts")
+        print(f"Filtered (kept): {len(filtered_df)} layouts ({len(filtered_df)/len(original_df)*100:.1f}%)")
+        print(f"Removed: {len(removed_df)} layouts ({len(removed_df)/len(original_df)*100:.1f}%)")
+        print(f"Filtered results saved to: {output_file}")
+        
+        # Add summary of removal reasons for intersection method
+        if args.method in ['intersection', 'intersection_score'] and args.verbose:
+            print(f"\nRemoval breakdown:")
+            if 'intersection' in filter_tool.filtering_stats:
+                stats = filter_tool.filtering_stats['intersection']
+                print(f"  Failed individual thresholds: {stats['filtered_by_thresholds']} layouts")
+                print(f"  Failed intersection requirement: {stats['filtered_by_intersection']} layouts")
+                
+                # Show per-objective failure analysis for removed layouts
+                if len(removed_df) > 0:
+                    print(f"\nPer-objective analysis of removed layouts:")
+                    for col in filter_tool.objective_columns:
+                        if col in stats['thresholds'] and col in removed_df.columns:
+                            threshold = stats['thresholds'][col]
+                            below_threshold = (removed_df[col] < threshold).sum()
+                            print(f"  {col}: {below_threshold}/{len(removed_df)} removed layouts below threshold {threshold:.4f}")
         
         # Generate statistical report if requested
         report_path = None
@@ -1386,7 +1436,7 @@ def main():
             print(f"\nRetained dataset summary:")
             for col in filter_tool.objective_columns:
                 if col in filtered_df.columns:
-                    orig_mean = filter_tool.df[col].mean()
+                    orig_mean = original_df[col].mean()
                     filt_mean = filtered_df[col].mean()
                     filt_std = filtered_df[col].std()
                     improvement = (filt_mean - orig_mean) / orig_mean * 100
@@ -1395,6 +1445,17 @@ def main():
                     # Warning for zero standard deviation
                     if filt_std < 1e-10:
                         print(f"    ⚠️  WARNING: {col} has zero variance - all retained layouts are identical for this objective!")
+            
+            # Also show removed dataset summary
+            if args.save_removed and len(removed_df) > 0:
+                print(f"\nRemoved dataset summary:")
+                for col in filter_tool.objective_columns:
+                    if col in removed_df.columns:
+                        removed_mean = removed_df[col].mean()
+                        removed_std = removed_df[col].std()
+                        orig_mean = original_df[col].mean()
+                        degradation = (removed_mean - orig_mean) / orig_mean * 100
+                        print(f"  {col}: {removed_df[col].min():.4f} - {removed_df[col].max():.4f} (mean: {removed_mean:.4f}, std: {removed_std:.4f}, {degradation:.1f}%)")
         
         # Enhanced quality check with warnings
         total_unique_values = 0
@@ -1410,7 +1471,7 @@ def main():
             quality_count = len(filtered_df)
             for col in filter_tool.objective_columns:
                 if col in filtered_df.columns:
-                    p90_threshold = np.percentile(filter_tool.df[col], 90)
+                    p90_threshold = np.percentile(original_df[col], 90)
                     in_top10 = (filtered_df[col] >= p90_threshold).sum()
                     quality_count = min(quality_count, in_top10)
             
@@ -1430,7 +1491,7 @@ def main():
         
         # Success message with recommendations based on actual diversity
         has_diversity = total_unique_values > len(filter_tool.objective_columns)
-        retention_rate = len(filtered_df) / len(filter_tool.df) * 100
+        retention_rate = len(filtered_df) / len(original_df) * 100
         
         if len(filtered_df) >= 10 and has_diversity and retention_rate >= 1.0:
             print(f"\n✅ Filtering successful! Retained {len(filtered_df)} diverse layouts ({retention_rate:.1f}%)")
