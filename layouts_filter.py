@@ -1,53 +1,18 @@
 #!/usr/bin/env python3
 """
-Filter MOO keyboard layout results using statistical and composite scoring approaches.
+Filter MOO keyboard layout results using intersection filtering approach.
 
-This script provides three focused filtering strategies to reduce large sets of MOO solutions
-to manageable, high-quality subsets for further analysis.
-
-FILTERING METHODS:
-
-1. intersection: 
-   Finds layouts that perform in the top percentage for ALL objectives simultaneously.
-   This is a very selective filter that only keeps layouts excelling across every dimension.
-   For example, with --top-percent 10, only layouts in the top 10% of ALL objectives survive.
-   Use this when you want layouts that are consistently good at everything.
-
-2. score:
-   Computes specified scores (e.g., engram_3key_order, comfort_total) for all layouts using 
-   score_layouts.py, then filters to the top percentage by that metric.
-   Specify the score type with --score-type (e.g., engram_3key_order, comfort_total).
-   Use this when you want to prioritize layouts optimized for a specific metric.
-
-3. intersection_score:
-   Two-stage filtering combining intersection with any scoring metric:
-   Stage 1: Intersection filtering at a broader percentage (--intersection-percent)
-   Stage 2: Computes specified scores for intersection survivors, then filters by 
-            top percentage of that score (--score-percent)
-   Specify the score type with --score-type (e.g., engram_3key_order, comfort_total).
-   Use this for efficient multi-dimensional filtering with a final score-based refinement.
+This script helps reduce large sets of MOO solutions to manageable subsets for further analysis.
+It finds layouts that perform in the top percentage for ALL objectives simultaneously.
+For example, with --top-percent 10, only layouts in the top 10% of ALL objectives survive.
 
 Usage:
-    # Intersection filtering (layouts excellent in ALL objectives)
-    python layouts_filter.py --input moo_analysis_results.csv --method intersection --top-percent 10
-    
-    # Score filtering (by any scoring method)
-    python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 10
-    
-    # Combined intersection + any score filtering  
-    python layouts_filter.py --input moo_analysis_results.csv --method intersection_score --intersection-percent 15 --score-type engram_3key_order --score-percent 10
-    
-    # Generate report and visualization
-    python layouts_filter.py --input moo_analysis_results.csv --method intersection --top-percent 15 --report --plot
+    # Intersection filtering (layouts that score well in ALL objectives, with plot and report)
+    python layouts_filter.py --input moo_analysis_results.csv --top-percent 10 --report --plot
 
-    # Add multiple scores to score-based filtering
-    python layouts_filter.py --input moo_analysis_results.csv --method score --score-type engram_3key_order --top-percent 15 --include-scores-in-output "comfort_total,dvorak_effort,qwerty_distance"
-
-    # Example used in study
-    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --method intersection --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --verbose
-
+    # Example used in study (adds a score to output)
+    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --verbose
 """
-
 import pandas as pd
 import numpy as np
 import argparse
@@ -188,167 +153,13 @@ class MOOLayoutFilter:
                 print(f"    This means NO layouts are simultaneously in top {top_percent}% of ALL objectives")
             else:
                 print(f"    This suggests layouts with identical/near-identical objective values")
-            print(f"    Consider using a higher --top-percent (e.g., 70-90%) or 'score' method instead.")
-            
-        if len(intersection_layouts) <= 1:
-            print(f"\n⚠️  ERROR: Intersection filtering kept ≤1 layout - filtering too restrictive!")
-            print(f"    Intersection filtering requires layouts to excel in ALL objectives simultaneously.")
+            print(f"    Consider using a higher --top-percent (e.g., 70-90%).")
             print(f"    Suggested fixes:")
-            print(f"    1. Use 'score' method: --method score --score-type engram_3key_order --top-percent 10")
-            print(f"    2. Use much higher threshold: --method intersection --top-percent 80")
-            print(f"    3. Use 'intersection_score': broader intersection + score refinement")
-        
+            print(f"    1. Use much higher threshold: --top-percent 80")
+            print(f"    2. Add more layouts to your dataset")
+            print(f"    3. Check if objectives are too correlated")
+
         return filtered_df
-    
-    def add_scores(self, score_type: str, use_poetry: bool = True) -> pd.DataFrame:
-        """Add specified scores using score_layouts.py."""
-        if 'items' not in self.df.columns:
-            raise ValueError("Need 'items' column for scoring")
-        
-        # Create temporary layouts for scoring
-        temp_layouts = []
-        for idx, row in self.df.iterrows():
-            layout_name = f"layout_{idx}"
-            items = str(row['items'])
-            temp_layouts.append(f"{layout_name}:{items}")
-        
-        if self.verbose:
-            print(f"Computing {score_type} scores for {len(temp_layouts)} layouts...")
-            print(f"Using score_layouts.py at: {self.score_layouts_path}")
-        
-        # Create temporary files for layouts and CSV output
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as layouts_file:
-            layouts_file_path = layouts_file.name
-            for layout in temp_layouts:
-                layouts_file.write(layout + '\n')
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
-            temp_csv_path = temp_file.name
-        
-        try:
-            # Determine working directory for score_layouts.py
-            score_layouts_path = Path(self.score_layouts_path)
-            if score_layouts_path.is_absolute():
-                work_dir = score_layouts_path.parent
-                script_name = score_layouts_path.name
-            else:
-                work_dir = Path.cwd() / score_layouts_path.parent
-                script_name = score_layouts_path.name
-            
-            # Try file input first, fall back to chunking if not supported
-            if use_poetry:
-                cmd = [
-                    'poetry', 'run', 'python3', script_name,
-                    '--compare-file', layouts_file_path,
-                    '--scorers', score_type,
-                    '--csv', temp_csv_path,
-                    '--quiet'
-                ]
-            else:
-                cmd = [
-                    'python', script_name,
-                    '--compare-file', layouts_file_path,
-                    '--scorers', score_type,
-                    '--csv', temp_csv_path,
-                    '--quiet'
-                ]
-            
-            # Add fallback score table paths if needed
-            potential_score_tables = [
-                work_dir / 'tables' / 'scores_2key_detailed.csv',
-                Path.cwd() / 'tables' / 'scores_2key_detailed.csv',
-                Path.cwd() / '..' / 'keyboard_layout_scorers' / 'tables' / 'scores_2key_detailed.csv'
-            ]
-            
-            score_table_found = None
-            for score_table_path in potential_score_tables:
-                if score_table_path.exists():
-                    score_table_found = score_table_path
-                    break
-            
-            if score_table_found:
-                cmd.extend(['--score-table', str(score_table_found)])
-                if self.verbose:
-                    print(f"Using score table: {score_table_found}")
-            
-            # Add potential frequency file paths
-            potential_freq_files = [
-                work_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                Path.cwd() / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                Path.cwd() / '..' / 'keyboard_layout_scorers' / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-            ]
-            
-            freq_file_found = None
-            for freq_file_path in potential_freq_files:
-                if freq_file_path.exists():
-                    freq_file_found = freq_file_path
-                    break
-            
-            if freq_file_found:
-                cmd.extend(['--frequency-file', str(freq_file_found)])
-                if self.verbose:
-                    print(f"Using frequency file: {freq_file_found}")
-            
-            if self.verbose:
-                print(f"Working directory: {work_dir}")
-                print("Running command:", ' '.join(cmd[:8]) + "..." if len(cmd) > 8 else ' '.join(cmd))
-            
-            # Run the command with the correct working directory
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir)
-            
-            if result.returncode != 0:
-                # If file input failed, try chunking approach
-                if "--compare-file" in cmd:
-                    if self.verbose:
-                        print("File input not supported, trying chunking approach...")
-                    return self._add_scores_chunked(temp_layouts, temp_csv_path, score_type, use_poetry)
-                
-                print(f"Command failed with return code {result.returncode}")
-                print(f"Working directory: {work_dir}")
-                print(f"STDOUT: {result.stdout}")
-                print(f"STDERR: {result.stderr}")
-                
-                # Try without poetry if that was the issue
-                if use_poetry:
-                    if self.verbose:
-                        print("Retrying without poetry...")
-                    return self.add_scores(score_type, use_poetry=False)
-                else:
-                    # Try with fallback approach as a last resort
-                    if self.verbose:
-                        print("Trying with fallback approach...")
-                    return self._add_scores_fallback(temp_layouts, temp_csv_path, score_type)
-            
-            # Load the scores
-            if not Path(temp_csv_path).exists():
-                raise RuntimeError(f"Output CSV file not created: {temp_csv_path}")
-            
-            scores_df = pd.read_csv(temp_csv_path)
-            
-            if self.verbose:
-                print(f"Successfully loaded scores from {temp_csv_path}")
-                print(f"Scores dataframe shape: {scores_df.shape}")
-                print(f"Columns: {list(scores_df.columns)}")
-            
-            # Add scores to original dataframe
-            enhanced_df = self.df.copy()
-            
-            if score_type in scores_df.columns:
-                enhanced_df[score_type] = scores_df[score_type].values
-                self.computed_score_col = score_type
-                
-                if self.verbose:
-                    score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                    print(f"Added {score_type} scores (range: {score_range[0]:.4f} - {score_range[1]:.4f})")
-            else:
-                raise ValueError(f"{score_type} column not found in scoring results. Available columns: {list(scores_df.columns)}")
-            
-            return enhanced_df
-            
-        finally:
-            # Clean up temp files
-            Path(temp_csv_path).unlink(missing_ok=True)
-            Path(layouts_file_path).unlink(missing_ok=True)
     
     def _add_multiple_scores_chunked(self, df: pd.DataFrame, score_types: List[str], temp_layouts: List[str], temp_csv_path: str, use_poetry: bool = True) -> pd.DataFrame:
         """Add multiple scores using chunking approach to avoid argument list length limits."""
@@ -369,9 +180,10 @@ class MOOLayoutFilter:
         all_results = []
         scorers_str = ','.join(score_types)
         
+        # Continue with chunking using the PASSED-IN temp_layouts...
         for i in range(0, len(temp_layouts), chunk_size):
             chunk = temp_layouts[i:i+chunk_size]
-            
+
             # Create temporary CSV for this chunk
             with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as chunk_file:
                 chunk_csv_path = chunk_file.name
@@ -489,153 +301,57 @@ class MOOLayoutFilter:
             
         return enhanced_df
     
-    def _add_scores_chunked(self, temp_layouts: List[str], temp_csv_path: str, score_type: str, use_poetry: bool = True) -> pd.DataFrame:
-        """Add scores using chunking approach to avoid argument list length limits."""
-        if self.verbose:
-            print("Using chunking approach to avoid argument list limits...")
+    def reorder_to_qwerty_layout(self, items, positions):
+        """Convert items->positions mapping to QWERTY-ordered layout string."""
+        QWERTY_ORDER = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
         
-        # Determine working directory for score_layouts.py
-        score_layouts_path = Path(self.score_layouts_path)
-        if score_layouts_path.is_absolute():
-            work_dir = score_layouts_path.parent
-            script_name = score_layouts_path.name
-        else:
-            work_dir = Path.cwd() / score_layouts_path.parent
-            script_name = score_layouts_path.name
+        # Create mapping from position to letter
+        pos_to_letter = dict(zip(positions, items))
         
-        # Chunk layouts into smaller batches (adjust chunk size as needed)
-        chunk_size = 50  # Start conservative
-        all_results = []
+        # Build layout string in QWERTY order
+        layout_chars = []
+        for qwerty_pos in QWERTY_ORDER:
+            if qwerty_pos in pos_to_letter:
+                layout_chars.append(pos_to_letter[qwerty_pos])
+            else:
+                layout_chars.append(' ')  # Use space for unassigned positions
         
-        for i in range(0, len(temp_layouts), chunk_size):
-            chunk = temp_layouts[i:i+chunk_size]
-            
-            # Create temporary CSV for this chunk
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as chunk_file:
-                chunk_csv_path = chunk_file.name
-            
-            try:
-                # Build command for this chunk
-                if use_poetry:
-                    cmd = [
-                        'poetry', 'run', 'python3', script_name,
-                        '--compare'] + chunk + [
-                        '--scorers', score_type,
-                        '--csv', chunk_csv_path,
-                        '--quiet'
-                    ]
-                else:
-                    cmd = [
-                        'python', script_name,
-                        '--compare'] + chunk + [
-                        '--scorers', score_type,
-                        '--csv', chunk_csv_path,
-                        '--quiet'
-                    ]
-                
-                # Add fallback paths for dependencies
-                potential_score_tables = [
-                    work_dir / 'tables' / 'scores_2key_detailed.csv',
-                    Path.cwd() / 'tables' / 'scores_2key_detailed.csv',
-                    Path.cwd() / '..' / 'keyboard_layout_scorers' / 'tables' / 'scores_2key_detailed.csv'
-                ]
-                
-                score_table_found = None
-                for score_table_path in potential_score_tables:
-                    if score_table_path.exists():
-                        score_table_found = score_table_path
-                        break
-                
-                if score_table_found:
-                    cmd.extend(['--score-table', str(score_table_found)])
-                
-                potential_freq_files = [
-                    work_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                    Path.cwd() / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                    Path.cwd() / '..' / 'keyboard_layout_scorers' / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-                ]
-                
-                freq_file_found = None
-                for freq_file_path in potential_freq_files:
-                    if freq_file_path.exists():
-                        freq_file_found = freq_file_path
-                        break
-                
-                if freq_file_found:
-                    cmd.extend(['--frequency-file', str(freq_file_found)])
-                
-                if self.verbose:
-                    print(f"Processing chunk {i//chunk_size + 1}/{(len(temp_layouts) + chunk_size - 1)//chunk_size} ({len(chunk)} layouts)")
-                
-                # Run the command
-                result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir)
-                
-                if result.returncode != 0:
-                    # If still getting argument list error, reduce chunk size
-                    if "Argument list too long" in result.stderr:
-                        if chunk_size > 10:
-                            chunk_size = max(10, chunk_size // 2)
-                            if self.verbose:
-                                print(f"Reducing chunk size to {chunk_size}")
-                            # Retry this chunk with smaller size
-                            continue
-                        else:
-                            raise RuntimeError(f"Cannot reduce chunk size further: {result.stderr}")
-                    else:
-                        raise RuntimeError(f"Chunk processing failed: {result.stderr}")
-                
-                # Load results for this chunk
-                if Path(chunk_csv_path).exists():
-                    chunk_df = pd.read_csv(chunk_csv_path)
-                    all_results.append(chunk_df)
-                    
-            finally:
-                # Clean up chunk CSV
-                Path(chunk_csv_path).unlink(missing_ok=True)
-        
-        # Combine all chunk results
-        if all_results:
-            combined_scores = pd.concat(all_results, ignore_index=True)
-            combined_scores.to_csv(temp_csv_path, index=False)
-            
-            if self.verbose:
-                print(f"Successfully combined {len(all_results)} chunks")
-        else:
-            raise RuntimeError("No successful chunks processed")
-        
-        # Continue with normal processing
-        scores_df = pd.read_csv(temp_csv_path)
-        enhanced_df = self.df.copy()
-        
-        if score_type in scores_df.columns:
-            enhanced_df[score_type] = scores_df[score_type].values
-            self.computed_score_col = score_type
-            
-            if self.verbose:
-                score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                print(f"Added {score_type} scores (range: {score_range[0]:.4f} - {score_range[1]:.4f})")
-        else:
-            raise ValueError(f"{score_type} column not found in scoring results. Available columns: {list(scores_df.columns)}")
-        
-        return enhanced_df
-    
+        return ''.join(layout_chars)
+
     def add_multiple_scores(self, df: pd.DataFrame, score_types: List[str], use_poetry: bool = True) -> pd.DataFrame:
         """Add multiple score types to a dataframe."""
         if not score_types:
             return df
             
-        if 'items' not in df.columns:
-            raise ValueError("Need 'items' column for scoring")
-        
+        if 'items' not in df.columns or 'positions' not in df.columns:
+            raise ValueError("Need both 'items' and 'positions' columns for scoring")        
         print(f"Computing additional scores: {', '.join(score_types)}")
         
         # Create temporary layouts for scoring
         temp_layouts = []
+        skipped_count = 0
         for idx, row in df.iterrows():
             layout_name = f"layout_{idx}"
             items = str(row['items'])
-            temp_layouts.append(f"{layout_name}:{items}")
+            positions = str(row['positions'])
+            
+            # Create letter->position mapping
+            if len(items) == len(positions):
+                # Create QWERTY-ordered layout string
+                qwerty_layout = self.reorder_to_qwerty_layout(items, positions)
+                temp_layouts.append(f"{layout_name}:{qwerty_layout}")
+            else:
+                if self.verbose:
+                    print(f"Warning: Skipping layout {idx} - items length {len(items)} != positions length {len(positions)}")
+                skipped_count += 1
         
+        if skipped_count > 0:
+            print(f"Skipped {skipped_count} layouts due to length mismatches")
+        
+        if not temp_layouts:
+            print("Warning: No valid layouts to score")
+            return df
+                    
         # Create temporary files for layouts and CSV output
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as layouts_file:
             layouts_file_path = layouts_file.name
@@ -740,7 +456,15 @@ class MOOLayoutFilter:
             added_scores = []
             for score_type in score_types:
                 if score_type in scores_df.columns:
-                    enhanced_df[score_type] = scores_df[score_type].values
+                    # Handle cases where some layouts were skipped
+                    if len(scores_df) == len(enhanced_df):
+                        enhanced_df[score_type] = scores_df[score_type].values
+                    else:
+                        # Fill with NaN and set values for layouts that were actually scored
+                        enhanced_df[score_type] = float('nan')
+                        valid_indices = enhanced_df.index[:len(scores_df)]
+                        enhanced_df.loc[valid_indices, score_type] = scores_df[score_type].values
+                    
                     added_scores.append(score_type)
                     if self.verbose:
                         score_range = (scores_df[score_type].min(), scores_df[score_type].max())
@@ -759,279 +483,7 @@ class MOOLayoutFilter:
             # Clean up temp files
             Path(temp_csv_path).unlink(missing_ok=True)
             Path(layouts_file_path).unlink(missing_ok=True)
-    
-    def _add_scores_fallback(self, temp_layouts: List[str], temp_csv_path: str, score_type: str) -> pd.DataFrame:
-        """Fallback method to add scores with absolute paths."""
-        try:
-            # Try to find required files in common locations
-            current_dir = Path.cwd()
-            parent_dir = current_dir.parent
-            
-            # Look for the keyboard_layout_scorers directory
-            scorer_dirs = [
-                current_dir / 'keyboard_layout_scorers',
-                parent_dir / 'keyboard_layout_scorers',
-                current_dir / '..' / 'keyboard_layout_scorers',
-            ]
-            
-            scorer_dir = None
-            for d in scorer_dirs:
-                if d.exists() and (d / 'score_layouts.py').exists():
-                    scorer_dir = d.resolve()
-                    break
-            
-            if not scorer_dir:
-                raise RuntimeError("Could not locate keyboard_layout_scorers directory")
-            
-            # Build command with absolute paths
-            cmd = [
-                'python', str(scorer_dir / 'score_layouts.py'),
-                '--compare'] + temp_layouts + [
-                '--scorers', score_type,
-                '--csv', temp_csv_path,
-                '--quiet'
-            ]
-            
-            # Add absolute paths for required files
-            score_table = scorer_dir / 'tables' / 'scores_2key_detailed.csv'
-            if score_table.exists():
-                cmd.extend(['--score-table', str(score_table)])
-            
-            freq_file = scorer_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-            if freq_file.exists():
-                cmd.extend(['--frequency-file', str(freq_file)])
-            
-            if self.verbose:
-                print(f"Fallback: Using scorer directory: {scorer_dir}")
-                print("Fallback command:", ' '.join(cmd[:8]) + "..." if len(cmd) > 8 else ' '.join(cmd))
-            
-            # Run with the scorer directory as working directory
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=scorer_dir)
-            
-            if result.returncode != 0:
-                raise RuntimeError(f"Fallback failed: {result.stderr}\nSTDOUT: {result.stdout}")
-            
-            # Load the scores
-            scores_df = pd.read_csv(temp_csv_path)
-            enhanced_df = self.df.copy()
-            
-            if score_type in scores_df.columns:
-                enhanced_df[score_type] = scores_df[score_type].values
-                self.computed_score_col = score_type
                 
-                if self.verbose:
-                    score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                    print(f"Fallback success: Added {score_type} scores (range: {score_range[0]:.4f} - {score_range[1]:.4f})")
-            else:
-                raise ValueError(f"{score_type} column not found in scoring results. Available columns: {list(scores_df.columns)}")
-            
-            return enhanced_df
-            
-        except Exception as e:
-            raise RuntimeError(f"All scoring attempts failed. Last error: {e}")
-    
-    def filter_by_score(self, df: pd.DataFrame, score_type: str, top_percent: float = 10.0) -> pd.DataFrame:
-        """Filter by top percentile of specified scores."""
-        if score_type not in df.columns:
-            raise ValueError(f"Score column '{score_type}' not available in dataframe. Available columns: {list(df.columns)}")
-        
-        threshold = np.percentile(df[score_type], 100 - top_percent)
-        filtered_df = df[df[score_type] >= threshold].copy()
-        
-        # Store filtering statistics
-        self.filtering_stats['score'] = {
-            'method': 'score',
-            'score_type': score_type,
-            'top_percent': top_percent,
-            'threshold': threshold,
-            'filtered_count': len(filtered_df),
-            'input_count': len(df),
-            'retention_rate': len(filtered_df) / len(df) * 100
-        }
-        
-        if self.verbose:
-            print(f"Score filtering ({score_type}): {len(df)} -> {len(filtered_df)} layouts ({len(filtered_df)/len(df)*100:.1f}%)")
-            print(f"Threshold: {threshold:.4f}")
-        
-        return filtered_df
-    
-    def filter_intersection_score(self, intersection_percent: float = 15.0, 
-                                 score_type: str = 'engram_3key_order',
-                                 score_percent: float = 10.0) -> pd.DataFrame:
-        """Combined intersection + score filtering."""
-        
-        if self.verbose:
-            print(f"=== Combined Intersection + {score_type} Score Filtering ===")
-        
-        # Stage 1: Intersection filtering
-        stage1_df = self.filter_intersection(intersection_percent)
-        
-        # Stage 2: Add scores to intersection results only
-        intersection_enhanced = self.add_scores_subset(stage1_df, score_type)
-        
-        # Stage 3: Apply score filtering to intersection results
-        final_df = self.filter_by_score(intersection_enhanced, score_type, score_percent)
-        
-        # Update combined statistics
-        self.filtering_stats['combined'] = {
-            'method': 'intersection_score',
-            'intersection_percent': intersection_percent,
-            'score_type': score_type,
-            'score_percent': score_percent,
-            'stage1_count': len(stage1_df),
-            'final_count': len(final_df),
-            'original_count': len(self.df),
-            'overall_retention_rate': len(final_df) / len(self.df) * 100
-        }
-        
-        if self.verbose:
-            print(f"Combined filtering: {len(self.df)} -> {len(stage1_df)} -> {len(final_df)} layouts")
-            print(f"Overall retention: {len(final_df)/len(self.df)*100:.1f}%")
-        
-        return final_df
-    
-    def add_scores_subset(self, subset_df: pd.DataFrame, score_type: str) -> pd.DataFrame:
-        """Add scores to a subset of layouts."""
-        if 'items' not in subset_df.columns:
-            raise ValueError("Need 'items' column for scoring")
-        
-        # Create temporary layouts for scoring (only for subset)
-        temp_layouts = []
-        for idx, row in subset_df.iterrows():
-            layout_name = f"layout_{idx}"
-            items = str(row['items'])
-            temp_layouts.append(f"{layout_name}:{items}")
-        
-        if self.verbose:
-            print(f"Computing {score_type} scores for {len(temp_layouts)} filtered layouts...")
-            print(f"Using score_layouts.py at: {self.score_layouts_path}")
-        
-        # Create temporary CSV output
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
-            temp_csv_path = temp_file.name
-        
-        try:
-            # Use the same logic as add_scores but for subset
-            return self._compute_scores(temp_layouts, temp_csv_path, subset_df, score_type)
-            
-        finally:
-            # Clean up temp file
-            Path(temp_csv_path).unlink(missing_ok=True)
-    
-    def _compute_scores(self, temp_layouts: List[str], temp_csv_path: str, 
-                       target_df: pd.DataFrame, score_type: str, use_poetry: bool = True) -> pd.DataFrame:
-        """Helper method to compute scores for given layouts."""
-        
-        # Determine working directory for score_layouts.py
-        score_layouts_path = Path(self.score_layouts_path)
-        if score_layouts_path.is_absolute():
-            work_dir = score_layouts_path.parent
-            script_name = score_layouts_path.name
-        else:
-            work_dir = Path.cwd() / score_layouts_path.parent
-            script_name = score_layouts_path.name
-        
-        # Build command based on whether to use poetry
-        if use_poetry:
-            cmd = [
-                'poetry', 'run', 'python3', script_name,
-                '--compare'] + temp_layouts + [
-                '--scorers', score_type,
-                '--csv', temp_csv_path,
-                '--quiet'
-            ]
-        else:
-            cmd = [
-                'python', script_name,
-                '--compare'] + temp_layouts + [
-                '--scorers', score_type,
-                '--csv', temp_csv_path,
-                '--quiet'
-            ]
-        
-        # Add fallback score table paths if needed
-        potential_score_tables = [
-            work_dir / 'tables' / 'scores_2key_detailed.csv',
-            Path.cwd() / 'tables' / 'scores_2key_detailed.csv',
-            Path.cwd() / '..' / 'keyboard_layout_scorers' / 'tables' / 'scores_2key_detailed.csv'
-        ]
-        
-        score_table_found = None
-        for score_table_path in potential_score_tables:
-            if score_table_path.exists():
-                score_table_found = score_table_path
-                break
-        
-        if score_table_found:
-            cmd.extend(['--score-table', str(score_table_found)])
-            if self.verbose:
-                print(f"Using score table: {score_table_found}")
-        
-        # Add potential frequency file paths
-        potential_freq_files = [
-            work_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-            Path.cwd() / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-            Path.cwd() / '..' / 'keyboard_layout_scorers' / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-        ]
-        
-        freq_file_found = None
-        for freq_file_path in potential_freq_files:
-            if freq_file_path.exists():
-                freq_file_found = freq_file_path
-                break
-        
-        if freq_file_found:
-            cmd.extend(['--frequency-file', str(freq_file_found)])
-            if self.verbose:
-                print(f"Using frequency file: {freq_file_found}")
-        
-        if self.verbose:
-            print(f"Working directory: {work_dir}")
-            print("Running command:", ' '.join(cmd[:8]) + "..." if len(cmd) > 8 else ' '.join(cmd))
-        
-        # Run the command with the correct working directory
-        result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir)
-        
-        if result.returncode != 0:
-            print(f"Command failed with return code {result.returncode}")
-            print(f"Working directory: {work_dir}")
-            print(f"STDOUT: {result.stdout}")
-            print(f"STDERR: {result.stderr}")
-            
-            # Try without poetry if that was the issue
-            if use_poetry:
-                if self.verbose:
-                    print("Retrying without poetry...")
-                return self._compute_scores(temp_layouts, temp_csv_path, target_df, score_type, use_poetry=False)
-            else:
-                raise RuntimeError(f"score_layouts.py failed: {result.stderr}\nSTDOUT: {result.stdout}")
-        
-        # Load the scores
-        if not Path(temp_csv_path).exists():
-            raise RuntimeError(f"Output CSV file not created: {temp_csv_path}")
-        
-        scores_df = pd.read_csv(temp_csv_path)
-        
-        if self.verbose:
-            print(f"Successfully loaded scores from {temp_csv_path}")
-            print(f"Scores dataframe shape: {scores_df.shape}")
-            print(f"Columns: {list(scores_df.columns)}")
-        
-        # Add scores to target dataframe
-        enhanced_df = target_df.copy()
-        
-        if score_type in scores_df.columns:
-            enhanced_df[score_type] = scores_df[score_type].values
-            self.computed_score_col = score_type
-            
-            if self.verbose:
-                score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                print(f"Added {score_type} scores (range: {score_range[0]:.4f} - {score_range[1]:.4f})")
-        else:
-            raise ValueError(f"{score_type} column not found in scoring results. Available columns: {list(scores_df.columns)}")
-        
-        return enhanced_df
-    
     def generate_statistical_report(self, filtered_df: pd.DataFrame, output_dir: str = '.') -> str:
         """Generate a statistical report comparing filtered vs original datasets."""
         
@@ -1043,7 +495,7 @@ class MOOLayoutFilter:
             f.write("=" * 50 + "\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Input file: {self.input_file}\n")
-            f.write(f"Filtering method: {getattr(self, 'filtering_stats', {}).get('intersection', {}).get('method', 'unknown')}\n\n")
+            f.write(f"Filtering method: {getattr(self, 'filtering_stats', {}).get('intersection', {}).get('method', 'intersection')}\n\n")
             
             # Dataset sizes
             f.write("Dataset Sizes:\n")
@@ -1290,8 +742,6 @@ def main():
     parser.add_argument('--output', help='Output CSV file (filtered results)')
     parser.add_argument('--save-removed', action='store_true', 
                        help='Save removed layouts to a separate CSV file')
-    parser.add_argument('--method', choices=['intersection', 'score', 'intersection_score'],
-                       default='intersection_score', help='Filtering method')
     
     # Path configuration
     parser.add_argument('--score-layouts-path', help='Path to score_layouts.py script')
@@ -1300,16 +750,6 @@ def main():
     # General method options
     parser.add_argument('--top-percent', type=float, default=25.0,
                        help='Top percentage to keep (for intersection and score methods)')
-    
-    # Intersection method options
-    parser.add_argument('--intersection-percent', type=float, default=30.0,
-                       help='Top percentage for intersection filtering (for intersection_score method)')
-    
-    # Score method options
-    parser.add_argument('--score-type', default='engram_3key_order',
-                       help='Score type to compute and filter by (e.g., engram_3key_order, comfort_total)')
-    parser.add_argument('--score-percent', type=float, default=15.0,
-                       help='Top percentage for score filtering (for intersection_score method)')
     
     # Additional scoring options
     parser.add_argument('--include-scores-in-output', 
@@ -1337,21 +777,7 @@ def main():
         original_df = filter_tool.df.copy()  # Keep original for removed layouts calculation
         
         # Apply filtering method
-        if args.method == 'intersection':
-            filtered_df = filter_tool.filter_intersection(args.top_percent)
-        
-        elif args.method == 'score':
-            # First add scores to full dataset
-            enhanced_df = filter_tool.add_scores(args.score_type, use_poetry=not args.no_poetry)
-            filter_tool.df = enhanced_df  # Update the main dataframe
-            original_df = enhanced_df.copy()  # Update original to include scores
-            filtered_df = filter_tool.filter_by_score(enhanced_df, args.score_type, args.top_percent)
-        
-        elif args.method == 'intersection_score':
-            filtered_df = filter_tool.filter_intersection_score(
-                args.intersection_percent, args.score_type, args.score_percent)
-            # Update original_df to include any scores that were computed
-            original_df = filter_tool.df.copy()
+        filtered_df = filter_tool.filter_intersection(args.top_percent)
         
         # Add additional scores efficiently to avoid double scoring
         if args.include_scores_in_output:
@@ -1359,54 +785,18 @@ def main():
             if additional_scores:
                 print(f"\nAdding additional scores to output: {', '.join(additional_scores)}")
                 
-                # Step 1: Score the filtered layouts
+                # Always score the filtered layouts
                 filtered_df = filter_tool.add_multiple_scores(
                     filtered_df, additional_scores, use_poetry=not args.no_poetry)
                 
-                # Step 2: If saving removed layouts, handle the remaining layouts efficiently
+                # Handle removed layouts if needed
                 if args.save_removed:
-                    # Calculate which layouts need scoring (removed layouts only)
-                    filtered_indices = set(filtered_df.index)
-                    original_indices = set(original_df.index)
-                    removed_indices = original_indices - filtered_indices
-                    
-                    if removed_indices:
-                        print(f"Computing additional scores for {len(removed_indices)} removed layouts...")
-                        
-                        # Create subset of removed layouts for scoring
-                        removed_layouts_to_score = original_df.loc[list(removed_indices)].copy()
-                        
-                        # Score only the removed layouts
-                        scored_removed = filter_tool.add_multiple_scores(
-                            removed_layouts_to_score, additional_scores, use_poetry=not args.no_poetry)
-                        
-                        # Merge scored filtered + scored removed back into original_df
-                        original_df = original_df.copy()
-                        
-                        # Add the additional score columns to original_df (initialize with NaN)
-                        for score_type in additional_scores:
+                    print(f"Saving removed layouts without additional scores (not needed for analysis)")
+                    # Don't score removed layouts - just leave additional score columns as NaN
+                    for score_type in additional_scores:
+                        if score_type in filtered_df.columns:
                             original_df[score_type] = float('nan')
-                        
-                        # Update with filtered scores
-                        for score_type in additional_scores:
-                            if score_type in filtered_df.columns:
-                                original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
-                        
-                        # Update with removed scores  
-                        for score_type in additional_scores:
-                            if score_type in scored_removed.columns:
-                                original_df.loc[scored_removed.index, score_type] = scored_removed[score_type]
-                        
-                        print(f"Successfully merged scores for all {len(original_df)} layouts")
-                    else:
-                        # No removed layouts, just copy additional columns to original_df
-                        for score_type in additional_scores:
-                            if score_type in filtered_df.columns:
-                                original_df[score_type] = float('nan')  # Initialize
-                                original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
-                else:
-                    # Not saving removed layouts, so we don't need to score anything else
-                    print("Not saving removed layouts - additional scoring complete")
+                            original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
                             
         # Calculate removed layouts
         filtered_indices = set(filtered_df.index)
@@ -1421,10 +811,10 @@ def main():
             output_path = Path(args.output)
             removed_file = output_path.parent / f"removed_{output_path.name}"
         else:
-            # Generate both filenames based on input filename and method
+            # Generate both filenames based on input filename
             input_stem = Path(args.input).stem
-            output_file = f"output/filtered_{input_stem}_{args.method}.csv"
-            removed_file = f"output/removed_{input_stem}_{args.method}.csv"
+            output_file = f"output/filtered_{input_stem}_intersection.csv"
+            removed_file = f"output/removed_{input_stem}_intersection.csv"
         
         # Save filtered results
         filtered_df.to_csv(output_file, index=False)
@@ -1441,7 +831,7 @@ def main():
         print(f"Filtered results saved to: {output_file}")
         
         # Add summary of removal reasons for intersection method
-        if args.method in ['intersection', 'intersection_score'] and args.verbose:
+        if args.verbose:
             print(f"\nRemoval breakdown:")
             if 'intersection' in filter_tool.filtering_stats:
                 stats = filter_tool.filtering_stats['intersection']
@@ -1502,35 +892,34 @@ def main():
         
         # Enhanced quality check with warnings
         total_unique_values = 0
-        if args.method in ['intersection', 'intersection_score']:
-            print(f"\nQuality check:")
-            
-            # Check if we have enough layouts for meaningful analysis
-            if len(filtered_df) < 5:
-                print(f"⚠️  WARNING: Only {len(filtered_df)} layouts retained - may be insufficient for analysis")
-                print(f"   Consider using higher percentages or different filtering method")
-            
-            # Count how many layouts are in top 10% of ALL original objectives
-            quality_count = len(filtered_df)
-            for col in filter_tool.objective_columns:
-                if col in filtered_df.columns:
-                    p90_threshold = np.percentile(original_df[col], 90)
-                    in_top10 = (filtered_df[col] >= p90_threshold).sum()
-                    quality_count = min(quality_count, in_top10)
-            
-            print(f"Layouts in top 10% of ALL objectives: {quality_count} ({quality_count/len(filtered_df)*100:.1f}% of retained set)")
-            
-            # Check for diversity
-            for col in filter_tool.objective_columns:
-                if col in filtered_df.columns:
-                    unique_values = filtered_df[col].nunique()
-                    total_unique_values += unique_values
-                    if unique_values <= 1:
-                        print(f"⚠️  {col}: All retained layouts have identical values")
-            
-            if total_unique_values <= len(filter_tool.objective_columns):
-                print(f"\n⚠️  WARNING: Retained layouts show little diversity across objectives")
-                print(f"   This suggests filtering was too restrictive")
+        print(f"\nQuality check:")
+
+        # Check if we have enough layouts for meaningful analysis
+        if len(filtered_df) < 5:
+            print(f"⚠️  WARNING: Only {len(filtered_df)} layouts retained - may be insufficient for analysis")
+            print(f"   Consider using higher percentages or different filtering method")
+        
+        # Count how many layouts are in top 10% of ALL original objectives
+        quality_count = len(filtered_df)
+        for col in filter_tool.objective_columns:
+            if col in filtered_df.columns:
+                p90_threshold = np.percentile(original_df[col], 90)
+                in_top10 = (filtered_df[col] >= p90_threshold).sum()
+                quality_count = min(quality_count, in_top10)
+        
+        print(f"Layouts in top 10% of ALL objectives: {quality_count} ({quality_count/len(filtered_df)*100:.1f}% of retained set)")
+        
+        # Check for diversity
+        for col in filter_tool.objective_columns:
+            if col in filtered_df.columns:
+                unique_values = filtered_df[col].nunique()
+                total_unique_values += unique_values
+                if unique_values <= 1:
+                    print(f"⚠️  {col}: All retained layouts have identical values")
+        
+        if total_unique_values <= len(filter_tool.objective_columns):
+            print(f"\n⚠️  WARNING: Retained layouts show little diversity across objectives")
+            print(f"   This suggests filtering was too restrictive")
         
         # Success message with recommendations based on actual diversity
         has_diversity = total_unique_values > len(filter_tool.objective_columns)
