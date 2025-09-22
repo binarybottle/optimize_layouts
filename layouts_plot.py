@@ -55,13 +55,14 @@ class UnifiedMOOAnalyzer:
             "#000000",  # Black  
             '#800080',  # Purple
             '#ff9896',  # Light Red
-            '#9467bd',  # Purple
             '#d62728',  # Red
             '#2ca02c',  # Green
+            '#008080',  # Teal
+            '#17becf',  # Cyan
+            '#9467bd',  # Purple
             '#8c564b',  # Brown
             '#e377c2',  # Pink
             '#7f7f7f',  # Gray
-            '#17becf',  # Cyan
             '#bcbd22',  # Olive
             '#c5b0d5',  # Light Purple
             '#c49c94',  # Light Brown
@@ -69,7 +70,6 @@ class UnifiedMOOAnalyzer:
             '#dbdb8d',  # Light Olive
             '#9edae5',  # Light Cyan
             '#1a1a1a',  # Near Black
-            '#008080',  # Teal
             '#800000'   # Maroon
         ]
 
