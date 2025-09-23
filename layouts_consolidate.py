@@ -6,15 +6,23 @@ This script processes all MOO results files in output/layouts/ directory,
 finds the global Pareto front across all solutions, and outputs a single
 CSV file with the globally optimal solutions.
 
-# Basic usage
-python layouts_consolidate.py
+Output Format:
+- items: letters in assignment order (e.g., "etaoinsrhldcum") 
+- positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+- layout_qwerty: layout string in 32-key QWERTY order (QWERTYUIOPASDFGHJKL;ZXCVBNM,./[')
+  with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
 
-# Test with limited files first
-python layouts_consolidate.py --max-files 100 --verbose
+Usage:
+    # Basic usage
+    python layouts_consolidate.py
 
-# Custom pattern and objectives
-python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
+    # Test with limited files first  
+    python layouts_consolidate.py --max-files 100 --verbose
+
+    # Custom pattern and objectives
+    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
 """
+
 import os
 import pandas as pd
 import numpy as np
@@ -24,10 +32,43 @@ from typing import List, Dict, Tuple
 import time
 import glob
 
+def safe_string_conversion(value, preserve_spaces: bool = False) -> str:
+    """Safely convert value to string, preserving apostrophes and avoiding NaN issues."""
+    if value == "'":
+        return "'"
+    
+    str_value = str(value)
+    if not preserve_spaces:
+        str_value = str_value.strip()
+    
+    if str_value.upper() in ['NAN', 'NA', 'NULL']:
+        raise ValueError(f"Detected problematic value conversion: {value} -> {str_value}")
+    
+    return str_value
+
+def validate_layout_data(items: str, positions: str) -> bool:
+    """Validate layout data for problematic values."""
+    try:
+        # Convert safely
+        safe_items = safe_string_conversion(items, preserve_spaces=True)
+        safe_positions = safe_string_conversion(positions, preserve_spaces=True)
+        
+        # Check lengths match
+        if len(safe_items) != len(safe_positions):
+            return False
+        
+        # Check for problematic values in mapping
+        for item, pos in zip(safe_items, safe_positions):
+            safe_string_conversion(item)
+            safe_string_conversion(pos)
+        
+        return True
+    except (ValueError, TypeError):
+        return False
 
 def parse_individual_moo_file(filepath: str, debug: bool = False) -> pd.DataFrame:
     """
-    Parse a single MOO results CSV file with metadata preservation.
+    Parse a single MOO results CSV file with metadata preservation and enhanced validation.
     
     Args:
         filepath: Path to CSV file
@@ -55,22 +96,70 @@ def parse_individual_moo_file(filepath: str, debug: bool = False) -> pd.DataFram
                 print(f"Available columns: {list(df.columns)}")
             return None
         
+        # Enhanced validation: Filter out rows with invalid layout data
+        valid_rows = []
+        invalid_count = 0
+        
+        for idx, row in df.iterrows():
+            items = row.get('items', '')
+            positions = row.get('positions', '')
+            
+            # Skip rows with missing or empty layout data
+            if pd.isna(items) or pd.isna(positions) or not items or not positions:
+                invalid_count += 1
+                if debug:
+                    print(f"Skipping row {idx} with missing layout data: items='{items}' positions='{positions}'")
+                continue
+            
+            # Validate layout data structure and content
+            if validate_layout_data(items, positions):
+                valid_rows.append(idx)
+            else:
+                invalid_count += 1
+                if debug:
+                    print(f"Skipping row {idx} with invalid layout data: items='{items}' positions='{positions}'")
+        
+        if not valid_rows:
+            if debug:
+                print(f"No valid layout data found in {filepath}")
+            return None
+        
+        if invalid_count > 0:
+            if debug:
+                print(f"Filtered out {invalid_count} rows with invalid layout data from {filepath}")
+            df = df.loc[valid_rows].copy()
+        
         # Extract config_id from filename
         filename = os.path.basename(filepath)
         config_id = filename.replace('moo_results_config_', '').replace('moo_results_', '').replace('.csv', '')
         if '_' in config_id:
             config_id = config_id.split('_')[0]  # Take first part before timestamp
         
-        # Add metadata columns
-        df['config_id'] = config_id
-        df['source_file'] = filename
+        # Add metadata columns with safe string conversion
+        df['config_id'] = safe_string_conversion(config_id)
+        df['source_file'] = safe_string_conversion(filename)
         df['source_rank'] = df['rank']  # Preserve original rank from source file
         
         # Remove the original 'rank' column to avoid confusion with global rankings
         df = df.drop('rank', axis=1)
         
+        # Additional validation: ensure items and positions are properly formatted
+        def clean_layout_data(row):
+            try:
+                items = safe_string_conversion(row['items'], preserve_spaces=True)
+                positions = safe_string_conversion(row['positions'], preserve_spaces=True)
+                row['items'] = items
+                row['positions'] = positions
+                return row
+            except ValueError as e:
+                if debug:
+                    print(f"Warning: Could not clean layout data in row: {e}")
+                return row
+        
+        df = df.apply(clean_layout_data, axis=1)
+        
         if debug:
-            print(f"Successfully parsed {filepath}: {len(df)} solutions")
+            print(f"Successfully parsed {filepath}: {len(df)} valid solutions")
             
         return df
         
@@ -78,7 +167,32 @@ def parse_individual_moo_file(filepath: str, debug: bool = False) -> pd.DataFram
         if debug:
             print(f"Error parsing {filepath}: {e}")
         return None
-
+    
+def convert_items_positions_to_qwerty_layout(items, positions):
+    """
+    Convert items->positions mapping to QWERTY-ordered layout string.
+    
+    Args:
+        items: Letters in assignment order (e.g., "etaoinsrhldcum")
+        positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+        
+    Returns:
+        Layout string in QWERTY key order (e.g., "  cr  du  oinl  teha   s  m     ")
+    """
+    QWERTY_ORDER = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+    
+    # Create mapping from position to letter
+    pos_to_letter = dict(zip(positions, items))
+    
+    # Build layout string in QWERTY order
+    layout_chars = []
+    for qwerty_pos in QWERTY_ORDER:
+        if qwerty_pos in pos_to_letter:
+            layout_chars.append(pos_to_letter[qwerty_pos])
+        else:
+            layout_chars.append(' ')  # Use space for unassigned positions
+    
+    return ''.join(layout_chars)
 
 def load_all_solutions(input_dir: str, file_pattern: str = "moo_results_config_*.csv", 
                        max_files: int = None, verbose: bool = False) -> pd.DataFrame:
@@ -164,7 +278,6 @@ def load_all_solutions(input_dir: str, file_pattern: str = "moo_results_config_*
     
     return combined_df
 
-
 def is_dominated(solution_a: pd.Series, solution_b: pd.Series, 
                 objectives: List[str], maximize: List[bool]) -> bool:
     """
@@ -201,7 +314,6 @@ def is_dominated(solution_a: pd.Series, solution_b: pd.Series,
                 worse_in_any = True
     
     return better_in_at_least_one and not worse_in_any
-
 
 def fast_pareto_filter_numpy(solutions: pd.DataFrame, 
                              objectives: List[str],
@@ -252,7 +364,6 @@ def fast_pareto_filter_numpy(solutions: pd.DataFrame,
     
     return pareto_solutions
 
-
 def hierarchical_pareto_filter(solutions: pd.DataFrame,
                               objectives: List[str], 
                               maximize: List[bool],
@@ -296,7 +407,6 @@ def hierarchical_pareto_filter(solutions: pd.DataFrame,
     
     return current_pareto
 
-
 def smart_objective_filtering(solutions: pd.DataFrame,
                             objectives: List[str],
                             maximize: List[bool],
@@ -327,7 +437,6 @@ def smart_objective_filtering(solutions: pd.DataFrame,
     
     return filtered_solutions
 
-
 def optimized_pareto_selection(solutions: pd.DataFrame,
                               objectives: List[str],
                               maximize: List[bool],
@@ -350,33 +459,43 @@ def optimized_pareto_selection(solutions: pd.DataFrame,
     else:
         return fast_pareto_filter_numpy(solutions, objectives, maximize)
 
-
 def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str, 
                        processing_stats: Dict) -> None:
-    """
-    Save Pareto results with metadata and column ordering.
-    """
+    """Save Pareto results with metadata and standardized column ordering."""
     if len(pareto_solutions) == 0:
         print("Warning: No Pareto solutions to save")
         return
     
-    # Clean column ordering: metadata first, then objectives, then source info
-    priority_cols = ['config_id', 'source_rank', 'items', 'positions']
+    # Add layout_qwerty column if items and positions exist
+    if 'items' in pareto_solutions.columns and 'positions' in pareto_solutions.columns:
+        print("Adding layout_qwerty column...")
+        pareto_solutions['layout_qwerty'] = pareto_solutions.apply(
+            lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
+            axis=1
+        )
+    
+    # Standardized column ordering: layout metadata first, then objectives, then source info
+    standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
     
     # Identify objective columns (exclude known metadata columns)
-    metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'source_file', 'layout', 'combined_score']
+    metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'layout_qwerty', 
+                     'source_file', 'layout', 'combined_score']
     objective_cols = [col for col in pareto_solutions.columns if col not in metadata_cols]
     
-    # Final column ordering
+    # Final standardized column ordering
     ordered_cols = []
     
-    # Add priority columns that exist
-    for col in priority_cols:
+    # Add standard columns that exist
+    for col in standard_cols:
         if col in pareto_solutions.columns:
             ordered_cols.append(col)
     
-    # Add objective columns
-    ordered_cols.extend(objective_cols)
+    # Add source_rank after standard columns
+    if 'source_rank' in pareto_solutions.columns:
+        ordered_cols.append('source_rank')
+    
+    # Add objective columns (sorted for consistency)
+    ordered_cols.extend(sorted(objective_cols))
     
     # Add remaining metadata columns
     remaining_cols = [col for col in pareto_solutions.columns if col not in ordered_cols]
@@ -402,6 +521,11 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
         f.write(f'"Objectives used","{", ".join(processing_stats["objectives"])}"\n')
         f.write(f'"Maximizing objectives","{", ".join(map(str, processing_stats["maximize_flags"]))}"\\n')
         f.write(f'"Processing time (seconds)","{processing_stats["processing_time"]:.2f}"\n')
+        f.write('\n')
+        f.write('"Data Format:"\n')
+        f.write('"items","Letters in assignment order (arbitrary)"\n')  
+        f.write('"positions","QWERTY positions where those letters go"\n')
+        f.write('"layout_qwerty","Layout string in QWERTY key order (what is at each QWERTY position)"\n')
         f.write('\n')
         
         # Write the actual data

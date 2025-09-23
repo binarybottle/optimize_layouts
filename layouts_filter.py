@@ -4,7 +4,12 @@ Filter MOO keyboard layout results using intersection filtering approach.
 
 This script helps reduce large sets of MOO solutions to manageable subsets for further analysis.
 It finds layouts that perform in the top percentage for ALL objectives simultaneously.
-For example, with --top-percent 10, only layouts in the top 10% of ALL objectives survive.
+
+Input/Output Format:
+- items: letters in assignment order (e.g., "etaoinsrhldcum") 
+- positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+- layout_qwerty: layout string in 32-key QWERTY order (QWERTYUIOPASDFGHJKL;ZXCVBNM,./[')
+  with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
 
 Usage:
     # Intersection filtering (layouts that score well in ALL objectives, with plot and report)
@@ -24,6 +29,66 @@ import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
 from datetime import datetime
+
+def safe_string_conversion(value, preserve_spaces: bool = False) -> str:
+    """Safely convert value to string, preserving apostrophes and avoiding NaN issues."""
+    if value == "'":
+        return "'"
+    
+    str_value = str(value)
+    if not preserve_spaces:
+        str_value = str_value.strip()
+    
+    if str_value.upper() in ['NAN', 'NA', 'NULL']:
+        raise ValueError(f"Detected problematic value conversion: {value} -> {str_value}")
+    
+    return str_value
+
+def validate_layout_data(items: str, positions: str) -> bool:
+    """Validate layout data for problematic values."""
+    try:
+        # Convert safely
+        safe_items = safe_string_conversion(items, preserve_spaces=True)
+        safe_positions = safe_string_conversion(positions, preserve_spaces=True)
+        
+        # Check lengths match
+        if len(safe_items) != len(safe_positions):
+            return False
+        
+        # Check for problematic values in mapping
+        for item, pos in zip(safe_items, safe_positions):
+            safe_string_conversion(item)
+            safe_string_conversion(pos)
+        
+        return True
+    except (ValueError, TypeError):
+        return False
+    
+def convert_items_positions_to_qwerty_layout(items, positions):
+    """
+    Convert items->positions mapping to QWERTY-ordered layout string.
+    
+    Args:
+        items: Letters in assignment order (e.g., "etaoinsrhldcum")
+        positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+        
+    Returns:
+        Layout string in QWERTY key order (e.g., "  cr  du  oinl  teha   s  m     ")
+    """
+    QWERTY_ORDER = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+    
+    # Create mapping from position to letter
+    pos_to_letter = dict(zip(positions, items))
+    
+    # Build layout string in QWERTY order
+    layout_chars = []
+    for qwerty_pos in QWERTY_ORDER:
+        if qwerty_pos in pos_to_letter:
+            layout_chars.append(pos_to_letter[qwerty_pos])
+        else:
+            layout_chars.append(' ')  # Use space for unassigned positions
+    
+    return ''.join(layout_chars)
 
 class MOOLayoutFilter:
     def __init__(self, input_file: str, verbose: bool = False, score_layouts_path: str = None):
@@ -55,10 +120,22 @@ class MOOLayoutFilter:
         return 'score_layouts.py'
     
     def _load_data(self) -> pd.DataFrame:
-        """Load MOO results data."""
+        """Load MOO results data with enhanced validation."""
         df = pd.read_csv(self.input_file)
+        
+        # Validate layout data
+        if 'items' in df.columns and 'positions' in df.columns:
+            valid_mask = df.apply(lambda row: validate_layout_data(row['items'], row['positions']), axis=1)
+            invalid_count = len(df) - valid_mask.sum()
+            
+            if invalid_count > 0:
+                if self.verbose:
+                    print(f"Filtered out {invalid_count} rows with invalid layout data")
+                df = df[valid_mask].copy()
+        
         if self.verbose:
-            print(f"Loaded {len(df)} layouts from {self.input_file}")
+            print(f"Loaded {len(df)} valid layouts from {self.input_file}")
+        
         return df
     
     def _detect_objectives(self) -> List[str]:
@@ -112,6 +189,15 @@ class MOOLayoutFilter:
             union_layouts = set()
         
         filtered_df = self.df.loc[list(intersection_layouts)].copy()
+    
+        # Add layout_qwerty column if items and positions exist
+        if 'items' in filtered_df.columns and 'positions' in filtered_df.columns and 'layout_qwerty' not in filtered_df.columns:
+            if self.verbose:
+                print("Adding layout_qwerty column to filtered results...")
+            filtered_df['layout_qwerty'] = filtered_df.apply(
+                lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
+                axis=1
+            )
         
         # Calculate detailed filtering breakdown
         total_layouts = len(self.df)
@@ -302,21 +388,17 @@ class MOOLayoutFilter:
         return enhanced_df
     
     def reorder_to_qwerty_layout(self, items, positions):
-        """Convert items->positions mapping to QWERTY-ordered layout string."""
-        QWERTY_ORDER = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+        """
+        Convert items->positions mapping to QWERTY-ordered layout string.
         
-        # Create mapping from position to letter
-        pos_to_letter = dict(zip(positions, items))
-        
-        # Build layout string in QWERTY order
-        layout_chars = []
-        for qwerty_pos in QWERTY_ORDER:
-            if qwerty_pos in pos_to_letter:
-                layout_chars.append(pos_to_letter[qwerty_pos])
-            else:
-                layout_chars.append(' ')  # Use space for unassigned positions
-        
-        return ''.join(layout_chars)
+        Args:
+            items: Letters in assignment order (e.g., "etaoinsrhldcum")
+            positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+            
+        Returns:
+            Layout string in QWERTY key order for score_layouts.py --compare format
+        """
+        return convert_items_positions_to_qwerty_layout(items, positions)
 
     def add_multiple_scores(self, df: pd.DataFrame, score_types: List[str], use_poetry: bool = True) -> pd.DataFrame:
         """Add multiple score types to a dataframe."""
@@ -483,7 +565,42 @@ class MOOLayoutFilter:
             # Clean up temp files
             Path(temp_csv_path).unlink(missing_ok=True)
             Path(layouts_file_path).unlink(missing_ok=True)
-                
+
+    def standardize_output_columns(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Standardize column ordering for output compatibility."""
+        if len(df) == 0:
+            return df
+        
+        # Standard column order
+        standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
+        
+        # Identify objective columns
+        metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'layout_qwerty', 
+                        'source_file', 'layout', 'combined_score']
+        objective_cols = sorted([col for col in df.columns if col not in metadata_cols and 
+                                col not in standard_cols])
+        
+        # Build ordered column list
+        ordered_cols = []
+        
+        # Add standard columns that exist
+        for col in standard_cols:
+            if col in df.columns:
+                ordered_cols.append(col)
+        
+        # Add source_rank after standard columns
+        if 'source_rank' in df.columns:
+            ordered_cols.append('source_rank')
+        
+        # Add objective columns
+        ordered_cols.extend(objective_cols)
+        
+        # Add any remaining columns
+        remaining = [col for col in df.columns if col not in ordered_cols]
+        ordered_cols.extend(remaining)
+        
+        return df[ordered_cols]
+                    
     def generate_statistical_report(self, filtered_df: pd.DataFrame, output_dir: str = '.') -> str:
         """Generate a statistical report comparing filtered vs original datasets."""
         
@@ -778,7 +895,8 @@ def main():
         
         # Apply filtering method
         filtered_df = filter_tool.filter_intersection(args.top_percent)
-        
+
+
         # Add additional scores efficiently to avoid double scoring
         if args.include_scores_in_output:
             additional_scores = [s.strip() for s in args.include_scores_in_output.split(',') if s.strip()]
@@ -797,7 +915,15 @@ def main():
                         if score_type in filtered_df.columns:
                             original_df[score_type] = float('nan')
                             original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
-                            
+        
+        # Add layout_qwerty to original_df if it's in filtered_df but not in original_df
+        if 'layout_qwerty' in filtered_df.columns and 'layout_qwerty' not in original_df.columns:
+            print("Adding layout_qwerty column to original dataset...")
+            original_df['layout_qwerty'] = original_df.apply(
+                lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
+                axis=1
+            )
+                                        
         # Calculate removed layouts
         filtered_indices = set(filtered_df.index)
         original_indices = set(original_df.index)
@@ -817,8 +943,14 @@ def main():
             removed_file = f"output/removed_{input_stem}_intersection.csv"
         
         # Save filtered results
-        filtered_df.to_csv(output_file, index=False)
-        
+        standardized_df = filter_tool.standardize_output_columns(filtered_df)
+        standardized_df.to_csv(output_file, index=False)
+
+        # And for removed layouts:
+        if args.save_removed and len(removed_df) > 0:
+            standardized_removed = filter_tool.standardize_output_columns(removed_df)
+            standardized_removed.to_csv(removed_file, index=False)
+
         # Save removed results if requested
         if args.save_removed and len(removed_df) > 0:
             removed_df.to_csv(removed_file, index=False)

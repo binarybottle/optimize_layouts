@@ -6,12 +6,11 @@ This script analyzes/visualizes MOO results with automatic input detection:
 - Directory input: Analyzes multiple individual CSV files from separate optimization runs
 - File input: Analyzes consolidated global Pareto CSV file
 
-Features:
-- Auto-detects input type and format
-- Unified analysis pipeline regardless of input source
-- Visualization suite (Pareto fronts, correlations, stability matrices)
-- Flexible filtering by letter-position constraints
-- Ranking and statistical analysis
+Output Format:
+- items: letters in assignment order (e.g., "etaoinsrhldcum") 
+- positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+- layout_qwerty: layout string in 32-key QWERTY order (QWERTYUIOPASDFGHJKL;ZXCVBNM,./[')
+  with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
 
 Usage:
     # Analyze directory of individual files
@@ -36,6 +35,65 @@ import os
 from io import StringIO
 import time
 
+def safe_string_conversion(value, preserve_spaces: bool = False) -> str:
+    """Safely convert value to string, preserving apostrophes and avoiding NaN issues."""
+    if value == "'":
+        return "'"
+    
+    str_value = str(value)
+    if not preserve_spaces:
+        str_value = str_value.strip()
+    
+    if str_value.upper() in ['NAN', 'NA', 'NULL']:
+        raise ValueError(f"Detected problematic value conversion: {value} -> {str_value}")
+    
+    return str_value
+
+def validate_layout_data(items: str, positions: str) -> bool:
+    """Validate layout data for problematic values."""
+    try:
+        # Convert safely
+        safe_items = safe_string_conversion(items, preserve_spaces=True)
+        safe_positions = safe_string_conversion(positions, preserve_spaces=True)
+        
+        # Check lengths match
+        if len(safe_items) != len(safe_positions):
+            return False
+        
+        # Check for problematic values in mapping
+        for item, pos in zip(safe_items, safe_positions):
+            safe_string_conversion(item)
+            safe_string_conversion(pos)
+        
+        return True
+    except (ValueError, TypeError):
+        return False
+       
+def convert_items_positions_to_qwerty_layout(items, positions):
+    """
+    Convert items->positions mapping to QWERTY-ordered layout string.
+    
+    Args:
+        items: Letters in assignment order (e.g., "etaoinsrhldcum")
+        positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
+        
+    Returns:
+        Layout string in QWERTY key order (e.g., "  cr  du  oinl  teha   s  m     ")
+    """
+    QWERTY_ORDER = "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+    
+    # Create mapping from position to letter
+    pos_to_letter = dict(zip(positions, items))
+    
+    # Build layout string in QWERTY order
+    layout_chars = []
+    for qwerty_pos in QWERTY_ORDER:
+        if qwerty_pos in pos_to_letter:
+            layout_chars.append(pos_to_letter[qwerty_pos])
+        else:
+            layout_chars.append(' ')  # Use space for unassigned positions
+    
+    return ''.join(layout_chars)
 
 class UnifiedMOOAnalyzer:
     """Unified analyzer for MOO results from any source format."""
@@ -141,7 +199,7 @@ class UnifiedMOOAnalyzer:
         return combined_df
     
     def load_file_input(self, filepath):
-        """Load single consolidated CSV file (like global Pareto results)."""
+        """Load single consolidated CSV file with enhanced validation and format detection."""
         print(f"Loading consolidated MOO results file: {filepath}")
         
         try:
@@ -153,7 +211,7 @@ class UnifiedMOOAnalyzer:
             data_start_idx = 0
             for i, line in enumerate(lines):
                 if ('config_id' in line or 'items' in line or 'positions' in line or 
-                    'Complete Item' in line or 'Complete Pair' in line):
+                    'Complete Item' in line or 'Complete Pair' in line or 'layout' in line):
                     data_start_idx = i
                     break
             
@@ -166,13 +224,140 @@ class UnifiedMOOAnalyzer:
                 # Standard CSV file
                 df = pd.read_csv(filepath)
             
-            print(f"Loaded {len(df):,} solutions from consolidated file")
+            if len(df) == 0:
+                print(f"Warning: No data found in {filepath}")
+                return pd.DataFrame()
+            
+            # Enhanced validation: Check for layout data columns and validate them
+            layout_data_found = False
+            invalid_count = 0
+            
+            # Check for different layout format combinations
+            if 'items' in df.columns and 'positions' in df.columns:
+                layout_data_found = True
+                print(f"Detected MOO format (items + positions)")
+                
+                # Validate each row's layout data
+                valid_mask = []
+                for idx, row in df.iterrows():
+                    items = row.get('items', '')
+                    positions = row.get('positions', '')
+                    
+                    # Skip rows with missing layout data
+                    if pd.isna(items) or pd.isna(positions) or not str(items).strip() or not str(positions).strip():
+                        valid_mask.append(False)
+                        invalid_count += 1
+                        continue
+                    
+                    # Validate layout data structure
+                    if validate_layout_data(items, positions):
+                        valid_mask.append(True)
+                    else:
+                        valid_mask.append(False)
+                        invalid_count += 1
+                
+                if invalid_count > 0:
+                    print(f"Filtered out {invalid_count} rows with invalid layout data")
+                    df = df[valid_mask].copy()
+                    
+                    if len(df) == 0:
+                        print(f"Error: No valid layout data remaining after filtering")
+                        return pd.DataFrame()
+            
+            elif 'layout_qwerty' in df.columns:
+                layout_data_found = True
+                print(f"Detected layout_qwerty format")
+                
+                # Validate layout_qwerty data
+                valid_mask = []
+                for idx, row in df.iterrows():
+                    layout_qwerty = row.get('layout_qwerty', '')
+                    
+                    if pd.isna(layout_qwerty) or not str(layout_qwerty).strip():
+                        valid_mask.append(False)
+                        invalid_count += 1
+                    else:
+                        try:
+                            safe_string_conversion(layout_qwerty, preserve_spaces=True)
+                            valid_mask.append(True)
+                        except ValueError:
+                            valid_mask.append(False)
+                            invalid_count += 1
+                
+                if invalid_count > 0:
+                    print(f"Filtered out {invalid_count} rows with invalid layout_qwerty data")
+                    df = df[valid_mask].copy()
+                    
+                    if len(df) == 0:
+                        print(f"Error: No valid layout data remaining after filtering")
+                        return pd.DataFrame()
+            
+            elif 'letters' in df.columns:
+                layout_data_found = True
+                print(f"Detected letters format")
+                
+                # Similar validation for letters format
+                valid_mask = []
+                for idx, row in df.iterrows():
+                    letters = row.get('letters', '')
+                    
+                    if pd.isna(letters) or not str(letters).strip():
+                        valid_mask.append(False)
+                        invalid_count += 1
+                    else:
+                        try:
+                            safe_string_conversion(letters, preserve_spaces=True)
+                            valid_mask.append(True)
+                        except ValueError:
+                            valid_mask.append(False)
+                            invalid_count += 1
+                
+                if invalid_count > 0:
+                    print(f"Filtered out {invalid_count} rows with invalid letters data")
+                    df = df[valid_mask].copy()
+                    
+                    if len(df) == 0:
+                        print(f"Error: No valid layout data remaining after filtering")
+                        return pd.DataFrame()
+            
+            if not layout_data_found:
+                print(f"Warning: No recognized layout data columns found in {filepath}")
+                print(f"Expected: 'items'+'positions', 'layout_qwerty', or 'letters'")
+                print(f"Found columns: {list(df.columns)}")
+            
+            # Clean string data in remaining valid rows
+            def clean_row_data(row):
+                """Clean string data in a row with safe conversion."""
+                try:
+                    for col in row.index:
+                        if isinstance(row[col], str) or not pd.isna(row[col]):
+                            if col in ['items', 'positions', 'layout_qwerty', 'letters']:
+                                # Preserve spaces in layout data
+                                row[col] = safe_string_conversion(row[col], preserve_spaces=True)
+                            else:
+                                # Regular string cleaning for other columns
+                                row[col] = safe_string_conversion(row[col])
+                    return row
+                except ValueError as e:
+                    # If we can't clean the row, mark it for removal
+                    print(f"Warning: Could not clean row data: {e}")
+                    return row
+            
+            # Apply cleaning to all rows
+            if len(df) > 0:
+                df = df.apply(clean_row_data, axis=1)
+            
+            print(f"Loaded {len(df):,} valid solutions from consolidated file")
+            
+            if invalid_count > 0:
+                print(f"Summary: Filtered {invalid_count} invalid rows, retained {len(df)} valid solutions")
+            
             return df
             
         except Exception as e:
             print(f"Error reading {filepath}: {e}")
             return pd.DataFrame()
-    
+                    
     def detect_objective_columns(self, df):
         """Detect objective columns and special item/pair columns."""
         # Comprehensive metadata columns to exclude
@@ -306,6 +491,16 @@ class UnifiedMOOAnalyzer:
             
     def add_global_rankings(self, df):
         """Add global ranking columns based on objectives."""
+        
+        # Add layout_qwerty column if items and positions exist
+        if 'items' in df.columns and 'positions' in df.columns and 'layout_qwerty' not in df.columns:
+            print("Adding layout_qwerty column...")
+            df['layout_qwerty'] = df.apply(
+                lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
+                axis=1
+            )
+        
+        # Rest of the function remains the same...
         if self.item_col and self.pair_col:
             # For Pareto analysis with specific item/pair objectives
             df['item_rank'] = df[self.item_col].rank(ascending=False, method='first').astype(int)
@@ -626,25 +821,58 @@ class UnifiedMOOAnalyzer:
         print(top_10[available_cols].to_string(index=False))
         
         return top_10
-    
+
     def save_results(self, top_solutions):
-        """Save analysis results to files."""
-        # Save dataset with rankings
-        output_csv = self.output_dir / 'moo_analysis_results.csv'
-        self.df.to_csv(output_csv, index=False)
-        print(f"\nComplete results saved to: {output_csv}")
-        
-        # Save summary
-        with open(self.output_dir / 'analysis_summary.txt', 'w') as f:
-            f.write(f"MOO Analysis Summary\n")
-            f.write(f"===================\n\n")
-            f.write(f"Input type: {self.input_type}\n")
-            f.write(f"Total solutions: {len(self.df):,}\n")
-            if 'source_file' in self.df.columns:
-                file_counts = self.df['source_file'].value_counts()
-                f.write(f"Number of source files: {len(file_counts)}\n")
-            f.write(f"\nTop 10 Solutions:\n")
-            f.write(top_solutions.to_string(index=False))
+        """Save analysis results with standardized column ordering."""
+        # Standardize column ordering
+        if len(self.df) > 0:
+            standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
+            
+            # Identify objective and metadata columns
+            metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'layout_qwerty', 
+                            'source_file', 'layout', 'combined_score', 'global_rank', 
+                            'item_rank', 'pair_rank']
+            objective_cols = sorted([col for col in self.df.columns if col not in metadata_cols])
+            
+            # Build ordered column list
+            ordered_cols = []
+            
+            # Add standard columns that exist
+            for col in standard_cols:
+                if col in self.df.columns:
+                    ordered_cols.append(col)
+            
+            # Add rankings after standard columns
+            for rank_col in ['source_rank', 'global_rank', 'item_rank', 'pair_rank']:
+                if rank_col in self.df.columns:
+                    ordered_cols.append(rank_col)
+            
+            # Add objective columns
+            ordered_cols.extend(objective_cols)
+            
+            # Add remaining columns
+            remaining = [col for col in self.df.columns if col not in ordered_cols]
+            ordered_cols.extend(remaining)
+            
+            # Reorder and save
+            standardized_df = self.df[ordered_cols]
+            
+            # Save dataset with rankings
+            output_csv = self.output_dir / 'moo_analysis_results.csv'
+            standardized_df.to_csv(output_csv, index=False)
+            print(f"\nComplete results saved to: {output_csv}")
+               
+            # Save summary
+            with open(self.output_dir / 'analysis_summary.txt', 'w') as f:
+                f.write(f"MOO Analysis Summary\n")
+                f.write(f"===================\n\n")
+                f.write(f"Input type: {self.input_type}\n")
+                f.write(f"Total solutions: {len(self.df):,}\n")
+                if 'source_file' in self.df.columns:
+                    file_counts = self.df['source_file'].value_counts()
+                    f.write(f"Number of source files: {len(file_counts)}\n")
+                f.write(f"\nTop 10 Solutions:\n")
+                f.write(top_solutions.to_string(index=False))
     
     def run_complete_analysis(self, input_path, filter_assignments=None, **load_kwargs):
         """Run the complete analysis pipeline."""
@@ -670,7 +898,6 @@ class UnifiedMOOAnalyzer:
         self.save_results(top_solutions)
         
         return self.df
-
 
 def main():
     parser = argparse.ArgumentParser(description='Unified MOO Analysis Tool')
@@ -723,7 +950,6 @@ def main():
         return 1
     
     return 0
-
 
 if __name__ == '__main__':
     exit(main())
