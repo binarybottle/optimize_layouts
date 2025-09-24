@@ -197,45 +197,103 @@ class UnifiedMOOAnalyzer:
         combined_df = pd.concat(all_results, ignore_index=True)
         print(f"Loaded {len(combined_df):,} total solutions from {successful_files} files")
         return combined_df
-    
+
+    def analyze_file_structure(self, filepath):
+        """Analyze the file structure to understand the format before parsing."""
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+            
+            print(f"\n=== File Structure Analysis ===")
+            print(f"Total lines: {len(lines)}")
+            
+            # Analyze first 20 lines
+            print(f"First 20 lines analysis:")
+            for i, line in enumerate(lines[:20], 1):
+                line_clean = line.strip()
+                comma_count = line_clean.count(',') if line_clean else 0
+                has_quotes = '"' in line_clean
+                
+                print(f"Line {i:2d}: {comma_count:2d} commas, quotes: {has_quotes}, content: {line_clean[:80]}{'...' if len(line_clean) > 80 else ''}")
+            
+            print(f"=== End Analysis ===\n")
+            
+        except Exception as e:
+            print(f"Could not analyze file structure: {e}")
+                
     def load_file_input(self, filepath):
         """Load single consolidated CSV file with enhanced validation and format detection."""
         print(f"Loading consolidated MOO results file: {filepath}")
         
         try:
-            # Try to detect if this is a global Pareto file with metadata header
+            # First, let's examine the file structure more carefully
             with open(filepath, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
-            # Look for data start (after metadata header)
-            data_start_idx = 0
-            for i, line in enumerate(lines):
-                if ('config_id' in line or 'items' in line or 'positions' in line or 
-                    'Complete Item' in line or 'Complete Pair' in line or 'layout' in line):
-                    data_start_idx = i
-                    break
+            print(f"File has {len(lines)} total lines")
             
-            # If we found a header section, parse from there
+            # Look for the actual CSV header by examining line content
+            data_start_idx = 0
+            header_found = False
+            
+            for i, line in enumerate(lines):
+                line_clean = line.strip()
+                if not line_clean:  # Skip empty lines
+                    continue
+                    
+                # Look for CSV header indicators (comma-separated values with expected columns)
+                if (',' in line_clean and 
+                    any(col in line_clean for col in ['config_id', 'items', 'positions', 'Complete Item', 'Complete Pair', 'layout'])):
+                    data_start_idx = i
+                    header_found = True
+                    print(f"Found CSV header at line {i + 1}: {line_clean[:100]}...")
+                    break
+                
+                # If we see what looks like data (lots of commas), stop looking
+                if ',' in line_clean and line_clean.count(',') > 10:
+                    # This might be data, so the header should be just before it
+                    # Let's check the previous line
+                    if i > 0:
+                        prev_line = lines[i-1].strip()
+                        if ',' in prev_line:
+                            data_start_idx = i - 1
+                            header_found = True
+                            print(f"Found CSV header at line {i}: {prev_line[:100]}...")
+                            break
+                    else:
+                        # First line is data, assume no header section
+                        data_start_idx = 0
+                        header_found = True
+                        break
+            
+            if not header_found:
+                print("Warning: No clear CSV header found, trying to parse entire file")
+                data_start_idx = 0
+            
+            # Try to parse from the detected start point
             if data_start_idx > 0:
-                print(f"Detected metadata header, parsing from line {data_start_idx + 1}")
-                data_lines = ''.join(lines[data_start_idx:])
-                df = pd.read_csv(StringIO(data_lines))
+                # Parse from detected header line
+                data_content = ''.join(lines[data_start_idx:])
+                df = pd.read_csv(StringIO(data_content))
             else:
-                # Standard CSV file
+                # Parse entire file
                 df = pd.read_csv(filepath)
             
+            # Validate we got data
             if len(df) == 0:
-                print(f"Warning: No data found in {filepath}")
+                print(f"Warning: No data rows found in {filepath}")
                 return pd.DataFrame()
             
-            # Enhanced validation: Check for layout data columns and validate them
+            print(f"Successfully loaded {len(df)} rows with columns: {list(df.columns)}")
+            
+            # Check for and handle layout data validation
             layout_data_found = False
             invalid_count = 0
             
             # Check for different layout format combinations
             if 'items' in df.columns and 'positions' in df.columns:
                 layout_data_found = True
-                print(f"Detected MOO format (items + positions)")
+                print(f"Detected MOO format with items + positions columns")
                 
                 # Validate each row's layout data
                 valid_mask = []
@@ -257,7 +315,7 @@ class UnifiedMOOAnalyzer:
                         invalid_count += 1
                 
                 if invalid_count > 0:
-                    print(f"Filtered out {invalid_count} rows with invalid layout data")
+                    print(f"Filtering out {invalid_count} rows with invalid layout data")
                     df = df[valid_mask].copy()
                     
                     if len(df) == 0:
@@ -268,96 +326,32 @@ class UnifiedMOOAnalyzer:
                 layout_data_found = True
                 print(f"Detected layout_qwerty format")
                 
-                # Validate layout_qwerty data
-                valid_mask = []
-                for idx, row in df.iterrows():
-                    layout_qwerty = row.get('layout_qwerty', '')
-                    
-                    if pd.isna(layout_qwerty) or not str(layout_qwerty).strip():
-                        valid_mask.append(False)
-                        invalid_count += 1
-                    else:
-                        try:
-                            safe_string_conversion(layout_qwerty, preserve_spaces=True)
-                            valid_mask.append(True)
-                        except ValueError:
-                            valid_mask.append(False)
-                            invalid_count += 1
-                
-                if invalid_count > 0:
-                    print(f"Filtered out {invalid_count} rows with invalid layout_qwerty data")
-                    df = df[valid_mask].copy()
-                    
-                    if len(df) == 0:
-                        print(f"Error: No valid layout data remaining after filtering")
-                        return pd.DataFrame()
-            
             elif 'letters' in df.columns:
-                layout_data_found = True
+                layout_data_found = True  
                 print(f"Detected letters format")
-                
-                # Similar validation for letters format
-                valid_mask = []
-                for idx, row in df.iterrows():
-                    letters = row.get('letters', '')
-                    
-                    if pd.isna(letters) or not str(letters).strip():
-                        valid_mask.append(False)
-                        invalid_count += 1
-                    else:
-                        try:
-                            safe_string_conversion(letters, preserve_spaces=True)
-                            valid_mask.append(True)
-                        except ValueError:
-                            valid_mask.append(False)
-                            invalid_count += 1
-                
-                if invalid_count > 0:
-                    print(f"Filtered out {invalid_count} rows with invalid letters data")
-                    df = df[valid_mask].copy()
-                    
-                    if len(df) == 0:
-                        print(f"Error: No valid layout data remaining after filtering")
-                        return pd.DataFrame()
             
             if not layout_data_found:
-                print(f"Warning: No recognized layout data columns found in {filepath}")
-                print(f"Expected: 'items'+'positions', 'layout_qwerty', or 'letters'")
-                print(f"Found columns: {list(df.columns)}")
+                print(f"Warning: No recognized layout data columns found")
+                print(f"Available columns: {list(df.columns)}")
             
-            # Clean string data in remaining valid rows
-            def clean_row_data(row):
-                """Clean string data in a row with safe conversion."""
-                try:
-                    for col in row.index:
-                        if isinstance(row[col], str) or not pd.isna(row[col]):
-                            if col in ['items', 'positions', 'layout_qwerty', 'letters']:
-                                # Preserve spaces in layout data
-                                row[col] = safe_string_conversion(row[col], preserve_spaces=True)
-                            else:
-                                # Regular string cleaning for other columns
-                                row[col] = safe_string_conversion(row[col])
-                    return row
-                except ValueError as e:
-                    # If we can't clean the row, mark it for removal
-                    print(f"Warning: Could not clean row data: {e}")
-                    return row
-            
-            # Apply cleaning to all rows
-            if len(df) > 0:
-                df = df.apply(clean_row_data, axis=1)
-            
-            print(f"Loaded {len(df):,} valid solutions from consolidated file")
-            
-            if invalid_count > 0:
-                print(f"Summary: Filtered {invalid_count} invalid rows, retained {len(df)} valid solutions")
-            
+            print(f"Final dataset: {len(df)} valid solutions")
             return df
             
         except Exception as e:
             print(f"Error reading {filepath}: {e}")
+            
+            # Additional debugging information
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    first_10_lines = [f.readline() for _ in range(10)]
+                print(f"First 10 lines of file for debugging:")
+                for i, line in enumerate(first_10_lines, 1):
+                    print(f"Line {i}: {line.rstrip()}")
+            except Exception as debug_e:
+                print(f"Could not read file for debugging: {debug_e}")
+            
             return pd.DataFrame()
-                    
+                            
     def detect_objective_columns(self, df):
         """Detect objective columns and special item/pair columns."""
         # Comprehensive metadata columns to exclude
@@ -878,8 +872,19 @@ class UnifiedMOOAnalyzer:
         """Run the complete analysis pipeline."""
         print(f"Starting MOO analysis for: {input_path}")
         
-        # Load data
-        self.load_data(input_path, **load_kwargs)
+        try:
+            # Load data
+            self.load_data(input_path, **load_kwargs)
+            
+        except Exception as load_error:
+            print(f"Failed to load data: {load_error}")
+            
+            # If it's a file input, analyze the structure for debugging
+            if self.detect_input_type(input_path) == "file":
+                print(f"Analyzing file structure for debugging...")
+                self.analyze_file_structure(input_path)
+            
+            raise load_error
         
         # Apply constraints if provided
         if filter_assignments:

@@ -519,7 +519,7 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
         f.write(f'"Global Pareto solutions","{len(pareto_ordered)}"\n')
         f.write(f'"Reduction factor","{processing_stats["reduction_factor"]:.1f}x"\n')
         f.write(f'"Objectives used","{", ".join(processing_stats["objectives"])}"\n')
-        f.write(f'"Maximizing objectives","{", ".join(map(str, processing_stats["maximize_flags"]))}"\\n')
+        f.write(f'"Maximizing objectives","{", ".join(map(str, processing_stats["maximize_flags"]))}"\n')
         f.write(f'"Processing time (seconds)","{processing_stats["processing_time"]:.2f}"\n')
         f.write('\n')
         f.write('"Data Format:"\n')
