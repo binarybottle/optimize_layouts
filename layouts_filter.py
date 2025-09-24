@@ -16,7 +16,7 @@ Usage:
     python layouts_filter.py --input moo_analysis_results.csv --top-percent 10 --report --plot
 
     # Example used in study (adds a score to output)
-    poetry run python3 layouts_filter.py --input output/analyze_phase1/layouts_consolidate_plot_filter1/moo_analysis_results.csv --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --verbose
+    poetry run python3 layouts_filter.py --input output/analyze_phase2/layouts_consolidate_compare_filter2/moo_analysis_results.csv --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --plot --report --verbose
 """
 import pandas as pd
 import numpy as np
