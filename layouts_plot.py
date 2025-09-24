@@ -223,58 +223,70 @@ class UnifiedMOOAnalyzer:
                 
     def load_file_input(self, filepath):
         """Load single consolidated CSV file with enhanced validation and format detection."""
-        print(f"Loading consolidated MOO results file: {filepath}")
+        print(f"Loading consolidated MOO results file: output/global_moo_solutions.csv")
         
         try:
-            # First, let's examine the file structure more carefully
+            # Read all lines first
             with open(filepath, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
             print(f"File has {len(lines)} total lines")
             
-            # Look for the actual CSV header by examining line content
+            # Find the actual CSV header - it should be:
+            # 1. Not quoted (doesn't start/end with quotes)  
+            # 2. Have many commas (10+ columns)
+            # 3. Contain multiple expected column names (not just one)
+            # 4. Be the first such line (actual CSV header, not metadata descriptions)
             data_start_idx = 0
             header_found = False
             
+            expected_columns = ['config_id', 'items', 'positions', 'layout_qwerty']
+            
             for i, line in enumerate(lines):
                 line_clean = line.strip()
-                if not line_clean:  # Skip empty lines
+                
+                # Skip empty lines
+                if not line_clean:
                     continue
-                    
-                # Look for CSV header indicators (comma-separated values with expected columns)
-                if (',' in line_clean and 
-                    any(col in line_clean for col in ['config_id', 'items', 'positions', 'Complete Item', 'Complete Pair', 'layout'])):
+                
+                # Check if this looks like the actual CSV header:
+                is_quoted_line = line_clean.startswith('"') and line_clean.endswith('"')
+                comma_count = line_clean.count(',')
+                
+                # Count how many expected columns are present
+                matching_cols = sum(1 for col in expected_columns if col in line_clean)
+                
+                # The real CSV header should:
+                # - Not be quoted
+                # - Have many columns (10+)  
+                # - Contain multiple expected column names (3+ out of 4)
+                if (not is_quoted_line and 
+                    comma_count >= 10 and  
+                    matching_cols >= 3):
                     data_start_idx = i
                     header_found = True
                     print(f"Found CSV header at line {i + 1}: {line_clean[:100]}...")
                     break
-                
-                # If we see what looks like data (lots of commas), stop looking
-                if ',' in line_clean and line_clean.count(',') > 10:
-                    # This might be data, so the header should be just before it
-                    # Let's check the previous line
-                    if i > 0:
-                        prev_line = lines[i-1].strip()
-                        if ',' in prev_line:
-                            data_start_idx = i - 1
-                            header_found = True
-                            print(f"Found CSV header at line {i}: {prev_line[:100]}...")
-                            break
-                    else:
-                        # First line is data, assume no header section
-                        data_start_idx = 0
-                        header_found = True
-                        break
             
             if not header_found:
                 print("Warning: No clear CSV header found, trying to parse entire file")
                 data_start_idx = 0
             
-            # Try to parse from the detected start point
+            # Parse CSV data from the detected start point
             if data_start_idx > 0:
-                # Parse from detected header line
-                data_content = ''.join(lines[data_start_idx:])
-                df = pd.read_csv(StringIO(data_content))
+                # Take only the lines from the header onward
+                csv_lines = []
+                for line in lines[data_start_idx:]:
+                    line_clean = line.strip()
+                    if line_clean:  # Skip empty lines
+                        csv_lines.append(line_clean)
+                
+                if csv_lines:
+                    csv_content = '\n'.join(csv_lines)
+                    df = pd.read_csv(StringIO(csv_content))
+                else:
+                    print("No CSV content found after header")
+                    return pd.DataFrame()
             else:
                 # Parse entire file
                 df = pd.read_csv(filepath)
@@ -343,15 +355,17 @@ class UnifiedMOOAnalyzer:
             # Additional debugging information
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    first_10_lines = [f.readline() for _ in range(10)]
-                print(f"First 10 lines of file for debugging:")
-                for i, line in enumerate(first_10_lines, 1):
-                    print(f"Line {i}: {line.rstrip()}")
+                    first_20_lines = [f.readline().rstrip() for _ in range(20)]
+                print(f"First 20 lines of file for debugging:")
+                for i, line in enumerate(first_20_lines, 1):
+                    comma_count = line.count(',') if line else 0
+                    is_quoted = line.startswith('"') and line.endswith('"') if line else False
+                    print(f"Line {i:2d} ({comma_count:2d} commas, quoted: {is_quoted}): {line[:80]}{'...' if len(line) > 80 else ''}")
             except Exception as debug_e:
                 print(f"Could not read file for debugging: {debug_e}")
             
             return pd.DataFrame()
-                            
+                                
     def detect_objective_columns(self, df):
         """Detect objective columns and special item/pair columns."""
         # Comprehensive metadata columns to exclude
