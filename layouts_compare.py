@@ -20,16 +20,16 @@ Usage:
         --input output/layouts_consolidate_moo_solutions.csv \
         --scores "engram_key_preference,engram_avg4_score" \
         --include-scores "engram_order" \
-        --output layout_compare_results.csv --plot --report --verbose
+        --output output/layouts_compare_results.csv --plot --report
 
-    # Custom weights (60% engram_key_preference, 40% engram_avg4_score) 
+    # Custom weights (50% engram_key_preference, 50% engram_avg4_score) 
     poetry run python3 layouts_compare.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --scores "engram_key_preference,engram_avg4_score" \
         --weights "0.5,0.5" \
         --include-scores "engram_order" \
         --score-table "engram_3key_scores_order.csv" \
-        --output weighted_ranked.csv --plot --report --verbose
+        --output output/layouts_compare_results.csv --plot --report --verbose
 
 """
 
@@ -289,7 +289,7 @@ class ComprehensiveLayoutAnalyzer:
             
             if self.verbose:
                 print(f"Loaded {len(df)} valid layouts")
-                print(f"Available columns: {list(df.columns)}")
+                #print(f"Available columns: {list(df.columns)}")
             
             return df
             
@@ -529,7 +529,7 @@ class ComprehensiveLayoutAnalyzer:
         self.df = df
         self.score_columns = score_columns
         return df
-    
+     
     def apply_constraint_filter(self, constraints_string):
         """Apply letter-position constraints to filter solutions."""
         if not constraints_string or self.df is None:
