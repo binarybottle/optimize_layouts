@@ -20,7 +20,11 @@ Usage:
     python layouts_consolidate.py --max-files 100 --verbose
 
     # Custom pattern and objectives
-    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference"
+    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference,engram_avg4_score"
+
+    # Study
+    poetry run python3 layouts_consolidate.py
+
 """
 
 import os
@@ -505,46 +509,69 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
     pareto_ordered = pareto_solutions[ordered_cols]
     
     # Create output directory if needed
-    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_path).parent
+    output_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save with metadata header
-    print(f"Saving {len(pareto_ordered):,} Pareto solutions to {output_path}...")
+    # Determine file paths
+    csv_path = output_path
+    info_path = output_path.replace('.csv', '_info.txt')
     
-    with open(output_path, 'w', encoding='utf-8') as f:
-        # Write metadata header
-        f.write('"Global Pareto Optimal Solutions"\n')
-        f.write(f'"Generated","{pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")}"\n')
-        f.write(f'"Total original solutions","{processing_stats["total_solutions"]}"\n')
-        f.write(f'"Source files processed","{processing_stats["source_files"]}"\n')
-        f.write(f'"Global Pareto solutions","{len(pareto_ordered)}"\n')
-        f.write(f'"Reduction factor","{processing_stats["reduction_factor"]:.1f}x"\n')
-        f.write(f'"Objectives used","{", ".join(processing_stats["objectives"])}"\n')
-        f.write(f'"Maximizing objectives","{", ".join(map(str, processing_stats["maximize_flags"]))}"\n')
-        f.write(f'"Processing time (seconds)","{processing_stats["processing_time"]:.2f}"\n')
-        f.write('\n')
-        f.write('"Data Format:"\n')
-        f.write('"items","Letters in assignment order (arbitrary)"\n')  
-        f.write('"positions","QWERTY positions where those letters go"\n')
-        f.write('"layout_qwerty","Layout string in QWERTY key order (what is at each QWERTY position)"\n')
-        f.write('\n')
+    # Save metadata to separate info file
+    print(f"Saving metadata to {info_path}...")
+    with open(info_path, 'w', encoding='utf-8') as f:
+        f.write("Global Pareto Optimal Solutions - Processing Information\n")
+        f.write("=" * 60 + "\n\n")
         
-        # Write the actual data
-        pareto_ordered.to_csv(f, index=False)
+        f.write("Generation Details:\n")
+        f.write(f"  Generated: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"  Processing time: {processing_stats['processing_time']:.2f} seconds\n\n")
+        
+        f.write("Input Statistics:\n")
+        f.write(f"  Total original solutions: {processing_stats['total_solutions']:,}\n")
+        f.write(f"  Source files processed: {processing_stats['source_files']}\n\n")
+        
+        f.write("Output Statistics:\n")
+        f.write(f"  Global Pareto solutions: {len(pareto_ordered):,}\n")
+        f.write(f"  Reduction factor: {processing_stats['reduction_factor']:.1f}x\n\n")
+        
+        f.write("Optimization Configuration:\n")
+        f.write(f"  Objectives used: {', '.join(processing_stats['objectives'])}\n")
+        f.write(f"  Maximizing objectives: {', '.join(map(str, processing_stats['maximize_flags']))}\n\n")
+        
+        f.write("Data Format Description:\n")
+        f.write("  items: Letters in assignment order (arbitrary order)\n")
+        f.write("  positions: QWERTY positions where those letters go\n")
+        f.write("  layout_qwerty: Layout string in QWERTY key order\n")
+        f.write("                 (what letter is at each QWERTY position)\n\n")
+        
+        f.write("Column Information:\n")
+        for i, col in enumerate(ordered_cols, 1):
+            col_type = "Layout" if col in standard_cols else \
+                      "Objective" if col in objective_cols else "Metadata"
+            f.write(f"  {i:2d}. {col} ({col_type})\n")
+        
+        f.write(f"\nTotal columns: {len(ordered_cols)}\n")
     
-    print(f"Successfully saved results to: {output_path}")
+    # Save clean CSV data
+    print(f"Saving {len(pareto_ordered):,} Pareto solutions to {csv_path}...")
+    pareto_ordered.to_csv(csv_path, index=False)
+    
+    print(f"Successfully saved:")
+    print(f"  Data: {csv_path}")
+    print(f"  Metadata: {info_path}")
 
 
 def main():
     parser = argparse.ArgumentParser(description='Select global Pareto optimal layouts')
     parser.add_argument('--input-dir', default='output/layouts/', 
                        help='Directory containing MOO results CSV files')
-    parser.add_argument('--output-file', default='output/global_moo_solutions.csv',
+    parser.add_argument('--output-file', default='output/layouts_consolidate_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
-                       default=['engram_key_preference','engram_row_separation','engram_same_row','engram_same_finger'],
+                       default=['engram_key_preference','engram_avg4_score'], #row_separation','engram_same_row','engram_same_finger'],
                        help='Objective columns to use for Pareto filtering')
     parser.add_argument('--maximize', nargs='+', type=lambda x: x.lower() == 'true',
-                       default=[True, True, True, True],
+                       default=[True, True], #, True, True],
                        help='Whether to maximize each objective (true/false for each)')
     parser.add_argument('--chunk-size', type=int, default=50000,
                        help='Chunk size for hierarchical processing')
@@ -687,9 +714,9 @@ def main():
     
     print(f"\n✓ Global Pareto selection complete!")
     print(f"Output saved to: {args.output_file}")
+    print(f"Metadata saved to: {args.output_file.replace('.csv', '_info.txt')}")
     
     return 0
-
 
 if __name__ == '__main__':
     exit(main())

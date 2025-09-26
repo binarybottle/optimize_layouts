@@ -23,15 +23,22 @@ Usage Examples:
     python optimize_layouts.py --config config.yaml
 
    # Branch-and-bound
-    poetry run python optimize_layouts.py --config config.yaml --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger --search-mode branch-bound
+    poetry run python optimize_layouts.py --config config.yaml --objectives engram_key_preference,engram_avg4_score --search-mode branch-bound
 
     # With custom settings
     python optimize_layouts.py --config config.yaml \
         --objectives engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger
         --position-pair-score-table input/position_pair_score_table.csv \
         --item-pair-score-table input/item_pair_score_table.csv \
-        --weights 1.0,2.0,0.5,0.5,0.5,0.5 --maximize true,true,false,false,false,false \
+        --weights 1.0,1.0,1.0,1.0 --maximize true,true,true,true \
         --max-solutions 50 --time-limit 1800
+
+    # Another example
+    python optimize_layouts.py --config config.yaml \
+        --objectives engram_key_preference,engram_avg4_score
+        --position-pair-score-table input/position_pair_score_table.csv \
+        --item-pair-score-table input/item_pair_score_table.csv \
+        --weights 1.0,1.0 --maximize true,true
 
     # Validation run
     python optimize_layouts.py --config config.yaml --validate --dry-run

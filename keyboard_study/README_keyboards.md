@@ -149,9 +149,6 @@ https://github.com/binarybottle/keyboard_layout_scorers/blob/main/prep/prep_keyp
     #    - (empirical analysis of left key-pairs toward vs. away from the thumb)
     #    - (empirical meta-analysis of left key-pairs in adjacent vs. remote columns) 
     # 4. Same-finger (empirical analysis of left same- vs. different finger inside finger-columns)
-    # 5. Outside reach (empirical analysis of left-hand lateral stretches outside finger-columns)
-    # 6. Scissor (adjacent column hurdle; ignores all other awkward finger mechanics)
-    # 7. Half-scissor (adjacent column reach; ignores all other awkward finger mechanics)
     #----------------------------------------------------------------------------------    
    
     # 1. Key preferences (empirical Bradley-Terry tiers inside left finger-columns)

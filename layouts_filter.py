@@ -12,19 +12,21 @@ Input/Output Format:
   with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
 
 Usage:
-    # Intersection filtering (layouts that score well in ALL objectives, with plot and report)
+    # Intersection filtering (layouts that score well in ALL objectives)
     python layouts_filter.py --input moo_analysis_results.csv --top-percent 10 --report --plot
 
-    # Example used in study (adds a score to output)
-    poetry run python3 layouts_filter.py --input output/analyze_phase2/layouts_consolidate_compare_filter2/moo_analysis_results.csv --top-percent 75 --save-removed --include-scores-in-output "engram_3key_order" --plot --report --verbose
+    # Filter with higher threshold for more results  
+    python layouts_filter.py --input results.csv --top-percent 75 --save-removed --verbose
+
+    # Used in study
+    poetry run python3 layouts_filter.py --input output/global_moo_solutions.csv --top-percent 75 --save-removed --plot --report --verbose
+
 """
 import pandas as pd
 import numpy as np
 import argparse
-import subprocess
-import tempfile
 from pathlib import Path
-from typing import List, Set, Tuple, Dict
+from typing import List
 import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -63,7 +65,7 @@ def validate_layout_data(items: str, positions: str) -> bool:
         return True
     except (ValueError, TypeError):
         return False
-    
+
 def convert_items_positions_to_qwerty_layout(items, positions):
     """
     Convert items->positions mapping to QWERTY-ordered layout string.
@@ -91,39 +93,20 @@ def convert_items_positions_to_qwerty_layout(items, positions):
     return ''.join(layout_chars)
 
 class MOOLayoutFilter:
-    def __init__(self, input_file: str, verbose: bool = False, score_layouts_path: str = None):
+    """MOO Layout Filter using intersection filtering approach."""
+    
+    def __init__(self, input_file: str, verbose: bool = False):
         self.input_file = input_file
         self.verbose = verbose
-        self.score_layouts_path = score_layouts_path or self._find_score_layouts_script()
         self.df = self._load_data()
         self.objective_columns = self._detect_objectives()
         self.filtering_stats = {}  # Track filtering statistics
-        self.computed_score_col = None  # Will be set when scores are added
         
-    def _find_score_layouts_script(self) -> str:
-        """Find the score_layouts.py script in common locations."""
-        possible_paths = [
-            'score_layouts.py',  # Same directory
-            '../score_layouts.py',  # Parent directory
-            '../keyboard_layout_scorers/score_layouts.py',  # Common structure
-            '../../keyboard_layout_scorers/score_layouts.py',  # Another level up
-            './keyboard_layout_scorers/score_layouts.py',  # Subdirectory
-        ]
-        
-        for path in possible_paths:
-            if Path(path).exists():
-                if self.verbose:
-                    print(f"Found score_layouts.py at: {path}")
-                return path
-        
-        # If not found, return a default and let the user specify
-        return 'score_layouts.py'
-    
     def _load_data(self) -> pd.DataFrame:
-        """Load MOO results data with enhanced validation."""
+        """Load MOO results data with format auto-detection and enhanced validation."""
         df = pd.read_csv(self.input_file)
         
-        # Validate layout data
+        # Validate layout data if available
         if 'items' in df.columns and 'positions' in df.columns:
             valid_mask = df.apply(lambda row: validate_layout_data(row['items'], row['positions']), axis=1)
             invalid_count = len(df) - valid_mask.sum()
@@ -230,7 +213,7 @@ class MOOLayoutFilter:
         
         # Warning for overly restrictive filtering
         if len(intersection_layouts) < 10:
-            print(f"\n⚠️  WARNING: Only {len(intersection_layouts)} layouts survived intersection filtering!")
+            print(f"\nWarning: Only {len(intersection_layouts)} layouts survived intersection filtering!")
             print(f"    With {len(self.objective_columns)} objectives and {top_percent}% threshold,")
             expected_rate = (top_percent/100) ** len(self.objective_columns) * 100
             print(f"    mathematical expectation: ~{expected_rate:.2f}% retention rate")
@@ -240,331 +223,8 @@ class MOOLayoutFilter:
             else:
                 print(f"    This suggests layouts with identical/near-identical objective values")
             print(f"    Consider using a higher --top-percent (e.g., 70-90%).")
-            print(f"    Suggested fixes:")
-            print(f"    1. Use much higher threshold: --top-percent 80")
-            print(f"    2. Add more layouts to your dataset")
-            print(f"    3. Check if objectives are too correlated")
 
         return filtered_df
-    
-    def _add_multiple_scores_chunked(self, df: pd.DataFrame, score_types: List[str], temp_layouts: List[str], temp_csv_path: str, use_poetry: bool = True) -> pd.DataFrame:
-        """Add multiple scores using chunking approach to avoid argument list length limits."""
-        if self.verbose:
-            print("Using chunking approach for multiple scores...")
-        
-        # Determine working directory for score_layouts.py
-        score_layouts_path = Path(self.score_layouts_path)
-        if score_layouts_path.is_absolute():
-            work_dir = score_layouts_path.parent
-            script_name = score_layouts_path.name
-        else:
-            work_dir = Path.cwd() / score_layouts_path.parent
-            script_name = score_layouts_path.name
-        
-        # Chunk layouts into smaller batches
-        chunk_size = 50  # Start conservative
-        all_results = []
-        scorers_str = ','.join(score_types)
-        
-        # Continue with chunking using the PASSED-IN temp_layouts...
-        for i in range(0, len(temp_layouts), chunk_size):
-            chunk = temp_layouts[i:i+chunk_size]
-
-            # Create temporary CSV for this chunk
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as chunk_file:
-                chunk_csv_path = chunk_file.name
-            
-            try:
-                # Build command for this chunk
-                if use_poetry:
-                    cmd = [
-                        'poetry', 'run', 'python3', script_name,
-                        '--compare'] + chunk + [
-                        '--scorers', scorers_str,
-                        '--csv', chunk_csv_path,
-                        '--quiet'
-                    ]
-                else:
-                    cmd = [
-                        'python', script_name,
-                        '--compare'] + chunk + [
-                        '--scorers', scorers_str,
-                        '--csv', chunk_csv_path,
-                        '--quiet'
-                    ]
-                
-                # Add fallback paths for dependencies
-                potential_score_tables = [
-                    work_dir / 'tables' / 'scores_2key_detailed.csv',
-                    Path.cwd() / 'tables' / 'scores_2key_detailed.csv',
-                    Path.cwd() / '..' / 'keyboard_layout_scorers' / 'tables' / 'scores_2key_detailed.csv'
-                ]
-                
-                score_table_found = None
-                for score_table_path in potential_score_tables:
-                    if score_table_path.exists():
-                        score_table_found = score_table_path
-                        break
-                
-                if score_table_found:
-                    cmd.extend(['--score-table', str(score_table_found)])
-                
-                potential_freq_files = [
-                    work_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                    Path.cwd() / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                    Path.cwd() / '..' / 'keyboard_layout_scorers' / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-                ]
-                
-                freq_file_found = None
-                for freq_file_path in potential_freq_files:
-                    if freq_file_path.exists():
-                        freq_file_found = freq_file_path
-                        break
-                
-                if freq_file_found:
-                    cmd.extend(['--frequency-file', str(freq_file_found)])
-                
-                if self.verbose:
-                    print(f"Processing chunk {i//chunk_size + 1}/{(len(temp_layouts) + chunk_size - 1)//chunk_size} ({len(chunk)} layouts)")
-                
-                # Run the command
-                result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir)
-                
-                if result.returncode != 0:
-                    # If still getting argument list error, reduce chunk size
-                    if "Argument list too long" in result.stderr:
-                        if chunk_size > 10:
-                            chunk_size = max(10, chunk_size // 2)
-                            if self.verbose:
-                                print(f"Reducing chunk size to {chunk_size}")
-                            # Retry this chunk with smaller size
-                            continue
-                        else:
-                            raise RuntimeError(f"Cannot reduce chunk size further: {result.stderr}")
-                    else:
-                        raise RuntimeError(f"Chunk processing failed: {result.stderr}")
-                
-                # Load results for this chunk
-                if Path(chunk_csv_path).exists():
-                    chunk_df = pd.read_csv(chunk_csv_path)
-                    all_results.append(chunk_df)
-                    
-            finally:
-                # Clean up chunk CSV
-                Path(chunk_csv_path).unlink(missing_ok=True)
-        
-        # Combine all chunk results
-        if all_results:
-            combined_scores = pd.concat(all_results, ignore_index=True)
-            combined_scores.to_csv(temp_csv_path, index=False)
-            
-            if self.verbose:
-                print(f"Successfully combined {len(all_results)} chunks for multiple scores")
-        else:
-            print("Warning: No successful chunks processed for multiple scores")
-            return df
-        
-        # Continue with normal processing
-        scores_df = pd.read_csv(temp_csv_path)
-        enhanced_df = df.copy()
-        
-        # Add each score type
-        added_scores = []
-        for score_type in score_types:
-            if score_type in scores_df.columns:
-                enhanced_df[score_type] = scores_df[score_type].values
-                added_scores.append(score_type)
-                if self.verbose:
-                    score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                    print(f"  Added {score_type}: {score_range[0]:.4f} - {score_range[1]:.4f}")
-            else:
-                print(f"Warning: {score_type} not found in scoring results")
-        
-        if added_scores:
-            print(f"Successfully added {len(added_scores)} additional scores: {', '.join(added_scores)}")
-        else:
-            print("Warning: No additional scores were successfully added")
-            
-        return enhanced_df
-    
-    def reorder_to_qwerty_layout(self, items, positions):
-        """
-        Convert items->positions mapping to QWERTY-ordered layout string.
-        
-        Args:
-            items: Letters in assignment order (e.g., "etaoinsrhldcum")
-            positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
-            
-        Returns:
-            Layout string in QWERTY key order for score_layouts.py --compare format
-        """
-        return convert_items_positions_to_qwerty_layout(items, positions)
-
-    def add_multiple_scores(self, df: pd.DataFrame, score_types: List[str], use_poetry: bool = True) -> pd.DataFrame:
-        """Add multiple score types to a dataframe."""
-        if not score_types:
-            return df
-            
-        if 'items' not in df.columns or 'positions' not in df.columns:
-            raise ValueError("Need both 'items' and 'positions' columns for scoring")        
-        print(f"Computing additional scores: {', '.join(score_types)}")
-        
-        # Create temporary layouts for scoring
-        temp_layouts = []
-        skipped_count = 0
-        for idx, row in df.iterrows():
-            layout_name = f"layout_{idx}"
-            items = str(row['items'])
-            positions = str(row['positions'])
-            
-            # Create letter->position mapping
-            if len(items) == len(positions):
-                # Create QWERTY-ordered layout string
-                qwerty_layout = self.reorder_to_qwerty_layout(items, positions)
-                temp_layouts.append(f"{layout_name}:{qwerty_layout}")
-            else:
-                if self.verbose:
-                    print(f"Warning: Skipping layout {idx} - items length {len(items)} != positions length {len(positions)}")
-                skipped_count += 1
-        
-        if skipped_count > 0:
-            print(f"Skipped {skipped_count} layouts due to length mismatches")
-        
-        if not temp_layouts:
-            print("Warning: No valid layouts to score")
-            return df
-                    
-        # Create temporary files for layouts and CSV output
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as layouts_file:
-            layouts_file_path = layouts_file.name
-            for layout in temp_layouts:
-                layouts_file.write(layout + '\n')
-        
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.csv', delete=False) as temp_file:
-            temp_csv_path = temp_file.name
-        
-        try:
-            # Determine working directory for score_layouts.py
-            score_layouts_path = Path(self.score_layouts_path)
-            if score_layouts_path.is_absolute():
-                work_dir = score_layouts_path.parent
-                script_name = score_layouts_path.name
-            else:
-                work_dir = Path.cwd() / score_layouts_path.parent
-                script_name = score_layouts_path.name
-            
-            # Build command with all score types, try file input first
-            scorers_str = ','.join(score_types)
-            
-            if use_poetry:
-                cmd = [
-                    'poetry', 'run', 'python3', script_name,
-                    '--compare-file', layouts_file_path,
-                    '--scorers', scorers_str,
-                    '--csv', temp_csv_path,
-                    '--quiet'
-                ]
-            else:
-                cmd = [
-                    'python', script_name,
-                    '--compare-file', layouts_file_path,
-                    '--scorers', scorers_str,
-                    '--csv', temp_csv_path,
-                    '--quiet'
-                ]
-            
-            # Add fallback paths for dependencies
-            potential_score_tables = [
-                work_dir / 'tables' / 'scores_2key_detailed.csv',
-                Path.cwd() / 'tables' / 'scores_2key_detailed.csv',
-                Path.cwd() / '..' / 'keyboard_layout_scorers' / 'tables' / 'scores_2key_detailed.csv'
-            ]
-            
-            score_table_found = None
-            for score_table_path in potential_score_tables:
-                if score_table_path.exists():
-                    score_table_found = score_table_path
-                    break
-            
-            if score_table_found:
-                cmd.extend(['--score-table', str(score_table_found)])
-            
-            potential_freq_files = [
-                work_dir / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                Path.cwd() / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv',
-                Path.cwd() / '..' / 'keyboard_layout_scorers' / 'input' / 'english-letter-pair-frequencies-google-ngrams.csv'
-            ]
-            
-            freq_file_found = None
-            for freq_file_path in potential_freq_files:
-                if freq_file_path.exists():
-                    freq_file_found = freq_file_path
-                    break
-            
-            if freq_file_found:
-                cmd.extend(['--frequency-file', str(freq_file_found)])
-            
-            if self.verbose:
-                print(f"Working directory: {work_dir}")
-                print("Running scoring command for additional metrics...")
-            
-            # Run the command
-            result = subprocess.run(cmd, capture_output=True, text=True, cwd=work_dir)
-            
-            if result.returncode != 0:
-                # If file input failed, try chunking approach
-                if "--compare-file" in cmd:
-                    if self.verbose:
-                        print("File input not supported, trying chunking approach...")
-                    return self._add_multiple_scores_chunked(df, score_types, temp_layouts, temp_csv_path, use_poetry)
-                
-                if use_poetry and "poetry" in result.stderr.lower():
-                    if self.verbose:
-                        print("Retrying without poetry...")
-                    return self.add_multiple_scores(df, score_types, use_poetry=False)
-                else:
-                    print(f"Warning: Failed to compute additional scores: {result.stderr}")
-                    return df
-            
-            # Load and merge the scores
-            if not Path(temp_csv_path).exists():
-                print(f"Warning: Score output file not created")
-                return df
-            
-            scores_df = pd.read_csv(temp_csv_path)
-            enhanced_df = df.copy()
-            
-            # Add each score type
-            added_scores = []
-            for score_type in score_types:
-                if score_type in scores_df.columns:
-                    # Handle cases where some layouts were skipped
-                    if len(scores_df) == len(enhanced_df):
-                        enhanced_df[score_type] = scores_df[score_type].values
-                    else:
-                        # Fill with NaN and set values for layouts that were actually scored
-                        enhanced_df[score_type] = float('nan')
-                        valid_indices = enhanced_df.index[:len(scores_df)]
-                        enhanced_df.loc[valid_indices, score_type] = scores_df[score_type].values
-                    
-                    added_scores.append(score_type)
-                    if self.verbose:
-                        score_range = (scores_df[score_type].min(), scores_df[score_type].max())
-                        print(f"  Added {score_type}: {score_range[0]:.4f} - {score_range[1]:.4f}")
-                else:
-                    print(f"Warning: {score_type} not found in scoring results")
-            
-            if added_scores:
-                print(f"Successfully added {len(added_scores)} additional scores: {', '.join(added_scores)}")
-            else:
-                print("Warning: No additional scores were successfully added")
-                
-            return enhanced_df
-            
-        finally:
-            # Clean up temp files
-            Path(temp_csv_path).unlink(missing_ok=True)
-            Path(layouts_file_path).unlink(missing_ok=True)
 
     def standardize_output_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         """Standardize column ordering for output compatibility."""
@@ -575,8 +235,7 @@ class MOOLayoutFilter:
         standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
         
         # Identify objective columns
-        metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'layout_qwerty', 
-                        'source_file', 'layout', 'combined_score']
+        metadata_cols = ['config_id', 'items', 'positions', 'layout_qwerty', 'source_file', 'layout']
         objective_cols = sorted([col for col in df.columns if col not in metadata_cols and 
                                 col not in standard_cols])
         
@@ -588,10 +247,6 @@ class MOOLayoutFilter:
             if col in df.columns:
                 ordered_cols.append(col)
         
-        # Add source_rank after standard columns
-        if 'source_rank' in df.columns:
-            ordered_cols.append('source_rank')
-        
         # Add objective columns
         ordered_cols.extend(objective_cols)
         
@@ -600,7 +255,7 @@ class MOOLayoutFilter:
         ordered_cols.extend(remaining)
         
         return df[ordered_cols]
-                    
+
     def generate_statistical_report(self, filtered_df: pd.DataFrame, output_dir: str = '.') -> str:
         """Generate a statistical report comparing filtered vs original datasets."""
         
@@ -612,7 +267,7 @@ class MOOLayoutFilter:
             f.write("=" * 50 + "\n\n")
             f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             f.write(f"Input file: {self.input_file}\n")
-            f.write(f"Filtering method: {getattr(self, 'filtering_stats', {}).get('intersection', {}).get('method', 'intersection')}\n\n")
+            f.write(f"Filtering method: intersection\n\n")
             
             # Dataset sizes
             f.write("Dataset Sizes:\n")
@@ -660,15 +315,8 @@ class MOOLayoutFilter:
                     
                     # Show max value loss
                     max_loss = orig_stats['max'] - filt_stats['max']
-                    max_loss_pct = max_loss / orig_stats['max'] * 100
+                    max_loss_pct = max_loss / orig_stats['max'] * 100 if orig_stats['max'] > 0 else 0
                     f.write(f"  Maximum value lost: {max_loss:.4f} ({max_loss_pct:.1f}%)\n")
-            
-            # Filtering statistics
-            if hasattr(self, 'filtering_stats') and self.filtering_stats:
-                f.write(f"\nDetailed Filtering Statistics:\n")
-                f.write("-" * 35 + "\n")
-                for key, stats in self.filtering_stats.items():
-                    f.write(f"{key}: {stats}\n")
         
         return str(report_path)
     
@@ -757,7 +405,7 @@ class MOOLayoutFilter:
                 # Add summary statistics as text
                 orig_mean = self.df[col].mean()
                 filt_mean = filtered_df[col].mean()
-                improvement = (filt_mean - orig_mean) / orig_mean * 100
+                improvement = (filt_mean - orig_mean) / orig_mean * 100 if orig_mean != 0 else 0
                 
                 axes[2, i].text(0.5, 0.02, f'Mean improvement: {improvement:+.1f}%', 
                                transform=axes[2, i].transAxes, ha='center',
@@ -783,12 +431,8 @@ class MOOLayoutFilter:
         original_indices = set(self.df.index)
         removed_indices = original_indices - filtered_indices
         
-        # Sort by global rank or combined score for consistent x-axis
-        sort_col = 'global_rank' if 'global_rank' in self.df.columns else 'combined_score'
-        if sort_col in self.df.columns:
-            df_sorted = self.df.sort_values(sort_col, ascending=False if sort_col == 'combined_score' else True)
-        else:
-            df_sorted = self.df
+        # Sort by index (no ranking references)
+        df_sorted = self.df.sort_index()
         
         plt.figure(figsize=(14, 8))
         
@@ -804,14 +448,15 @@ class MOOLayoutFilter:
             # Plot removed points first (so they appear behind retained points)
             if removed_mask.any():
                 plt.scatter(np.array(x_positions)[removed_mask], df_sorted[obj_col][removed_mask], 
-                           marker='.', s=1, alpha=0.3, color='lightgray', label=f'{obj_col} (removed)' if i == 0 else "")
+                           marker='.', s=1, alpha=0.3, color='lightgray', 
+                           label=f'{obj_col} (removed)' if i == 0 else "")
             
             # Plot retained points
             if retained_mask.any():
                 plt.scatter(np.array(x_positions)[retained_mask], df_sorted[obj_col][retained_mask], 
                            marker='.', s=2, alpha=0.8, color=colors[i], label=f'{obj_col} (retained)')
         
-        plt.xlabel('Solution Index (sorted by ranking)')
+        plt.xlabel('Solution Index')
         plt.ylabel('Objective Score')
         plt.title(f'Retained Multi-Objective Scores\n'
                  f'Original: {len(self.df):,} solutions, Retained: {len(filtered_df):,} solutions '
@@ -859,18 +504,10 @@ def main():
     parser.add_argument('--output', help='Output CSV file (filtered results)')
     parser.add_argument('--save-removed', action='store_true', 
                        help='Save removed layouts to a separate CSV file')
-    
-    # Path configuration
-    parser.add_argument('--score-layouts-path', help='Path to score_layouts.py script')
-    parser.add_argument('--no-poetry', action='store_true', help='Use direct python instead of poetry run')
-    
-    # General method options
+
+    # Filtering method options
     parser.add_argument('--top-percent', type=float, default=25.0,
-                       help='Top percentage to keep (for intersection and score methods)')
-    
-    # Additional scoring options
-    parser.add_argument('--include-scores-in-output', 
-                       help='Comma-separated list of additional scores to include in output (e.g., "engram_3key_order,comfort_total")')
+                       help='Top percentage to keep for intersection filtering')
     
     # Reporting and visualization options
     parser.add_argument('--report', action='store_true',
@@ -890,39 +527,11 @@ def main():
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         
         # Initialize filter
-        filter_tool = MOOLayoutFilter(args.input, args.verbose, args.score_layouts_path)
+        filter_tool = MOOLayoutFilter(args.input, args.verbose)
         original_df = filter_tool.df.copy()  # Keep original for removed layouts calculation
         
         # Apply filtering method
         filtered_df = filter_tool.filter_intersection(args.top_percent)
-
-
-        # Add additional scores efficiently to avoid double scoring
-        if args.include_scores_in_output:
-            additional_scores = [s.strip() for s in args.include_scores_in_output.split(',') if s.strip()]
-            if additional_scores:
-                print(f"\nAdding additional scores to output: {', '.join(additional_scores)}")
-                
-                # Always score the filtered layouts
-                filtered_df = filter_tool.add_multiple_scores(
-                    filtered_df, additional_scores, use_poetry=not args.no_poetry)
-                
-                # Handle removed layouts if needed
-                if args.save_removed:
-                    print(f"Saving removed layouts without additional scores (not needed for analysis)")
-                    # Don't score removed layouts - just leave additional score columns as NaN
-                    for score_type in additional_scores:
-                        if score_type in filtered_df.columns:
-                            original_df[score_type] = float('nan')
-                            original_df.loc[filtered_df.index, score_type] = filtered_df[score_type]
-        
-        # Add layout_qwerty to original_df if it's in filtered_df but not in original_df
-        if 'layout_qwerty' in filtered_df.columns and 'layout_qwerty' not in original_df.columns:
-            print("Adding layout_qwerty column to original dataset...")
-            original_df['layout_qwerty'] = original_df.apply(
-                lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
-                axis=1
-            )
                                         
         # Calculate removed layouts
         filtered_indices = set(filtered_df.index)
@@ -945,15 +554,11 @@ def main():
         # Save filtered results
         standardized_df = filter_tool.standardize_output_columns(filtered_df)
         standardized_df.to_csv(output_file, index=False)
-
-        # And for removed layouts:
+        
+        # Save removed results if requested
         if args.save_removed and len(removed_df) > 0:
             standardized_removed = filter_tool.standardize_output_columns(removed_df)
             standardized_removed.to_csv(removed_file, index=False)
-
-        # Save removed results if requested
-        if args.save_removed and len(removed_df) > 0:
-            removed_df.to_csv(removed_file, index=False)
             print(f"Removed layouts saved to: {removed_file}")
         
         print(f"\nFiltering complete!")
@@ -980,21 +585,18 @@ def main():
                             print(f"  {col}: {below_threshold}/{len(removed_df)} removed layouts below threshold {threshold:.4f}")
         
         # Generate statistical report if requested
-        report_path = None
         if args.report:
             report_path = filter_tool.generate_statistical_report(filtered_df, args.output_dir)
             print(f"Statistical report: {report_path}")
         
         # Generate visualization if requested
-        plot_path = None
-        filtered_scatter_path = None
         if args.plot:
             plot_path = filter_tool.plot_filtering_results(filtered_df, args.output_dir)
             print(f"Filtering visualization: {plot_path}")
             
             # Generate filtered objective scatter plot
-            filtered_scatter_path = filter_tool.plot_filtered_objective_scatter(filtered_df, args.output_dir)
-            print(f"Filtered objective scatter: {filtered_scatter_path}")
+            scatter_path = filter_tool.plot_filtered_objective_scatter(filtered_df, args.output_dir)
+            print(f"Filtered objective scatter: {scatter_path}")
         
         # Print summary statistics
         if args.verbose and len(filtered_df) > 0:
@@ -1004,12 +606,12 @@ def main():
                     orig_mean = original_df[col].mean()
                     filt_mean = filtered_df[col].mean()
                     filt_std = filtered_df[col].std()
-                    improvement = (filt_mean - orig_mean) / orig_mean * 100
+                    improvement = (filt_mean - orig_mean) / orig_mean * 100 if orig_mean != 0 else 0
                     print(f"  {col}: {filtered_df[col].min():.4f} - {filtered_df[col].max():.4f} (mean: {filt_mean:.4f}, std: {filt_std:.4f}, +{improvement:.1f}%)")
                     
                     # Warning for zero standard deviation
                     if filt_std < 1e-10:
-                        print(f"    ⚠️  WARNING: {col} has zero variance - all retained layouts are identical for this objective!")
+                        print(f"    Warning: {col} has zero variance - all retained layouts are identical for this objective!")
             
             # Also show removed dataset summary
             if args.save_removed and len(removed_df) > 0:
@@ -1019,17 +621,16 @@ def main():
                         removed_mean = removed_df[col].mean()
                         removed_std = removed_df[col].std()
                         orig_mean = original_df[col].mean()
-                        degradation = (removed_mean - orig_mean) / orig_mean * 100
+                        degradation = (removed_mean - orig_mean) / orig_mean * 100 if orig_mean != 0 else 0
                         print(f"  {col}: {removed_df[col].min():.4f} - {removed_df[col].max():.4f} (mean: {removed_mean:.4f}, std: {removed_std:.4f}, {degradation:.1f}%)")
         
         # Enhanced quality check with warnings
-        total_unique_values = 0
         print(f"\nQuality check:")
 
         # Check if we have enough layouts for meaningful analysis
         if len(filtered_df) < 5:
-            print(f"⚠️  WARNING: Only {len(filtered_df)} layouts retained - may be insufficient for analysis")
-            print(f"   Consider using higher percentages or different filtering method")
+            print(f"Warning: Only {len(filtered_df)} layouts retained - may be insufficient for analysis")
+            print(f"   Consider using higher --top-percent values")
         
         # Count how many layouts are in top 10% of ALL original objectives
         quality_count = len(filtered_df)
@@ -1042,15 +643,16 @@ def main():
         print(f"Layouts in top 10% of ALL objectives: {quality_count} ({quality_count/len(filtered_df)*100:.1f}% of retained set)")
         
         # Check for diversity
+        total_unique_values = 0
         for col in filter_tool.objective_columns:
             if col in filtered_df.columns:
                 unique_values = filtered_df[col].nunique()
                 total_unique_values += unique_values
                 if unique_values <= 1:
-                    print(f"⚠️  {col}: All retained layouts have identical values")
+                    print(f"Warning: {col}: All retained layouts have identical values")
         
         if total_unique_values <= len(filter_tool.objective_columns):
-            print(f"\n⚠️  WARNING: Retained layouts show little diversity across objectives")
+            print(f"\nWarning: Retained layouts show little diversity across objectives")
             print(f"   This suggests filtering was too restrictive")
         
         # Success message with recommendations based on actual diversity
@@ -1058,19 +660,19 @@ def main():
         retention_rate = len(filtered_df) / len(original_df) * 100
         
         if len(filtered_df) >= 10 and has_diversity and retention_rate >= 1.0:
-            print(f"\n✅ Filtering successful! Retained {len(filtered_df)} diverse layouts ({retention_rate:.1f}%)")
+            print(f"\nFiltering successful! Retained {len(filtered_df)} diverse layouts ({retention_rate:.1f}%)")
         elif len(filtered_df) >= 10 and has_diversity:
-            print(f"\n⚠️  Filtering very restrictive but diverse: {len(filtered_df)} layouts ({retention_rate:.1f}%)")
-            print(f"   Consider higher percentages for more layouts")
+            print(f"\nFiltering very restrictive but diverse: {len(filtered_df)} layouts ({retention_rate:.1f}%)")
+            print(f"   Consider higher --top-percent values for more layouts")
         elif len(filtered_df) >= 10:
-            print(f"\n⚠️  Filtering retained {len(filtered_df)} layouts but they lack diversity")
+            print(f"\nFiltering retained {len(filtered_df)} layouts but they lack diversity")
             print(f"   All layouts are nearly identical - intersection method too restrictive")
         elif len(filtered_df) >= 2:
-            print(f"\n⚠️  Filtering completed but retained only {len(filtered_df)} layouts ({retention_rate:.2f}%)")
-            print(f"   Consider using higher percentages or 'score' method for more diversity")
+            print(f"\nFiltering completed but retained only {len(filtered_df)} layouts ({retention_rate:.2f}%)")
+            print(f"   Consider using higher --top-percent values")
         else:
-            print(f"\n⚠️  Filtering too restrictive! Only {len(filtered_df)} layout(s) retained")
-            print(f"   Recommended: use 'score' method or much higher --top-percent (70-90%)")
+            print(f"\nFiltering too restrictive! Only {len(filtered_df)} layout(s) retained")
+            print(f"   Recommended: use much higher --top-percent (70-90%)")
         
     except Exception as e:
         print(f"Error: {e}")

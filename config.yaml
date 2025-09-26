@@ -16,11 +16,12 @@ paths:
 moo:
   default_objectives: 
     - "engram_key_preference"
-    - "engram_row_separation"
-    - "engram_same_row"
-    - "engram_same_finger"
-  default_weights: [1.0, 1.0, 1.0, 1.0]
-  default_maximize: [true, true, true, true]
+    - "engram_avg4_score"
+    #- "engram_row_separation"
+    #- "engram_same_row"
+    #- "engram_same_finger"
+  default_weights: [1.0, 1.0]
+  default_maximize: [true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true

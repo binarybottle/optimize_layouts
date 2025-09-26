@@ -55,7 +55,7 @@ Input format examples:
   Dvorak,',.pyfgcrlaeoiduhtns;qjkxbmwvz,QWERTYUIOPASDFGHJKL;ZXCVBNM,./[',0.712,0.698,0.654
   
   MOO format (auto-converted):
-  config_id,items,positions,engram_key_preference,engram_row_separation
+  config_id,items,positions,engram_key_preference,engram_avg4_score
   2438,etaoinsrhldcum,KJ;ASDVRLFUEIM,0.742,0.960
 
 Summary output:
