@@ -1024,7 +1024,7 @@ Examples:
             additional_scores = [s.strip() for s in args.include_scores.split(',') if s.strip()]
             if additional_scores:
                 print(f"\nAdding additional scores: {', '.join(additional_scores)}")
-                analyzer.add_multiple_scores(additional_scores, use_poetry=not args.no_poetry, score_table=args.score_table)
+                analyzer.add_multiple_scores(additional_scores, use_poetry=not args.no_poetry, score_table=getattr(args, 'score_table', None))
 
         # Calculate weighted scores if scores specified
         if args.scores:
