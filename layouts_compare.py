@@ -567,12 +567,14 @@ class ComprehensiveLayoutAnalyzer:
         plt.figure(figsize=(14, 8))
         
         # Sort by weighted score if available, otherwise by first objective
-        if 'weighted_score' in self.df.columns:
-            df_sorted = self.df.sort_values('weighted_score', ascending=False)
-            sort_desc = " (sorted by weighted score)"
-        else:
-            df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
-            sort_desc = f" (sorted by {self.objective_columns[0]})"
+        #if 'weighted_score' in self.df.columns:
+        #    df_sorted = self.df.sort_values('weighted_score', ascending=False)
+        #    sort_desc = " (sorted by weighted score)"
+        #else:
+        #    df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
+        #    sort_desc = f" (sorted by {self.objective_columns[0]})"
+        df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
+        sort_desc = f" (sorted by {self.objective_columns[0]})"
         
         colors = self.get_colors(len(self.objective_columns))
         x_positions = range(len(df_sorted))
