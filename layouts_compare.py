@@ -24,6 +24,15 @@ Usage:
         --include-scores "engram_order" \
         --output output/layouts_compare_results.csv --plot --report --verbose
 
+    # Custom weights
+    poetry run python3 layouts_compare.py \
+        --input output/layouts_consolidate_moo_solutions.csv \
+        --scores "engram_key_preference,engram_avg4_score" \
+        --include-scores "engram_order" \
+        --avg-scores engram_avg4_scores,engram_key_preference \
+        --avg-weights 0.44,0.56 \
+        --output output/layouts_compare_results.csv --plot --report --verbose
+
 """
 
 import pandas as pd
@@ -929,13 +938,13 @@ Examples:
   python layouts_compare.py --input layouts.csv --include-scores "engram_order" --score-table "engram_3key_scores_order.csv"
 
   # Custom average scores with specific weights
-  python layouts_compare.py --input layouts.csv --avg-all-scores "engram_key_preference,engram_order" --avg-weights "0.7,0.3"
+  python layouts_compare.py --input layouts.csv --avg-scores "engram_key_preference,engram_order" --avg-weights "0.7,0.3"
 
   # Weighted scoring system (separate from average)
   python layouts_compare.py --input layouts.csv --scores "engram_key_preference,engram_avg4_score" --weights "0.6,0.4"
 
   # Both weighted scoring and custom average
-  python layouts_compare.py --input layouts.csv --scores auto --weights "0.4,0.3,0.3" --avg-all-scores "engram_key_preference,engram_order" --avg-weights "0.8,0.2"
+  python layouts_compare.py --input layouts.csv --scores auto --weights "0.4,0.3,0.3" --avg-scores "engram_key_preference,engram_order" --avg-weights "0.8,0.2"
         """
     )
     
@@ -952,7 +961,7 @@ Examples:
     parser.add_argument('--no-poetry', action='store_true', help='Use direct python instead of poetry run')
     
     # Average score calculation options  
-    parser.add_argument('--avg-all-scores', help='Comma-separated list of score columns to average (default: all available scores)')
+    parser.add_argument('--avg-scores', help='Comma-separated list of score columns to average (default: all available scores)')
     parser.add_argument('--avg-weights', help='Comma-separated list of weights for average score calculation (default: equal weights)')
     
     # Analysis options
@@ -1014,9 +1023,9 @@ Examples:
 
         # Calculate weighted average score column
         avg_score_columns = None
-        if args.avg_all_scores:
-            # Explicit avg-all-scores specified
-            avg_score_columns = [col.strip() for col in args.avg_all_scores.split(',')]
+        if args.avg_scores:
+            # Explicit avg-scores specified
+            avg_score_columns = [col.strip() for col in args.avg_scores.split(',')]
         else:
             # Default to all available scores (including newly added ones)
             avg_score_columns = all_available_scores
@@ -1038,7 +1047,7 @@ Examples:
                 try:
                     avg_weights = [float(w.strip()) for w in args.avg_weights.split(',')]
                     if len(avg_weights) != len(avg_score_columns):
-                        print(f"Error: Number of avg-weights ({len(avg_weights)}) must match number of avg-all-scores ({len(avg_score_columns)})")
+                        print(f"Error: Number of avg-weights ({len(avg_weights)}) must match number of avg-scores ({len(avg_score_columns)})")
                         return 1
                     if all(w == 0 for w in avg_weights):
                         print("Error: All average weights cannot be zero")
