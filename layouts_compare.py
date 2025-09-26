@@ -4,6 +4,8 @@ Comprehensive Keyboard Layout Analysis Tool
 
 This script provides weighted scoring and visualization for keyboard layouts.
 It combines multi-objective optimization analysis with weighted average scoring.
+By default, it calculates a weighted average of ALL available scores,
+including those from --include-scores, with equal weights.
 
 Input/Output Format:
 - items: letters in assignment order (e.g., "etaoinsrhldcum") 
@@ -20,15 +22,6 @@ Usage:
         --input output/layouts_consolidate_moo_solutions.csv \
         --scores "engram_key_preference,engram_avg4_score" \
         --include-scores "engram_order" \
-        --output output/layouts_compare_results.csv --plot --report
-
-    # Custom weights (50% engram_key_preference, 50% engram_avg4_score) 
-    poetry run python3 layouts_compare.py \
-        --input output/layouts_consolidate_moo_solutions.csv \
-        --scores "engram_key_preference,engram_avg4_score" \
-        --weights "0.5,0.5" \
-        --include-scores "engram_order" \
-        --score-table "engram_3key_scores_order.csv" \
         --output output/layouts_compare_results.csv --plot --report --verbose
 
 """
@@ -277,6 +270,12 @@ class ComprehensiveLayoutAnalyzer:
             else:
                 df = pd.read_csv(filepath)
             
+            # Remove global_rank column if it exists
+            if 'global_rank' in df.columns:
+                df = df.drop('global_rank', axis=1)
+                if self.verbose:
+                    print("Removed global_rank column")
+            
             # Validate layout data if available
             if 'items' in df.columns and 'positions' in df.columns:
                 valid_mask = df.apply(lambda row: validate_layout_data(row['items'], row['positions']), axis=1)
@@ -302,7 +301,7 @@ class ComprehensiveLayoutAnalyzer:
         # Comprehensive metadata columns to exclude
         metadata_cols = [
             'config_id', 'rank', 'source_rank', 'items', 'positions', 'layout', 'layout_qwerty',
-            'combined_score', 'source_file', 'global_rank', 'weighted_score',
+            'combined_score', 'source_file', 'weighted_score', 'global_rank',
             # Config metadata columns
             'config_items_to_assign', 'config_positions_to_assign', 
             'config_items_assigned', 'config_positions_assigned',
@@ -465,12 +464,16 @@ class ComprehensiveLayoutAnalyzer:
             pass
         
         self.df = results_df
+        
+        # Update objective columns to include newly added scores
+        self.objective_columns, self.item_col, self.pair_col = self.detect_objective_columns(self.df)
+        
         return results_df
     
     def calculate_weighted_scores(self, score_columns: List[str], weights: List[float] = None) -> pd.DataFrame:
-        """Calculate weighted average scores instead of rankings."""
+        """Calculate weighted average of specified score columns and add as 'weighted_score' column."""
         if not score_columns:
-            raise ValueError("No score columns specified for scoring")
+            raise ValueError("No score columns specified for averaging")
         
         # Validate score columns exist
         missing_cols = [col for col in score_columns if col not in self.df.columns]
@@ -478,15 +481,6 @@ class ComprehensiveLayoutAnalyzer:
             raise ValueError(f"Score columns not found in data: {missing_cols}")
         
         df = self.df.copy()
-        
-        # Add layout_qwerty column if items and positions exist
-        if 'items' in df.columns and 'positions' in df.columns and 'layout_qwerty' not in df.columns:
-            if self.verbose:
-                print("Adding layout_qwerty column...")
-            df['layout_qwerty'] = df.apply(
-                lambda row: convert_items_positions_to_qwerty_layout(row['items'], row['positions']), 
-                axis=1
-            )
         
         # Default to equal weights if not specified
         if weights is None:
@@ -500,34 +494,27 @@ class ComprehensiveLayoutAnalyzer:
             raise ValueError("Sum of weights cannot be zero")
         weights = [w / weight_sum for w in weights]
         
-        print(f"Calculating weighted scores for {len(score_columns)} score columns:")
+        print(f"Calculating average score from {len(score_columns)} columns:")
         for col, weight in zip(score_columns, weights):
             print(f"  - {col}: weight = {weight:.3f}")
         
-        # Calculate weighted score
-        weighted_score = 0
+        # Calculate weighted average
+        weighted_sum = 0
         for col, weight in zip(score_columns, weights):
             if self.verbose:
                 col_stats = df[col].describe()
                 print(f"  {col}: min={col_stats['min']:.6f}, max={col_stats['max']:.6f}, mean={col_stats['mean']:.6f}")
-            weighted_score += weight * df[col]
+            weighted_sum += weight * df[col]
         
-        df['weighted_score'] = weighted_score
+        df['weighted_score'] = weighted_sum
         
-        # Sort by weighted score (higher is better)
-        df = df.sort_values('weighted_score', ascending=False).reset_index(drop=True)
-        
-        # Add rank based on weighted score
-        df['global_rank'] = range(1, len(df) + 1)
-        
-        print(f"Weighted scoring completed:")
-        print(f"  Best weighted score: {df['weighted_score'].iloc[0]:.6f}")
-        print(f"  Worst weighted score: {df['weighted_score'].iloc[-1]:.6f}")
+        print(f"Average score calculation completed:")
+        print(f"  Min average score: {df['weighted_score'].min():.6f}")
+        print(f"  Max average score: {df['weighted_score'].max():.6f}")
         print(f"  Score range: {df['weighted_score'].max() - df['weighted_score'].min():.6f}")
-        print(f"  Unique scores: {df['weighted_score'].nunique()}")
+        print(f"  Unique average scores: {df['weighted_score'].nunique()}")
         
         self.df = df
-        self.score_columns = score_columns
         return df
      
     def apply_constraint_filter(self, constraints_string):
@@ -583,9 +570,6 @@ class ComprehensiveLayoutAnalyzer:
         if 'weighted_score' in self.df.columns:
             df_sorted = self.df.sort_values('weighted_score', ascending=False)
             sort_desc = " (sorted by weighted score)"
-        elif 'global_rank' in self.df.columns:
-            df_sorted = self.df.sort_values('global_rank')
-            sort_desc = " (sorted by global rank)"
         else:
             df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
             sort_desc = f" (sorted by {self.objective_columns[0]})"
@@ -779,13 +763,6 @@ class ComprehensiveLayoutAnalyzer:
         axes[0, -1].set_xlabel('Weighted Score')
         axes[0, -1].set_ylabel('Frequency')
         
-        # Global rank distribution
-        if 'global_rank' in self.df.columns:
-            axes[1, -1].hist(self.df['global_rank'], bins=50, alpha=0.7, color='red')
-            axes[1, -1].set_title('Global Rank\nDistribution')
-            axes[1, -1].set_xlabel('Global Rank')
-            axes[1, -1].set_ylabel('Frequency')
-        
         plt.tight_layout()
         plot_path = self.output_dir / 'layouts_compare_score_distributions.png'
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
@@ -796,13 +773,13 @@ class ComprehensiveLayoutAnalyzer:
         """Standardize column ordering for output."""
         if len(self.df) == 0:
             return self.df
-        
+
         # Standard column order
         standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
-        scoring_cols = ['global_rank', 'weighted_score']
+        scoring_cols = ['weighted_score']
         
-        # Identify other columns
-        metadata_cols = standard_cols + scoring_cols + ['source_rank', 'source_file', 'layout', 'combined_score']
+        # Identify other columns (excluding global_rank)
+        metadata_cols = standard_cols + scoring_cols + ['source_rank', 'source_file', 'layout', 'combined_score', 'global_rank']
         other_cols = sorted([col for col in self.df.columns if col not in metadata_cols])
         
         # Build ordered column list
@@ -829,7 +806,7 @@ class ComprehensiveLayoutAnalyzer:
         remaining = [col for col in other_cols if col not in ordered_cols]
         ordered_cols.extend(remaining)
         
-        # Add final metadata columns
+        # Add final metadata columns (excluding global_rank)
         for col in ['source_file', 'layout', 'combined_score']:
             if col in self.df.columns and col not in ordered_cols:
                 ordered_cols.append(col)
@@ -863,7 +840,7 @@ class ComprehensiveLayoutAnalyzer:
                 # Top 10 layouts
                 f.write("Top 10 Scored Layouts:\n")
                 f.write("-" * 22 + "\n")
-                display_cols = ['global_rank', 'weighted_score'] + self.score_columns[:3]
+                display_cols = ['weighted_score'] + self.score_columns[:3]
                 if 'layout_qwerty' in self.df.columns:
                     display_cols.append('layout_qwerty')
                 available_cols = [col for col in display_cols if col in self.df.columns]
@@ -926,7 +903,7 @@ class ComprehensiveLayoutAnalyzer:
             
             # Show top 3 layouts
             print(f"\nTop 3 Layouts:")
-            display_cols = ['global_rank', 'weighted_score']
+            display_cols = ['weighted_score']
             display_cols.extend([col for col in self.score_columns[:2]])  # Limit to first 2 scores
             if 'layout_qwerty' in self.df.columns:
                 display_cols.append('layout_qwerty')
@@ -946,17 +923,17 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Score and analyze layouts with equal weights
-  python layouts_compare.py --input layouts.csv --scores "engram_key_preference,engram_avg4_score" --plot
+  # Default: Add scores and create average of all scores with equal weights
+  python layouts_compare.py --input layouts.csv --include-scores "engram_order" --score-table "engram_3key_scores_order.csv"
 
-  # Use custom weights (must match number of score columns)
-  python layouts_compare.py --input layouts.csv --scores "same_finger_bigrams,alternation,rolls" --weights "0.5,0.3,0.2" --plot
+  # Custom average scores with specific weights
+  python layouts_compare.py --input layouts.csv --avg-all-scores "engram_key_preference,engram_order" --avg-weights "0.7,0.3"
 
-  # Add additional scores and visualize
-  python layouts_compare.py --input layouts.csv --scores auto --include-scores "comfort_total" --plot
+  # Weighted scoring system (separate from average)
+  python layouts_compare.py --input layouts.csv --scores "engram_key_preference,engram_avg4_score" --weights "0.6,0.4"
 
-  # Directory analysis with weighted scoring
-  python layouts_compare.py --input data_dir/ --scores auto --weights "0.4,0.3,0.2,0.1" --plot --report
+  # Both weighted scoring and custom average
+  python layouts_compare.py --input layouts.csv --scores auto --weights "0.4,0.3,0.3" --avg-all-scores "engram_key_preference,engram_order" --avg-weights "0.8,0.2"
         """
     )
     
@@ -965,12 +942,16 @@ Examples:
     parser.add_argument('--output-dir', default='output', help='Output directory for plots and results')
     
     # Scoring and weighting options
-    parser.add_argument('--scores', help='Comma-separated list of score columns for weighting, or "auto" for all available')
-    parser.add_argument('--weights', help='Comma-separated list of weights for score columns (default: equal weights)')
+    parser.add_argument('--scores', help='Comma-separated list of score columns for weighted scoring, or "auto" for all available')
+    parser.add_argument('--weights', help='Comma-separated list of weights for score columns in --scores (default: equal weights)')
     parser.add_argument('--include-scores', help='Comma-separated list of additional scores to compute and include')
     parser.add_argument('--score-table', help='Score table CSV file name (e.g., engram_3key_scores_order.csv)')
     parser.add_argument('--score-layouts-path', help='Path to score_layouts.py script')
     parser.add_argument('--no-poetry', action='store_true', help='Use direct python instead of poetry run')
+    
+    # Average score calculation options  
+    parser.add_argument('--avg-all-scores', help='Comma-separated list of score columns to average (default: all available scores)')
+    parser.add_argument('--avg-weights', help='Comma-separated list of weights for average score calculation (default: equal weights)')
     
     # Analysis options
     parser.add_argument('--filter-assignments', help='Filter by letter-position assignments: "letter:position,letter:position"')
@@ -1026,47 +1007,50 @@ Examples:
                 print(f"\nAdding additional scores: {', '.join(additional_scores)}")
                 analyzer.add_multiple_scores(additional_scores, use_poetry=not args.no_poetry, score_table=getattr(args, 'score_table', None))
 
-        # Calculate weighted scores if scores specified
-        if args.scores:
-            available_scores = analyzer.objective_columns
+        # Update available scores after adding new ones (this is the key fix)
+        all_available_scores = analyzer.objective_columns
+
+        # Calculate weighted average score column
+        avg_score_columns = None
+        if args.avg_all_scores:
+            # Explicit avg-all-scores specified
+            avg_score_columns = [col.strip() for col in args.avg_all_scores.split(',')]
+        else:
+            # Default to all available scores (including newly added ones)
+            avg_score_columns = all_available_scores
+            if avg_score_columns:
+                print(f"Defaulting to all available scores for average: {', '.join(avg_score_columns)}")
+
+        if avg_score_columns:
+            # Validate avg score columns exist in dataframe
+            invalid_avg_cols = [col for col in avg_score_columns if col not in analyzer.df.columns]
+            if invalid_avg_cols:
+                print(f"Error: Average score columns not found in data: {invalid_avg_cols}")
+                available_df_cols = [col for col in analyzer.df.columns if col in all_available_scores]
+                print(f"Available score columns in dataframe: {available_df_cols}")
+                return 1
             
-            if args.scores.lower() == 'auto':
-                score_columns = available_scores
-                if not score_columns:
-                    print("Error: No score columns detected for auto mode")
-                    return 1
-                print(f"Auto-detected {len(score_columns)} score columns")
-            else:
-                score_columns = [col.strip() for col in args.scores.split(',')]
-                
-                # Validate score columns
-                invalid_cols = [col for col in score_columns if col not in available_scores]
-                if invalid_cols:
-                    print(f"Error: Invalid score columns: {invalid_cols}")
-                    print(f"Available columns: {available_scores}")
-                    return 1
-            
-            # Parse weights if provided
-            weights = None
-            if args.weights:
+            # Parse average weights if provided
+            avg_weights = None
+            if args.avg_weights:
                 try:
-                    weights = [float(w.strip()) for w in args.weights.split(',')]
-                    if len(weights) != len(score_columns):
-                        print(f"Error: Number of weights ({len(weights)}) must match number of score columns ({len(score_columns)})")
+                    avg_weights = [float(w.strip()) for w in args.avg_weights.split(',')]
+                    if len(avg_weights) != len(avg_score_columns):
+                        print(f"Error: Number of avg-weights ({len(avg_weights)}) must match number of avg-all-scores ({len(avg_score_columns)})")
                         return 1
-                    if all(w == 0 for w in weights):
-                        print("Error: All weights cannot be zero")
+                    if all(w == 0 for w in avg_weights):
+                        print("Error: All average weights cannot be zero")
                         return 1
-                    print(f"Using custom weights: {weights}")
+                    print(f"Using custom average weights: {avg_weights}")
                 except ValueError:
-                    print(f"Error: Invalid weight format. Use comma-separated numbers like '0.5,0.3,0.2'")
+                    print(f"Error: Invalid avg-weights format. Use comma-separated numbers like '0.5,0.3,0.2'")
                     return 1
             else:
-                print(f"Using equal weights for all {len(score_columns)} score columns")
+                print(f"Using equal weights for all {len(avg_score_columns)} average score columns")
             
-            # Calculate weighted scores
-            analyzer.calculate_weighted_scores(score_columns, weights)
-        
+            # Calculate the average score column
+            analyzer.calculate_weighted_scores(avg_score_columns, avg_weights)
+
         # Generate plots if requested
         if args.plot:
             print("\nGenerating visualizations...")
