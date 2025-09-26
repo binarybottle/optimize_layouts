@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Filter MOO keyboard layout results using intersection filtering approach.
+Filter MOO keyboard layouts based on objective scores.
 
 This script helps reduce large sets of MOO solutions to manageable subsets for further analysis.
 It finds layouts that perform in the top percentage for ALL objectives simultaneously.
@@ -13,13 +13,13 @@ Input/Output Format:
 
 Usage:
     # Intersection filtering (layouts that score well in ALL objectives)
-    python layouts_filter.py --input moo_analysis_results.csv --top-percent 10 --report --plot
+    python layouts_filter_scores.py --input moo_analysis_results.csv --top-percent 10 --report --plot
 
     # Filter with higher threshold for more results  
-    python layouts_filter.py --input results.csv --top-percent 75 --save-removed --verbose
+    python layouts_filter_scores.py --input results.csv --top-percent 75 --save-removed --verbose
 
     # Used in study
-    poetry run python3 layouts_filter.py --input output/global_moo_solutions.csv --top-percent 75 --save-removed --plot --report --verbose
+    poetry run python3 layouts_filter_scores.py --input output/global_moo_solutions.csv --top-percent 75 --save-removed --plot --report --verbose
 
 """
 import pandas as pd
