@@ -21,12 +21,13 @@ from collections import deque
 import argparse
 
 # Configuration
-CONFIG_PREFIX = "output/configs/config_"
+CONFIG_PREFIX = "output/configs1/config_"
 CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
 SCRIPT_PATH = "optimize_layouts.py" 
-OBJECTIVES = "engram_key_preference,engram_avg4_score" #engram_row_separation,engram_same_row,engram_same_finger"
+OBJECTIVES = "engram_key_preference,engram_avg4_score"
+#OBJECTIVES = "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
 # Adaptive scaling parameters
 MAX_MEMORY_PERCENT = 90  # Scale down if memory exceeds this
 MAX_CPU_PERCENT = 95     # Scale down if CPU exceeds this

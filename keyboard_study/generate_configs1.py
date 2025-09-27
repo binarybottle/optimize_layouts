@@ -35,22 +35,33 @@ Number of permutations per config file, with some of the 14 items fixed per file
     12 items (2 fixed):     479,001,600 permutations
     11 items (3 fixed):      39,916,800 permutations
     10 items (4 fixed):       3,628,800 permutations
+    10 items (4 fixed):       3,628,800 permutations
+      - 4 constrained items in 4 constrained positions: 4! = 24 permutations
+      - 6 remaining items in 6 remaining positions: 6! = 720 permutations
+      - Total: 24 × 720 = 17,280 permutations
+
 Number of permutations for 3 fixed items (after constraining the top item to one side):
     3 fixed in 13 positions:      1,716 permutations
 Number of configuration files:
     1,716 3-fixed-in-13 permutations x 2 1-fixed-in-2 permutations = 3,432 configuration files
+    
 """
 
-top_items = "etaoinsrhldcum"  # Most frequent letters (in English) for first configs
-top_positions = ["F","J","D","K","E","I","S","L","V","M","R","U","A",";"]
+top_items = "etaoinsrhldcum"  # Most frequent letters (in English) for first configs (etaoinsrhldcumfpgwybvkxj)
 ntop_items = len(top_items)
-if len(top_positions) < ntop_items:
-    raise ValueError("Not enough positions defined for the number of letters.")
-positions_for_item_1 = ["J","K"] # Positions for first item
 
+# Define position tiers
+tier1_positions = ["F","J","D","K","E","I","S","L","V","M"]  # Top 10
+tier2_positions = ["R","U","A",";"]  # Remaining 4
+top_positions = tier1_positions + tier2_positions
+positions_for_item_1 = ["J","K"]  # Constrain top item ('e') to these positions
+
+# Fixed and constrained items/positions
 nfixed_items = 4  # Number of fixed items
+nconstrained_items = 4  # Number of constrained items
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
 items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
+items_to_constrain = top_items[nfixed_items:nfixed_items + nconstrained_items]
 n_assigned = len(items_assigned)
 n_assign = len(items_to_assign)
 
@@ -62,50 +73,42 @@ with open(CONFIG_FILE, 'r') as f:
     base_config = yaml.safe_load(f)
 
 def generate_constraint_sets():
-    """Generate all valid configurations based on the constraints."""
-
-    # Generate all valid configurations
     configs = []
     
-    # Loop through all possible position combinations
     for pos1 in positions_for_item_1:
-        remaining_positions = [pos for pos in top_positions if pos not in [pos1]]
-
-        # Generate all combinations of n_assigned positions (1 indicates fixed item1)
-        for comboN in itertools.combinations(remaining_positions, n_assigned - 1):
-
-            # Generate all permutations of these combinations
+        # Only choose from tier1 positions for fixing t,a,o
+        remaining_tier1 = [pos for pos in tier1_positions if pos != pos1]
+        
+        # Generate combinations only from tier1 for the 3 remaining fixed items
+        for comboN in itertools.combinations(remaining_tier1, n_assigned - 1):
             for permN in itertools.permutations(comboN):
-                if nfixed_items == 4:
-                    pos2, pos3, pos4 = permN
-                else:
-                    raise(ValueError("nfixed_items must be 4 in this script, unless modified."))
+                pos2, pos3, pos4 = permN
                 
-                # Create final position assignments
-                positions = {items_assigned[0]: pos1,
-                             items_assigned[1]: pos2,
-                             items_assigned[2]: pos3,
-                             items_assigned[3]: pos4
-                             }
-
-                # Create the positions_assigned string (must match the order of items_assigned)
+                positions = {
+                    items_assigned[0]: pos1,  # e
+                    items_assigned[1]: pos2,  # t  
+                    items_assigned[2]: pos3,  # a
+                    items_assigned[3]: pos4   # o
+                }
+                
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])
                 
-                # Create positions_to_assign (keys not used in positions_assigned)
+                # Create positions_to_assign from ALL remaining positions (tier1 + tier2)
                 used_positions = set(positions_assigned)
-                positions_to_assign = ''.join([pos for pos in all_N_keys if pos not in used_positions])
+                positions_to_assign = ''.join([pos for pos in top_positions if pos not in used_positions])
                 
-                # Add to configs if valid and positions_to_assign has the correct number of positions
-                if len(positions_to_assign) == n_assign:
-                    configs.append({
-                        'items_to_assign': items_to_assign,
-                        'positions_to_assign': positions_to_assign,
-                        'items_assigned': items_assigned,
-                        'positions_assigned': positions_assigned,
-                        'items_to_constrain': "",  # No constraints for these configurations
-                        'positions_to_constrain': ""
-                    })
-
+                # First 4 available positions for constraints
+                positions_to_constrain = ''.join(positions_to_assign[:nconstrained_items])
+                
+                configs.append({
+                    'items_to_assign': items_to_assign,
+                    'positions_to_assign': positions_to_assign,
+                    'items_assigned': items_assigned,
+                    'positions_assigned': positions_assigned,
+                    'items_to_constrain': items_to_constrain,
+                    'positions_to_constrain': positions_to_constrain,
+                })
+    
     return configs
 
 def create_config_files(configs):
@@ -149,10 +152,18 @@ if __name__ == "__main__":
         print(f"  items_assigned: {config['items_assigned']}")
         print(f"  positions_assigned: {config['positions_assigned']}")
         print(f"  positions_to_assign: {config['positions_to_assign']}")
+        print(f"  items_to_constrain: {config['items_to_constrain']}")
+        print(f"  positions_to_constrain: {config['positions_to_constrain']}")
         
         # Map letters to positions for clarity
         letter_positions = {config['items_assigned'][j]: config['positions_assigned'][j] 
                           for j in range(len(config['items_assigned']))}
-        print("  Letter mappings:")
+        letter_positions_to_constrain = {config['items_to_constrain'][j]: config['positions_to_constrain'][j] 
+                          for j in range(len(config['items_to_constrain']))}
+        print("  Letter mappings to fix:")
         for letter, pos in letter_positions.items():
             print(f"    {letter} -> {pos}")
+        print("  Letter mappings to constrain:")
+        for letter, pos in letter_positions_to_constrain.items():
+            if letter and pos:
+                print(f"    {letter} -> {pos}")

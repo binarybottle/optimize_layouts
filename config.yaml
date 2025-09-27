@@ -20,8 +20,8 @@ moo:
     #- "engram_row_separation"
     #- "engram_same_row"
     #- "engram_same_finger"
-  default_weights: [1.0, 1.0]
-  default_maximize: [true, true]
+  default_weights: [1.0, 1.0] #, 1.0, 1.0]
+  default_maximize: [true, true] #, true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true
@@ -39,12 +39,12 @@ moo:
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_to_assign:         "etaoinsrhl"
-  positions_to_assign:     "JFKDIELSMV"
-  items_assigned:          ""   
-  positions_assigned:      ""  
-  items_to_constrain:      ""   
-  positions_to_constrain:  ""  
+  items_to_assign:         "insrhldcum"
+  positions_to_assign:     "EISLVMRUA;"
+  items_assigned:          "etao"   
+  positions_assigned:      "JDFK"  
+  items_to_constrain:      "insr"   
+  positions_to_constrain:  "EISL"  
 
 #-----------------------------------------------------------------------
 # Visualization settings
