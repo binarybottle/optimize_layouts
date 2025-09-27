@@ -39,12 +39,12 @@ moo:
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_to_assign:         "insrhldcum"
-  positions_to_assign:     "EISLVMRUA;"
-  items_assigned:          "etao"   
-  positions_assigned:      "JDFK"  
-  items_to_constrain:      "insr"   
-  positions_to_constrain:  "EISL"  
+  items_to_assign:         "nsrhldcu"
+  positions_to_assign:     "ISLVMRUWOA;C,"
+  items_assigned:          "etaoi"
+  positions_assigned:      "JFDKE"  
+  items_to_constrain:      "nsrh"
+  positions_to_constrain:  "ISLVMRUWOA;"
 
 #-----------------------------------------------------------------------
 # Visualization settings

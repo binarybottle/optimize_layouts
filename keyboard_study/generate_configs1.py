@@ -61,18 +61,20 @@ Total Search Space
 
 """
 
-top_items = "etaoinsrhldcu"  # Most frequent letters (in English) for first configs (etaoinsrhldcumfpgwybvkxj)
+# English letter frequency order:  e taoi / nsrh ldcu / mfpgwybvkxj / qz
+top_items = "etaoinsrhldcu"  # Most frequent letters (in English) for first configs
 ntop_items = len(top_items)
 
 # Define position tiers
-tier1_positions = ["F","J","D","K","E","I","S","L","V","M"]  # Top 10
-tier2_positions = ["R","U","A",";","W","O"]  # Remaining 6
+tier1_positions = ["F","J","D","K","E","I","S","L"]  # Top 8 positions
+tier2_positions = ["V","M","R","U","W","O","A",";","C",","]  # Remaining 10 of top 18 positions
 top_positions = tier1_positions + tier2_positions
-positions_for_item_1 = ["J","K"]  # Constrain top item ('e') to these positions
+positions_for_item_1 = ["J","K"]  # Constrain top item to these positions
 
 # Fixed and constrained items/positions
-nfixed_items = 5  # Number of fixed items
-nconstrained_items = 0  # Number of constrained items
+nfixed_items = 5  # Number of fixed items (if modify, update below permN's pos1...)
+nconstrained_items = 4  # Number of constrained items
+nconstrained_positions = 11  # Number of constrained positions
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
 items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
 items_to_constrain = top_items[nfixed_items:nfixed_items + nconstrained_items]
@@ -113,7 +115,7 @@ def generate_constraint_sets():
                 positions_to_assign = ''.join([pos for pos in top_positions if pos not in used_positions])
                 
                 # Available positions for constraints
-                positions_to_constrain = positions_to_assign #''.join(positions_to_assign[:nconstrained_items])
+                positions_to_constrain = ''.join(positions_to_assign[:nconstrained_positions])
                 
                 configs.append({
                     'items_to_assign': items_to_assign,
