@@ -19,29 +19,33 @@ For the following, we:
     etaoinsrhldcumfpgwybvkxj (q or z are dealt with at the end).
 
 ## Overview of steps
-1. Optimally arrange the 14 most frequent letters in the 14 most comfortable keys.
-  (The remaining 10 letters have negligible interaction with the top 14 letters,
-  and the remaining 10 keys have much lower comfort scores than the top 14 keys.)
-  Use multi-objective optimization (MOO, with Engram-6 scoring objectives -- see below) 
-  to find a Pareto front of equally viable, 14-letter/key layout candidates.
+1. Optimally arrange the most frequent half of the letters in the alphabet
+  to the 18 most preferred keys (as determined by the Bigram Typing Preference Study).
+  (The remaining letters have negligible interaction with the top 13 letters,
+  and the remaining keys have extremely low preference scores.)
+  Use multi-objective optimization (MOO, with Engram scoring objectives -- see below) 
+  to find a Pareto front of equally viable, 13-letter/key layout candidates.
     1. To parallelize the exhaustive search:
-       constrain the most frequent letter to the two strongest keys (JK) while 
-       constraining the next 3 letters to the remaining 13 of the top 14 keys.
-       Create a configuration file for each of the (3,432) possible arrangements of 4 in 14. 
+       constrain the most frequent letter to the two most preferred keys, 
+       constrain the next four most frequent letters to the remaining of the top 8 keys, and
+       constrain the next four most frequent letters to the remaining of the top 16 keys.
+       Create a configuration file for each of the (1,680) possible arrangements of 5 letters. 
        ``generate_configs1.py``
-    2. For each of the 3,432 configuration files, use MOO to optimally arrange 10 letters 
-       in the 10 available of 14 keys. The result is 3,432 Pareto fronts, each with many solutions.
+    2. For each of the 1,680 configuration files, use MOO to optimally arrange 8 letters 
+       in the 13 available of 18 top keys. Each file entails 23,950,080 permutations
+       (40,236,134,400 total permutations across all 1,680 configuration files),
+       and the result is 1,680 Pareto fronts, each with many solutions.
        ``run_jobs.py``
-    3. Select the global Pareto front of MOO solutions from the 14-letter/key layouts.
-       ``optimize_layouts.py``
+    3. Select the global Pareto front of MOO solutions from the 13-letter layouts.
+       ``layouts_consolidate.py``
 2. Optimally arrange the remaining letters.
-    1. For each selected 14-letter/key layout, generate a new configuration file.
+    1. For each selected 13-letter layout, generate a new configuration file.
        ``generate_configs2.py``
-    2. For each configuration file, optimally arrange the 10 (out of 24) 
-       remaining letters in the 10 remaining keys, again using MOO.
+    2. For each configuration file, optimally arrange the 11 (out of 24) 
+       remaining letters in the 11 remaining keys, again using MOO.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
-       ``optimize_layouts.py``
+       ``layouts_consolidate.py``
 3. Select the final layout: ``layouts_filter.py``
 4. Arrange periphery of the 24-letter/key home blocks.
     1. Assign the two least frequent letters (q & z in English) 
@@ -50,65 +54,54 @@ For the following, we:
 
 ## Commands for steps 1 and 2.
 
-### Step 1. Optimally arrange the 14 most frequent letters in the 14 most comfortable keys.
+### Step 1. Optimally arrange the 13 top letters in the 18 top keys.
 
-  **1.1. Constrain the top 4 letters to the top 14 keys, with the topmost letter on the right side.**
-    - 14 keys are prioritized, based on statistical tests and cumulative coverage of 99% of bigrams by frequency.
-    - 1 letter is assigned to any one of 7 of these keys on the right side of the keyboard.
-    - 3 more letters are assigned to any of the remaining 13 of these 14 keys (1,716 permutations).
-    - Each arrangement of these 4 letters is saved as a config file: 1,716 x 7 permutations = 3,432 config files.
+  **1.1. Constrain the top 5 letters to the top 8 keys, with the topmost letter on the right side.**
+  Command for generating the configuration files: `python generate_configs1.py`
 
-  Command for generating the 3,432 configuration files: `python generate_configs1.py`
-
-  In the example below, the 4 most frequent letters (etao in English)
-  are assigned to 4 of the 14 keys in the home blocks
+  In the example below, the 5 most frequent letters (etaoi in English) are assigned to 5 of the top 8 keys
   (available keys are empty; restricted keys are represented by "|||||"):
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
-    │|||||||||||│  o  │     │    │     │     │|||||│|||||│
+    │|||||||||||│     │|||||│    │|||||│  o  │|||||│|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │     │     │  t  │  a  │    │  e  │     │     │     │
+    │|||||│     │  t  │     │    │  i  │  e  │  a  │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │|||||||||||||||||│     │    │     │|||||||||||||||||│
+    │|||||||||||||||||│|||||│    │|||||│|||||||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
     ```
 
-  **1.2. Optimally arrange 10 letters in the 10 available of the top 14 keys.**
-
-  Command for optimizing layouts, with constraints specified per configuration file: bash run_jobs.sh
-
-  This optimally arranges 10 letters in 10 available keys 
-  (3,628,800 permutations) for each of the 3,432 configurations above:
+  **1.2. Optimally arrange 8 letters in the 13 available of the top 18 keys.**
+  Command for optimizing layouts, with constraints specified per configuration file: `bash run_jobs.sh`
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
-    │|||||||||||│  o  │  u  │    │  l  │  d  │|||||│|||||│
+    │||||||     │  p  │  u  │    │  l  │  o  │     │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │  c  │  i  │  t  │  a  │    │  e  │  h  │  s  │  n  │
+    │  c  │  s  │  t  │  h  │    │  i  │  e  │  a  │  n  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │|||||||||||||||||│  m  │    │  r  │|||||||||||||||||│
+    │||||||||||||     │  m  │    │  r  │     ||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
     ```
 
-  **1.3. Select the global Pareto front of 14-letter/key layouts.**
-
-  `python optimize_layouts.py`
+  **1.3. Select the global Pareto front of 13-letter layouts.**
+  `python layouts_consolidate.py`
 
 ### Step 2. Optimally arrange the remaining letters.
 
-  **2.1. Optimally arrange the 10 remaining letters in the 10 remaining keys.**
-
+  **2.1. Optimally arrange the 11 remaining letters in the 11 remaining keys.**
   Rerun the commands above (after renaming variables and folders): 
   `python generate_configs2.py; bash run_jobs.sh`
+  etaoi nsrh ldcu mfpgwybvkxj
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
-    │  b  |  f  │  o  │  u  │    │  l  │  d  │  m  │  v  │
+    │  b  |  f  │  p  │  u  │    │  l  │  d  │  r  │  v  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │  c  │  i  │  e  │  a  │    │  h  │  t  │  s  │  n  │
+    │  c  │  s  │  t  │  h  │    │  i  │  e  │  a  │  n  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │  k  │  x  │  j  │  p  │    │  r  │  m  │  f  │  p  │
+    │  k  │  x  │  j  │  m  │    │  r  │  g  │  y  │  w  │
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
     ```
 
