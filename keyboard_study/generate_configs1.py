@@ -35,30 +35,44 @@ Number of permutations per config file, with some of the 14 items fixed per file
     12 items (2 fixed):     479,001,600 permutations
     11 items (3 fixed):      39,916,800 permutations
     10 items (4 fixed):       3,628,800 permutations
-    10 items (4 fixed):       3,628,800 permutations
       - 4 constrained items in 4 constrained positions: 4! = 24 permutations
       - 6 remaining items in 6 remaining positions: 6! = 720 permutations
       - Total: 24 × 720 = 17,280 permutations
 
-Number of permutations for 3 fixed items (after constraining the top item to one side):
-    3 fixed in 13 positions:      1,716 permutations
-Number of configuration files:
-    1,716 3-fixed-in-13 permutations x 2 1-fixed-in-2 permutations = 3,432 configuration files
-    
+Configuration File Generation
+Fixed Items (etao):
+  - 'e' fixed to 2 positions: J or K
+  - 't', 'a', 'o' fixed to 3 positions from remaining 9 tier1 positions
+  - Combinations: C(9,3) = 84
+  - Permutations: 3! = 6
+  - Total config files: 2 × 84 × 6 = 1,008 configuration files
+
+Per-Configuration Search Space (with 10 items in 12 available positions)
+Constrained items ("insr"):
+  - 4 items in 4 constrained positions: 4! = 24 arrangements
+Free items ("hldcum"):
+  - 6 items arranged in any 6 of the remaining 8 positions
+  - Choose 6 positions from 8: C(8,6) = 28 combinations
+  - Arrange 6 items in chosen positions: 6! = 720 permutations
+  - Subtotal: 28 × 720 = 20,160 arrangements
+  - Per configuration total: 24 × 20,160 = 483,840 permutations
+Total Search Space
+  - 1,008 config files × 483,840 permutations = 487,711,680 total permutations
+
 """
 
-top_items = "etaoinsrhldcum"  # Most frequent letters (in English) for first configs (etaoinsrhldcumfpgwybvkxj)
+top_items = "etaoinsrhldcu"  # Most frequent letters (in English) for first configs (etaoinsrhldcumfpgwybvkxj)
 ntop_items = len(top_items)
 
 # Define position tiers
 tier1_positions = ["F","J","D","K","E","I","S","L","V","M"]  # Top 10
-tier2_positions = ["R","U","A",";"]  # Remaining 4
+tier2_positions = ["R","U","A",";","W","O"]  # Remaining 6
 top_positions = tier1_positions + tier2_positions
 positions_for_item_1 = ["J","K"]  # Constrain top item ('e') to these positions
 
 # Fixed and constrained items/positions
-nfixed_items = 4  # Number of fixed items
-nconstrained_items = 4  # Number of constrained items
+nfixed_items = 5  # Number of fixed items
+nconstrained_items = 0  # Number of constrained items
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
 items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
 items_to_constrain = top_items[nfixed_items:nfixed_items + nconstrained_items]
@@ -82,13 +96,14 @@ def generate_constraint_sets():
         # Generate combinations only from tier1 for the 3 remaining fixed items
         for comboN in itertools.combinations(remaining_tier1, n_assigned - 1):
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4 = permN
+                pos2, pos3, pos4, pos5 = permN
                 
                 positions = {
                     items_assigned[0]: pos1,  # e
                     items_assigned[1]: pos2,  # t  
                     items_assigned[2]: pos3,  # a
-                    items_assigned[3]: pos4   # o
+                    items_assigned[3]: pos4,  # o
+                    items_assigned[4]: pos5   # i
                 }
                 
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])
@@ -97,8 +112,8 @@ def generate_constraint_sets():
                 used_positions = set(positions_assigned)
                 positions_to_assign = ''.join([pos for pos in top_positions if pos not in used_positions])
                 
-                # First 4 available positions for constraints
-                positions_to_constrain = ''.join(positions_to_assign[:nconstrained_items])
+                # Available positions for constraints
+                positions_to_constrain = positions_to_assign #''.join(positions_to_assign[:nconstrained_items])
                 
                 configs.append({
                     'items_to_assign': items_to_assign,
