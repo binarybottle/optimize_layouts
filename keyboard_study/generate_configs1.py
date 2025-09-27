@@ -27,37 +27,23 @@ import itertools
 OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
 
-# Example with 14 letters to be arranged in 14 keys
+# Example with 13 letters to be arranged within 18 keys
 """
-Number of permutations per config file, with some of the 14 items fixed per file: 
-    14 items (0 fixed):  87,178,291,200 permutations
-    13 items (1 fixed):   6,227,020,800 permutations
-    12 items (2 fixed):     479,001,600 permutations
-    11 items (3 fixed):      39,916,800 permutations
-    10 items (4 fixed):       3,628,800 permutations
-      - 4 constrained items in 4 constrained positions: 4! = 24 permutations
-      - 6 remaining items in 6 remaining positions: 6! = 720 permutations
-      - Total: 24 × 720 = 17,280 permutations
-
 Configuration File Generation
-Fixed Items (etao):
+Fixed Items (etaoi):
   - 'e' fixed to 2 positions: J or K
-  - 't', 'a', 'o' fixed to 3 positions from remaining 9 tier1 positions
-  - Combinations: C(9,3) = 84
-  - Permutations: 3! = 6
-  - Total config files: 2 × 84 × 6 = 1,008 configuration files
+  - 't', 'a', 'o', 'i' fixed to 4 positions from remaining 7 tier1 positions
+  - Permutations: 840
+  - Total config files: 2 × 840 = 1,680
 
-Per-Configuration Search Space (with 10 items in 12 available positions)
-Constrained items ("insr"):
-  - 4 items in 4 constrained positions: 4! = 24 arrangements
-Free items ("hldcum"):
-  - 6 items arranged in any 6 of the remaining 8 positions
-  - Choose 6 positions from 8: C(8,6) = 28 combinations
-  - Arrange 6 items in chosen positions: 6! = 720 permutations
-  - Subtotal: 28 × 720 = 20,160 arrangements
-  - Per configuration total: 24 × 20,160 = 483,840 permutations
+Per-Configuration Search Space (with 8 items in 13 available positions)
+Constrained items ("nsrh"):
+  - 4 items in 11 constrained positions: 7,920 permutations
+Free items ("ldcu"):
+  - 4 items arranged in any of the remaining 9 positions: 3,024 permutations
+  - Per configuration total: 7,920 × 3,024 = 23,950,080 permutations
 Total Search Space
-  - 1,008 config files × 483,840 permutations = 487,711,680 total permutations
+  - 1,680 config files × 23,950,080 permutations = 40,236,134,400 total permutations
 
 """
 

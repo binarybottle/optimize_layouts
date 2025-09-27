@@ -16,10 +16,11 @@ paths:
 moo:
   default_objectives: 
     - "engram_key_preference"
-    - "engram_avg4_score"
+    - "engram_avg4_score"  # engram_[row_separation, same_row, same_finger, outside]
     #- "engram_row_separation"
     #- "engram_same_row"
     #- "engram_same_finger"
+    #- "engram_outside"  # Irrelevant to this optimization code
   default_weights: [1.0, 1.0] #, 1.0, 1.0]
   default_maximize: [true, true] #, true, true]
   default_max_solutions: 10000
@@ -30,9 +31,12 @@ moo:
 #-----------------------------------------------------------------------
 # Optimization settings
 #
-# Example keyboard optimization problem:
-#   Items (letters by frequency):  etaoin srhldc umfpgw ybvkxj
-#   Positions (keys by comfort):   JFKDIE LSMVUR ;AOW,C /ZPQ.X
+# Example keyboard layout optimization problem:
+#   Items (letters by frequency):     etaoi nsrh ldcu mfpgwybvkxj
+#   Positions (keys by preference):   FJDKEISL VMRU WOA;C, Z/QPX.
+#   Strategy: For every possible arrangement of 5 letters in 8 keys,
+#     arrange the next most-frequent 8 letters in the top 18 keys.
+#     Then for each of these, arrange the next 11 letters.
 #-----------------------------------------------------------------------
 #   _to_assign:    Items to arrange in available positions
 #   _assigned:     Items already assigned to positions
