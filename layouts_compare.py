@@ -24,13 +24,10 @@ Usage:
         --include-scores "engram_order" \
         --output output/layouts_compare_results.csv --plot --report --verbose
 
-    # Custom weights
     poetry run python3 layouts_compare.py \
         --input output/layouts_consolidate_moo_solutions.csv \
-        --scores "engram_key_preference,engram_avg4_score" \
-        --include-scores "engram_row_separation,engram_same_row,engram_same_finger,engram_order" \
-        --avg-scores engram_avg4_score,engram_key_preference \
-        --avg-weights 0.44,0.56 \
+        --include-scores "engram_avg4_score,engram_order" \
+        --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
         --output output/layouts_compare_results.csv --plot --report --verbose
 
 """
@@ -131,12 +128,12 @@ class ComprehensiveLayoutAnalyzer:
         self.colors = [
             '#1f77b4',  # Blue
             "#000000",  # Black  
-            '#800080',  # Purple
+            '#2ca02c',  # Green
             '#ff9896',  # Light Red
             '#d62728',  # Red
-            '#2ca02c',  # Green
             '#008080',  # Teal
             '#17becf',  # Cyan
+            '#800080',  # Purple
             '#9467bd',  # Purple
             '#8c564b',  # Brown
             '#e377c2',  # Pink
@@ -326,7 +323,7 @@ class ComprehensiveLayoutAnalyzer:
             if col not in metadata_cols:
                 # Check if column contains numeric data and has variation
                 try:
-                    if pd.api.types.is_numeric_dtype(df[col]) and df[col].nunique() > 1:
+                    if pd.api.types.is_numeric_dtype(df[col]):
                         potential_objectives.append(col)
                 except (ValueError, TypeError):
                     continue
@@ -576,14 +573,12 @@ class ComprehensiveLayoutAnalyzer:
         plt.figure(figsize=(14, 8))
         
         # Sort by weighted score if available, otherwise by first objective
-        #if 'weighted_score' in self.df.columns:
-        #    df_sorted = self.df.sort_values('weighted_score', ascending=False)
-        #    sort_desc = " (sorted by weighted score)"
-        #else:
-        #    df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
-        #    sort_desc = f" (sorted by {self.objective_columns[0]})"
-        df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
-        sort_desc = f" (sorted by {self.objective_columns[0]})"
+        if 'weighted_score' in self.df.columns:
+           df_sorted = self.df.sort_values('weighted_score', ascending=False)
+           sort_desc = " (sorted by weighted score)"
+        else:
+           df_sorted = self.df.sort_values(self.objective_columns[0], ascending=False)
+           sort_desc = f" (sorted by {self.objective_columns[0]})"
         
         colors = self.get_colors(len(self.objective_columns))
         x_positions = range(len(df_sorted))

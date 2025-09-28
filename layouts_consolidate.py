@@ -20,10 +20,12 @@ Usage:
     python layouts_consolidate.py --max-files 100 --verbose
 
     # Custom pattern and objectives
-    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference,engram_avg4_score"
+    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
 
     # Study
-    poetry run python3 layouts_consolidate.py
+    poetry run python3 layouts_consolidate.py \
+        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger \
+        --maximize true true true true
 
 """
 
@@ -568,10 +570,10 @@ def main():
     parser.add_argument('--output-file', default='output/layouts_consolidate_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
-                       default=['engram_key_preference','engram_avg4_score'], #row_separation','engram_same_row','engram_same_finger'],
+                       default=['engram_key_preference','row_separation','engram_same_row','engram_same_finger'],
                        help='Objective columns to use for Pareto filtering')
     parser.add_argument('--maximize', nargs='+', type=lambda x: x.lower() == 'true',
-                       default=[True, True], #, True, True],
+                       default=[True, True, True, True],
                        help='Whether to maximize each objective (true/false for each)')
     parser.add_argument('--chunk-size', type=int, default=50000,
                        help='Chunk size for hierarchical processing')
