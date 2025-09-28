@@ -27,40 +27,40 @@ import itertools
 OUTPUT_DIR = '../output/configs1'
 CONFIG_FILE = '../config.yaml'
 
-# Example with 13 letters to be arranged within 18 keys
+# Example with 13 letters to be arranged within 16 keys
 """
 Configuration File Generation
-Fixed Items (etaoi):
-  - 'e' fixed to 2 positions: J or K
-  - 't', 'a', 'o', 'i' fixed to 4 positions from remaining 7 tier1 positions
-  - Permutations: 840
-  - Total config files: 2 × 840 = 1,680
+Fixed Items (etao):
+  - 'e' fixed to 4 positions: JKIL
+  - 't', 'a', 'o' fixed to 3 positions from remaining 7 tier1 positions (210 permutations)
+  - Total config files: 840
 
-Per-Configuration Search Space (with 8 items in 13 available positions)
+Per-Configuration Search Space (with 9 items in 12 available positions)
 Constrained items ("nsrh"):
-  - 4 items in 11 constrained positions: 7,920 permutations
+  - 4 items in 12 constrained positions: 11,880 permutations
 Free items ("ldcu"):
-  - 4 items arranged in any of the remaining 9 positions: 3,024 permutations
-  - Per configuration total: 7,920 × 3,024 = 23,950,080 permutations
+  - 4 items arranged in any of the remaining 8 positions: 1,680 permutations
+  - Per configuration total: 11,880 × 1,680 = 19,958,400 permutations
 Total Search Space
-  - 1,680 config files × 23,950,080 permutations = 40,236,134,400 total permutations
+  - 840 config files × 19,958,400 permutations = 16,765,056,000 total permutations
 
 """
 
-# English letter frequency order:  e taoi / nsrh ldcu / mfpgwybvkxj / qz
-top_items = "etaoinsrhldcu"  # Most frequent letters (in English) for first configs
+# English letter frequency order:  etaoi / nsrh ldcu / mfpgwybvkxj / qz
+top_items = "etaoinsrhldcu"  # Most frequent letters (in English)
 ntop_items = len(top_items)
 
 # Define position tiers
+tier1_right_positions = ["J","K","I","L"]  # Top right positions
 tier1_positions = ["F","J","D","K","E","I","S","L"]  # Top 8 positions
-tier2_positions = ["V","M","R","U","W","O","A",";","C",","]  # Remaining 10 of top 18 positions
+tier2_positions = ["V","M","R","U","W","O","A",";"]  # Remaining 10 of top 16 positions
 top_positions = tier1_positions + tier2_positions
-positions_for_item_1 = ["J","K"]  # Constrain top item to these positions
+positions_for_item_1 = tier1_right_positions  # Constrain top item to these positions
 
 # Fixed and constrained items/positions
-nfixed_items = 5  # Number of fixed items (if modify, update below permN's pos1...)
+nfixed_items = 4  # Number of fixed items (if modify, update below permN's pos1...)
 nconstrained_items = 4  # Number of constrained items
-nconstrained_positions = 11  # Number of constrained positions
+nconstrained_positions = 10  # Number of constrained positions
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
 items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
 items_to_constrain = top_items[nfixed_items:nfixed_items + nconstrained_items]
@@ -84,14 +84,13 @@ def generate_constraint_sets():
         # Generate combinations only from tier1 for the 3 remaining fixed items
         for comboN in itertools.combinations(remaining_tier1, n_assigned - 1):
             for permN in itertools.permutations(comboN):
-                pos2, pos3, pos4, pos5 = permN
+                pos2, pos3, pos4 = permN
                 
                 positions = {
                     items_assigned[0]: pos1,  # e
                     items_assigned[1]: pos2,  # t  
                     items_assigned[2]: pos3,  # a
-                    items_assigned[3]: pos4,  # o
-                    items_assigned[4]: pos5   # i
+                    items_assigned[3]: pos4   # o
                 }
                 
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])

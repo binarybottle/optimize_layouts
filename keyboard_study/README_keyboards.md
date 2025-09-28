@@ -20,21 +20,21 @@ For the following, we:
 
 ## Overview of steps
 1. Optimally arrange the most frequent half of the letters in the alphabet
-  to the 18 most preferred keys (as determined by the Bigram Typing Preference Study).
+  to the 16 most preferred keys (as determined by the Bigram Typing Preference Study).
   (The remaining letters have negligible interaction with the top 13 letters,
-  and the remaining keys have extremely low preference scores.)
+  and the remaining keys have very low preference scores.)
   Use multi-objective optimization (MOO, with Engram scoring objectives -- see below) 
-  to find a Pareto front of equally viable, 13-letter/key layout candidates.
+  to exhaustively search for a Pareto front of equally viable, 13-letter layout candidates.
     1. To parallelize the exhaustive search:
-       constrain the most frequent letter to the two most preferred keys, 
-       constrain the next four most frequent letters to the remaining of the top 8 keys, and
-       constrain the next four most frequent letters to the remaining of the top 16 keys.
-       Create a configuration file for each of the (1,680) possible arrangements of 5 letters. 
+       - Constrain the four most frequent letters to the eight most preferred keys,
+         with the most frequent letter constrained to one side (removes mirror layouts). 
+       - Constrain the next four most frequent letters to the remaining of the top 16 keys.
+       - Create a configuration file for each of the (840) possible arrangements of 4 letters. 
        ``generate_configs1.py``
-    2. For each of the 1,680 configuration files, use MOO to optimally arrange 8 letters 
-       in the 13 available of 18 top keys. Each file entails 23,950,080 permutations
-       (40,236,134,400 total permutations across all 1,680 configuration files),
-       and the result is 1,680 Pareto fronts, each with many solutions.
+    2. For each of the 840 configuration files, use MOO to optimally arrange 9 letters 
+       in the 12 available of the top 16 keys. Each file entails 19,958,400 permutations
+       (16,765,056,000 total permutations across all 840 configuration files),
+       and the result is 840 Pareto fronts, each with many solutions.
        ``run_jobs.py``
     3. Select the global Pareto front of MOO solutions from the 13-letter layouts.
        ``layouts_consolidate.py``
@@ -59,20 +59,21 @@ For the following, we:
   **1.1. Constrain the top 5 letters to the top 8 keys, with the topmost letter on the right side.**
   Command for generating the configuration files: `python generate_configs1.py`
 
-  In the example below, the 5 most frequent letters (etaoi in English) are assigned to 5 of the top 8 keys
+  In the example below, the 4 most frequent letters (etao of etaoinsrhldcumfpgwybvkxj
+  in English) are assigned to any 4 of the top 8 keys 
   (available keys are empty; restricted keys are represented by "|||||"):
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
     │|||||||||||│     │|||||│    │|||||│  o  │|||||│|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │|||||│     │  t  │     │    │  i  │  e  │  a  │|||||│
+    │|||||│     │  t  │     │    │     │  e  │  a  │|||||│
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
     │|||||||||||||||||│|||||│    │|||||│|||||||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
     ```
 
-  **1.2. Optimally arrange 8 letters in the 13 available of the top 18 keys.**
+  **1.2. Optimally arrange 9 letters in the 12 available of the top 16 keys.**
   Command for optimizing layouts, with constraints specified per configuration file: `bash run_jobs.sh`
 
     ```
@@ -81,7 +82,7 @@ For the following, we:
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
     │  c  │  s  │  t  │  h  │    │  i  │  e  │  a  │  n  │
     ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │||||||||||||     │  m  │    │  r  │     ||||||||||||│
+    │||||||||||||     │     │    │  r  │     ||||||||||||│
     ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
     ```
 
@@ -93,7 +94,6 @@ For the following, we:
   **2.1. Optimally arrange the 11 remaining letters in the 11 remaining keys.**
   Rerun the commands above (after renaming variables and folders): 
   `python generate_configs2.py; bash run_jobs.sh`
-  etaoi nsrh ldcu mfpgwybvkxj
 
     ```
     ╭───────────────────────╮    ╭───────────────────────╮
@@ -125,7 +125,7 @@ an average base score is calculated over all possible key-pairs:
     4. Same-finger (empirical analysis of left same- vs. different finger inside finger-columns)
     5. Outside reach (empirical analysis of left-hand lateral stretches outside finger-columns)
 
-For this study, #5 is excluded, as only finger-column keys are considered.
+For this study, #5 (engram_outside) is excluded, as only finger-column keys are considered.
 A layout's score is the average product of each key-pair's base score 
 and the corresponding letter-pair's frequency. 
 

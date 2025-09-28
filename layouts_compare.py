@@ -28,7 +28,7 @@ Usage:
     poetry run python3 layouts_compare.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --scores "engram_key_preference,engram_avg4_score" \
-        --include-scores "engram_order" \
+        --include-scores "engram_row_separation,engram_same_row,engram_same_finger,engram_order" \
         --avg-scores engram_avg4_score,engram_key_preference \
         --avg-weights 0.44,0.56 \
         --output output/layouts_compare_results.csv --plot --report --verbose

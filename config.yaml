@@ -16,13 +16,13 @@ paths:
 moo:
   default_objectives: 
     - "engram_key_preference"
-    - "engram_avg4_score"  # engram_[row_separation, same_row, same_finger, outside]
-    #- "engram_row_separation"
-    #- "engram_same_row"
-    #- "engram_same_finger"
+    #- "engram_avg4_score"  # engram_[row_separation, same_row, same_finger, outside]
+    - "engram_row_separation"
+    - "engram_same_row"
+    - "engram_same_finger"
     #- "engram_outside"  # Irrelevant to this optimization code
-  default_weights: [1.0, 1.0] #, 1.0, 1.0]
-  default_maximize: [true, true] #, true, true]
+  default_weights: [1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true
@@ -33,9 +33,9 @@ moo:
 #
 # Example keyboard layout optimization problem:
 #   Items (letters by frequency):     etaoi nsrh ldcu mfpgwybvkxj
-#   Positions (keys by preference):   FJDKEISL VMRU WOA;C, Z/QPX.
-#   Strategy: For every possible arrangement of 5 letters in 8 keys,
-#     arrange the next most-frequent 8 letters in the top 18 keys.
+#   Positions (keys by preference):   FJDKEISLVMRUWOA; C,Z/QPX.
+#   Strategy: For every possible arrangement of top 4 letters in 8 keys,
+#     arrange the next most-frequent 9 letters in the top 16 keys.
 #     Then for each of these, arrange the next 11 letters.
 #-----------------------------------------------------------------------
 #   _to_assign:    Items to arrange in available positions
@@ -43,12 +43,12 @@ moo:
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_to_assign:         "nsrhldcu"
-  positions_to_assign:     "ISLVMRUWOA;C,"
-  items_assigned:          "etaoi"
-  positions_assigned:      "JFDKE"  
-  items_to_constrain:      "nsrh"
-  positions_to_constrain:  "ISLVMRUWOA;"
+  items_to_assign:         "insrhldcu"
+  positions_to_assign:     "EISLVMRUWOA;"
+  items_assigned:          "etao"
+  positions_assigned:      "JFDK"  
+  items_to_constrain:      "insr"
+  positions_to_constrain:  "EISLVMRUWO"
 
 #-----------------------------------------------------------------------
 # Visualization settings
