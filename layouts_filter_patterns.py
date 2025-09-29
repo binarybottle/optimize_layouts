@@ -31,29 +31,31 @@ Usage:
 
     # Study
     # Don't permit any of the top eight keys to be empty.
-    # Don't permit common bigrams containing e,t,a,o to be stacked vertically.
+    # Don't permit common bigrams to be stacked vertically.
+    # Up to 25% (cumulative fraction 0.249612493 at "or")
+    BIGRAMS25="th,he,in,er,an,re,on,at,en,nd,ti,es,or"
+    # From 25% to 50% (cumulative fraction 0.497485843 at "ea")
+    BIGRAMS50="te,of,ed,is,it,al,ar,st,to,nt,ng,se,ha,as,ou,io,le,ve,co,me,de,hi,ri,ro,ic,ne,ea"
+    # From 50% to 75% (cumulative fraction 0.727855962 at "na")
+    BIGRAMS75="ra,ce,li,ch,ll,be,ma,si,om,ur,ca,el,ta,la,ns,di,fo,ho,pe,ec,pr,no,ct,us,ac,ot,il,tr,ly,nc,et,ut,ss,so,rs,un,lo,wa,ge,ie,wh,ee,wi,em,ad,ol,rt,po,we,na"
+    # From 75% to 90% (cumulative fraction 0.921126837 at "au")
+    BIGRAMS90="ul,ni,ts,mo,ow,pa,im,mi,ai,sh,ir,su,id,os,iv,ia,am,fi,ci,vi,pl,ig,tu,ev,ld,ry,mp,fe,bl,ab,gh,ty,op,wo,sa,ay,ex,ke,fr,oo,av,ag,if,ap,gr,od,bo,sp,rd,do,uc,bu,ei,ov,by,rm,ep,tt,oc,fa,ef,cu,rn,sc,gi,da,yo,cr,cl,du,ga,qu,ue,ff,ba,ey,ls,va,um,pp,ua,up,lu,go,ht,ru,ug,ds,lt,pi,rc,rr,eg,au"
+    # From 90% to 99% (cumulative fraction 0.989258952 at "oh")
+    BIGRAMS99="ck,ew,mu,br,bi,pt,ak,pu,ui,rg,ib,tl,ny,ki,rk,ys,ob,mm,fu,ph,og,ms,ye,ud,mb,ip,ub,oi,rl,gu,dr,hr,cc,tw,ft,wn,nu,af,hu,nn,eo,vo,rv,nf,xp,gn,sm,fl,iz,ok,nl,my,gl,aw,ju,oa,eq,sy,sl,ps,jo,lf,nv,je,nk,kn,gs,dy,hy,ze,ks,xt,bs,ik,dd,cy,rp,sk,xi,oe,oy,ws,lv,dl,rf,eu,dg,wr,xa,yi,nm,eb,rb,tm,xc,eh,tc,gy,ja,hn,yp,za,gg,ym,sw,bj,lm,cs,ii,ix,xe,oh"
+    BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75,$BIGRAMS90,$BIGRAMS99"
     poetry run python3 layouts_filter_patterns.py \
-        --input output/analyze_phase1/layouts_consolidate_moo_solutions.csv \
-        --exclude "^ht" \
-        --exclude-vertical-bigrams "th,he,er,an,re,on,at,en,ti, \ # 20%
-            es,or,te, \ # 25%
-            ed,it,al,ar,st,to,nt,se,ha,as,ou,io,le,co,de,ro,ne,ea,ra, \ # 50%
-            ce,ca,el,ta,la,ec,ct,ac,ot,tr,et,ut,so,lo,ie,ad, \ # 70%
-            ol,rt,na,ts,ai, \ # 75%
-            os,ia,tu,sa, \ # 80%
-            od,do,ei,oc,da,ue,ua, \ # 90%
-            ht,lt,au,tl,oi,eo,oa,oe,eu,eh,tc,oh" \ # 99%
-        --report --output output/layouts_filter_patterns.csv
+        --input output/layouts_consolidate_moo_solutions.csv \
+        --output output/layouts_filter_patterns.csv --report \
+        --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]" \
+        --exclude-vertical-bigrams "$BIGRAMS"
 
-┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-│   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
-├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-│   │11 │12 │13 │   │   │16 │17 │18 │   │   │
-├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
-│   │   │   │23 │   │   │26 │   │   │   │
-└───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
-
-
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    │   │11 │12 │13 │   │   │16 │17 │18 │   │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+    │   │   │   │23 │   │   │26 │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
 
 """
 
@@ -295,6 +297,68 @@ class LayoutPatternFilter:
         
         return patterns
 
+    def generate_vertical_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+        """
+        Generate exclusion patterns for bigrams that should not be vertically stacked.
+        
+        Args:
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,er")
+        
+        Returns:
+            List of regex patterns to exclude vertical bigram placements
+        """
+        if not bigrams_str:
+            return []
+        
+        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+        patterns = []
+        
+        for bigram in bigrams:
+            if len(bigram) != 2:
+                continue
+            
+            char1, char2 = bigram[0].lower(), bigram[1].lower()
+            
+            # Top row to home row stacking (positions 0-9 to 10-19)
+            for i in range(10):
+                top_pos = i
+                home_pos = i + 10
+                
+                # char1 on top, char2 on home row
+                if top_pos == 0:
+                    pattern1 = f"^{char1}.{{{home_pos-1}}}{char2}"
+                else:
+                    pattern1 = f"^.{{{top_pos}}}{char1}.{{{home_pos-top_pos-1}}}{char2}"
+                
+                # char2 on top, char1 on home row  
+                if top_pos == 0:
+                    pattern2 = f"^{char2}.{{{home_pos-1}}}{char1}"
+                else:
+                    pattern2 = f"^.{{{top_pos}}}{char2}.{{{home_pos-top_pos-1}}}{char1}"
+                
+                patterns.extend([pattern1, pattern2])
+            
+            # Home row to bottom row stacking (positions 10-19 to 20-29)
+            for i in range(10):
+                home_pos = i + 10
+                bottom_pos = i + 20
+                
+                if bottom_pos >= len(self.QWERTY_ORDER):
+                    continue
+                    
+                # char1 on home, char2 on bottom
+                pattern3 = f"^.{{{home_pos}}}{char1}.{{{bottom_pos-home_pos-1}}}{char2}"
+                
+                # char2 on home, char1 on bottom
+                pattern4 = f"^.{{{home_pos}}}{char2}.{{{bottom_pos-home_pos-1}}}{char1}"
+                
+                patterns.extend([pattern3, pattern4])
+        
+        if self.verbose:
+            print(f"Generated {len(patterns)} vertical exclusion patterns for {len(bigrams)} bigrams")
+        
+        return patterns
+
     def print_position_map(self):
         """Print the QWERTY position mapping for reference."""
         print("QWERTY Position Reference:")
@@ -403,13 +467,6 @@ def main():
                        help='Verbose output')
     
     args = parser.parse_args()
-    
-    exclude_patterns = parse_patterns(args.exclude)
-
-    # Add vertical bigram patterns if specified
-    if args.exclude_vertical_bigrams:
-        vertical_patterns = filter_tool.generate_vertical_exclusion_patterns(args.exclude_vertical_bigrams)
-        exclude_patterns.extend(vertical_patterns)
 
     # Show position reference if requested
     if args.show_positions:
@@ -445,21 +502,26 @@ def main():
         dummy_filter = DummyFilter()
         dummy_filter.print_position_map()
         return 0
-    
+
     try:
         # Create output directory
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         
-        # Initialize filter
+        # Initialize filter FIRST
         filter_tool = LayoutPatternFilter(args.input, args.verbose)
         
         # Parse patterns
         exclude_patterns = parse_patterns(args.exclude)
         include_patterns = parse_patterns(args.include)
         
+        # Add vertical bigrams if specified
+        if args.exclude_vertical_bigrams:
+            vertical_patterns = filter_tool.generate_vertical_exclusion_patterns(args.exclude_vertical_bigrams)
+            exclude_patterns.extend(vertical_patterns)
+        
         if args.verbose:
             if exclude_patterns:
-                print(f"Exclude patterns: {exclude_patterns}")
+                print(f"Total exclude patterns: {len(exclude_patterns)}")
             if include_patterns:
                 print(f"Include patterns: {include_patterns}")
             if args.forbidden_letters and args.forbidden_positions:
