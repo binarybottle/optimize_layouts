@@ -33,16 +33,29 @@ Examples:
     python compare_layouts.py --tables moo_results.csv --metrics engram dvorak7 comfort
 
     # Core metrics only (recommended)
-    python compare_layouts.py --metrics engram dvorak7 comfort_combo comfort comfort_key --tables layout_scores.csv
+    python compare_layouts.py \
+        --metrics engram_avg4_score dvorak7 comfort_combo comfort comfort_key \
+        --tables layout_scores.csv
 
     # Include experimental distance/time metrics (caution: limitations noted above)
-    python compare_layouts.py --metrics engram comfort comfort_key dvorak7 efficiency speed --tables layout_scores.csv --experimental-metrics
+    python compare_layouts.py --metrics engram_avg4_score comfort comfort_key dvorak7 \
+        --tables layout_scores.csv --experimental-metrics
 
     # Create plots with specific metrics and save summary
-    python compare_layouts.py --tables layouts.csv --metrics engram_strength engram_curl engram_rows engram_columns engram_order engram_3key_order --summary summary.csv
+    python compare_layouts.py --tables layouts.csv \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside \
+        --summary summary.csv
     
     # Compare multiple tables with core metrics
-    python compare_layouts.py --metrics engram comfort comfort_key dvorak7 --output output/layout_comparison.png --tables layout_scores1.csv layout_scores2.csv
+    python compare_layouts.py --metrics engram_avg4_score comfort comfort_key dvorak7 \
+        --output output/compare_layouts.png --tables layout_scores1.csv layout_scores2.csv
+
+    # Study
+    poetry run python3 compare_layouts.py \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_avg4_score \
+        --output ../output/compare_layouts.png \
+        --tables ../output/layouts_filter_patterns.csv ../output/moo2-1in4-4in8-9in16/layouts_compare_results.csv
+    
 
 Input format examples:
   

@@ -3,20 +3,24 @@
 --------------------------------------------------------------------------------
 Generate configuration files from global Pareto optimal keyboard layouts.
 
-This script takes the output from consolidate_moo.py and generates
-configuration files for the next round of optimization with specific 
-letter-to-key constraints. If --remove-positions is specified, it will remove 
-positions from the global Pareto set, and remove redundant layouts.
-
 This is Step 2 in a process to optimally arrange the 24 most frequent letters 
 in the 24 keys of the home block of a keyboard. 
+
+This script takes the output from run_jobs.py 
+(and optionally layouts_[consolidate, compare, filter_scores, filter_patterns]) 
+and generates configuration files for the second optimization round with specific 
+letter-to-key constraints. If --remove-positions is specified, it will remove 
+positions from the global Pareto set, and remove resulting redundant layouts.
 
 Usage:
     # Use all global Pareto solutions, after removing items from specified positions
     python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
     
     # Use "top" N solutions from global Pareto set with specific ranking criteria
-    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by global_rank
+    python generate_configs2.py --input-file ../output/layouts_consolidate_moo_solutions.csv --top-n 50 --sort-by global_rank
+
+    # Study
+    python generate_configs2.py --input-file ../output/layouts_filter_patterns.csv
 
 See **README_keyboards.md** for a full description.
 """
