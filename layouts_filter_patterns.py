@@ -29,6 +29,11 @@ Usage:
         --forbidden-letters "etaio" \
         --forbidden-positions "A;R"
 
+    poetry run python3 layouts_filter_patterns.py \
+        --input output/layouts_consolidate_moo_solutions.csv \
+        --output output/layouts_filter_empty_spaces.csv --report \
+        --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
+
     # Study
     # Don't permit any of the top eight keys to be empty.
     # Don't permit common bigrams to be stacked vertically.
@@ -42,7 +47,7 @@ Usage:
     BIGRAMS90="ul,ni,ts,mo,ow,pa,im,mi,ai,sh,ir,su,id,os,iv,ia,am,fi,ci,vi,pl,ig,tu,ev,ld,ry,mp,fe,bl,ab,gh,ty,op,wo,sa,ay,ex,ke,fr,oo,av,ag,if,ap,gr,od,bo,sp,rd,do,uc,bu,ei,ov,by,rm,ep,tt,oc,fa,ef,cu,rn,sc,gi,da,yo,cr,cl,du,ga,qu,ue,ff,ba,ey,ls,va,um,pp,ua,up,lu,go,ht,ru,ug,ds,lt,pi,rc,rr,eg,au"
     # From 90% to 99% (cumulative fraction 0.989258952 at "oh")
     BIGRAMS99="ck,ew,mu,br,bi,pt,ak,pu,ui,rg,ib,tl,ny,ki,rk,ys,ob,mm,fu,ph,og,ms,ye,ud,mb,ip,ub,oi,rl,gu,dr,hr,cc,tw,ft,wn,nu,af,hu,nn,eo,vo,rv,nf,xp,gn,sm,fl,iz,ok,nl,my,gl,aw,ju,oa,eq,sy,sl,ps,jo,lf,nv,je,nk,kn,gs,dy,hy,ze,ks,xt,bs,ik,dd,cy,rp,sk,xi,oe,oy,ws,lv,dl,rf,eu,dg,wr,xa,yi,nm,eb,rb,tm,xc,eh,tc,gy,ja,hn,yp,za,gg,ym,sw,bj,lm,cs,ii,ix,xe,oh"
-    BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75,$BIGRAMS90,$BIGRAMS99"
+    BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75 #,$BIGRAMS90,$BIGRAMS99"
     poetry run python3 layouts_filter_patterns.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --output output/layouts_filter_patterns.csv --report \
@@ -238,6 +243,7 @@ class LayoutPatternFilter:
     def generate_vertical_exclusion_patterns(self, bigrams_str: str) -> List[str]:
         """
         Generate exclusion patterns for bigrams that should not be vertically stacked.
+        Checks same-column placement across all row pairs: top-home, home-bottom, and top-bottom.
         
         Args:
             bigrams_str: Comma-separated string of bigrams (e.g., "th,he,er")
@@ -291,71 +297,31 @@ class LayoutPatternFilter:
                 pattern4 = f"^.{{{home_pos}}}{char2}.{{{bottom_pos-home_pos-1}}}{char1}"
                 
                 patterns.extend([pattern3, pattern4])
-        
-        if self.verbose:
-            print(f"Generated {len(patterns)} vertical exclusion patterns for bigrams: {bigrams}")
-        
-        return patterns
-
-    def generate_vertical_exclusion_patterns(self, bigrams_str: str) -> List[str]:
-        """
-        Generate exclusion patterns for bigrams that should not be vertically stacked.
-        
-        Args:
-            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,er")
-        
-        Returns:
-            List of regex patterns to exclude vertical bigram placements
-        """
-        if not bigrams_str:
-            return []
-        
-        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
-        patterns = []
-        
-        for bigram in bigrams:
-            if len(bigram) != 2:
-                continue
             
-            char1, char2 = bigram[0].lower(), bigram[1].lower()
-            
-            # Top row to home row stacking (positions 0-9 to 10-19)
+            # Top row to bottom row stacking (positions 0-9 to 20-29) - NEW!
             for i in range(10):
                 top_pos = i
-                home_pos = i + 10
-                
-                # char1 on top, char2 on home row
-                if top_pos == 0:
-                    pattern1 = f"^{char1}.{{{home_pos-1}}}{char2}"
-                else:
-                    pattern1 = f"^.{{{top_pos}}}{char1}.{{{home_pos-top_pos-1}}}{char2}"
-                
-                # char2 on top, char1 on home row  
-                if top_pos == 0:
-                    pattern2 = f"^{char2}.{{{home_pos-1}}}{char1}"
-                else:
-                    pattern2 = f"^.{{{top_pos}}}{char2}.{{{home_pos-top_pos-1}}}{char1}"
-                
-                patterns.extend([pattern1, pattern2])
-            
-            # Home row to bottom row stacking (positions 10-19 to 20-29)
-            for i in range(10):
-                home_pos = i + 10
                 bottom_pos = i + 20
                 
                 if bottom_pos >= len(self.QWERTY_ORDER):
                     continue
-                    
-                # char1 on home, char2 on bottom
-                pattern3 = f"^.{{{home_pos}}}{char1}.{{{bottom_pos-home_pos-1}}}{char2}"
                 
-                # char2 on home, char1 on bottom
-                pattern4 = f"^.{{{home_pos}}}{char2}.{{{bottom_pos-home_pos-1}}}{char1}"
+                # char1 on top, char2 on bottom
+                if top_pos == 0:
+                    pattern5 = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                else:
+                    pattern5 = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
                 
-                patterns.extend([pattern3, pattern4])
+                # char2 on top, char1 on bottom
+                if top_pos == 0:
+                    pattern6 = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                else:
+                    pattern6 = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                
+                patterns.extend([pattern5, pattern6])
         
         if self.verbose:
-            print(f"Generated {len(patterns)} vertical exclusion patterns for {len(bigrams)} bigrams")
+            print(f"Generated {len(patterns)} vertical exclusion patterns for {len(bigrams)} bigrams (including non-adjacent rows)")
         
         return patterns
 

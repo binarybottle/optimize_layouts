@@ -30,6 +30,12 @@ Usage:
         --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
         --output output/layouts_compare_results.csv --plot --report --verbose
 
+    poetry run python3 layouts_compare.py \
+        --input output/layouts_filter_patterns.csv \
+        --include-scores "engram_avg4_score,engram_order" \
+        --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
+        --output output/layouts_compare_filter_patterns.csv --plot --report --verbose
+
 """
 
 import pandas as pd
