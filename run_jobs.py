@@ -20,7 +20,7 @@ from collections import deque
 import argparse
 
 # Configuration
-CONFIG_PREFIX = "output/configs1/config_"
+CONFIG_PREFIX = "output/configs2/config_"
 CONFIG_SUFFIX = ".yaml"
 OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000

@@ -42,13 +42,20 @@ moo:
 #   _assigned:     Items already assigned to positions
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
+#optimization:   
+#  items_to_assign:         "insrhldcu"
+#  positions_to_assign:     "EISLVMRUWOA;"
+#  items_assigned:          "etao"
+#  positions_assigned:      "JFDK"  
+#  items_to_constrain:      "insr"
+#  positions_to_constrain:  "EISLVMRUWO"
 optimization:   
-  items_to_assign:         "insrhldcu"
-  positions_to_assign:     "EISLVMRUWOA;"
-  items_assigned:          "etao"
-  positions_assigned:      "JFDK"  
-  items_to_constrain:      "insr"
-  positions_to_constrain:  "EISLVMRUWO"
+  items_assigned:       "etaoinsrhldcu"
+  positions_assigned:   "ILSKEMJFRVDAU"
+  items_to_assign:      "mfpgwybvkxj"
+  positions_to_assign:  "WO;C,Z/QPX."
+  items_to_constrain:      "xj"   
+  positions_to_constrain:  "QPX."  
 
 #-----------------------------------------------------------------------
 # Visualization settings

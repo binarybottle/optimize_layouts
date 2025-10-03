@@ -29,14 +29,14 @@ Usage:
         --forbidden-letters "etaio" \
         --forbidden-positions "A;R"
 
-    poetry run python3 layouts_filter_patterns.py \
+    python layouts_filter_patterns.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --output output/layouts_filter_empty_spaces.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
 
-    # Study
-    # Don't permit any of the top eight keys to be empty.
-    # Don't permit common bigrams to be stacked vertically.
+    # Keyboard layout optimization study command:
+    #   - Don't permit any of the top eight keys to be empty.
+    #   - Don't permit common bigrams to be stacked vertically.
     # Up to 25% (cumulative fraction 0.249612493 at "or")
     BIGRAMS25="th,he,in,er,an,re,on,at,en,nd,ti,es,or"
     # From 25% to 50% (cumulative fraction 0.497485843 at "ea")
@@ -45,15 +45,14 @@ Usage:
     BIGRAMS75="ra,ce,li,ch,ll,be,ma,si,om,ur,ca,el,ta,la,ns,di,fo,ho,pe,ec,pr,no,ct,us,ac,ot,il,tr,ly,nc,et,ut,ss,so,rs,un,lo,wa,ge,ie,wh,ee,wi,em,ad,ol,rt,po,we,na"
     # From 75% to 90% (cumulative fraction 0.921126837 at "au")
     BIGRAMS90="ul,ni,ts,mo,ow,pa,im,mi,ai,sh,ir,su,id,os,iv,ia,am,fi,ci,vi,pl,ig,tu,ev,ld,ry,mp,fe,bl,ab,gh,ty,op,wo,sa,ay,ex,ke,fr,oo,av,ag,if,ap,gr,od,bo,sp,rd,do,uc,bu,ei,ov,by,rm,ep,tt,oc,fa,ef,cu,rn,sc,gi,da,yo,cr,cl,du,ga,qu,ue,ff,ba,ey,ls,va,um,pp,ua,up,lu,go,ht,ru,ug,ds,lt,pi,rc,rr,eg,au"
-    # From 90% to 99% (cumulative fraction 0.989258952 at "oh")
-    BIGRAMS99="ck,ew,mu,br,bi,pt,ak,pu,ui,rg,ib,tl,ny,ki,rk,ys,ob,mm,fu,ph,og,ms,ye,ud,mb,ip,ub,oi,rl,gu,dr,hr,cc,tw,ft,wn,nu,af,hu,nn,eo,vo,rv,nf,xp,gn,sm,fl,iz,ok,nl,my,gl,aw,ju,oa,eq,sy,sl,ps,jo,lf,nv,je,nk,kn,gs,dy,hy,ze,ks,xt,bs,ik,dd,cy,rp,sk,xi,oe,oy,ws,lv,dl,rf,eu,dg,wr,xa,yi,nm,eb,rb,tm,xc,eh,tc,gy,ja,hn,yp,za,gg,ym,sw,bj,lm,cs,ii,ix,xe,oh"
-    BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75 #,$BIGRAMS90,$BIGRAMS99"
+    BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75" #,$BIGRAMS90"
     poetry run python3 layouts_filter_patterns.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --output output/layouts_filter_patterns.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]" \
         --exclude-vertical-bigrams "$BIGRAMS"
 
+    # Indices:
     ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
     │   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
     ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
@@ -357,7 +356,7 @@ class LayoutPatternFilter:
     def generate_report(self, filtered_df: pd.DataFrame, output_dir: str = '.') -> str:
         """Generate filtering report."""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        report_path = Path(output_dir) / f'pattern_filtering_report_{timestamp}.txt'
+        report_path = Path(output_dir) / f'layouts_filter_patterns_report_{timestamp}.txt'
         
         with open(report_path, 'w') as f:
             f.write("Layout Pattern Filtering Report\n")
@@ -511,14 +510,14 @@ def main():
         if not args.output:
             input_stem = Path(args.input).stem
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            args.output = f"{args.output_dir}/pattern_filtered_{input_stem}_{timestamp}.csv"
+            args.output = f"{args.output_dir}/layouts_filter_patterns_{input_stem}_{timestamp}.csv"
         
         # Save results
         filtered_df.to_csv(args.output, index=False)
         
         # Save removed layouts if requested
         if args.save_removed and len(removed_df) > 0:
-            removed_path = Path(args.output).parent / f"removed_{Path(args.output).name}"
+            removed_path = Path(args.output).parent / f"layouts_filter_patterns_removed_{Path(args.output).name}"
             removed_df.to_csv(removed_path, index=False)
             print(f"Removed layouts saved to: {removed_path}")
         

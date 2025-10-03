@@ -22,7 +22,10 @@ Usage:
     # Custom pattern and objectives
     python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
 
-    # Study
+    # Keyboard layout optimization study commands:
+    poetry run python3 layouts_consolidate.py \
+        --objectives engram_key_preference engram_avg4_score \
+        --maximize true true
     poetry run python3 layouts_consolidate.py \
         --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger \
         --maximize true true true true
@@ -456,8 +459,8 @@ def optimized_pareto_selection(solutions: pd.DataFrame,
         return solutions
     
     # Step 1: Smart pre-filtering for very large datasets
-    if len(solutions) > 100000:
-        solutions = smart_objective_filtering(solutions, objectives, maximize, percentile_threshold=0.2)
+    #if len(solutions) > 100000:
+    #    solutions = smart_objective_filtering(solutions, objectives, maximize, percentile_threshold=0.2)
     
     # Step 2: Use hierarchical approach for large datasets
     if len(solutions) > chunk_size:

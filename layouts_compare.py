@@ -19,22 +19,16 @@ Usage:
 
     # Equal weights
     poetry run python3 layouts_compare.py \
-        --input output/layouts_consolidate_moo_solutions.csv \
-        --scores "engram_key_preference,engram_avg4_score" \
-        --include-scores "engram_order" \
-        --output output/layouts_compare_results.csv --plot --report --verbose
+        --input output/analyze_2objectives_phase1/layouts_filter_patterns.csv \
+        --include-scores engram_order \
+        --avg-scores "engram_key_preference,engram_avg4_score" \
+        --output output/layouts_compare.csv --plot --report --verbose
 
     poetry run python3 layouts_compare.py \
-        --input output/layouts_consolidate_moo_solutions.csv \
-        --include-scores "engram_avg4_score,engram_order" \
+        --input output/analyze_5objectives_phase1/layouts_filter_patterns.csv \
+        --include-scores engram_order \
         --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
-        --output output/layouts_compare_results.csv --plot --report --verbose
-
-    poetry run python3 layouts_compare.py \
-        --input output/layouts_filter_patterns.csv \
-        --include-scores "engram_avg4_score,engram_order" \
-        --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
-        --output output/layouts_compare_filter_patterns.csv --plot --report --verbose
+        --output output/layouts_compare.csv --plot --report --verbose
 
 """
 
@@ -481,6 +475,44 @@ class ComprehensiveLayoutAnalyzer:
         self.objective_columns, self.item_col, self.pair_col = self.detect_objective_columns(self.df)
         
         return results_df
+
+    def add_score_rankings(self, score_columns: List[str] = None, ascending: bool = False) -> pd.DataFrame:
+        """
+        Add ranking columns for each score column.
+        
+        Args:
+            score_columns: List of score columns to rank (default: all score columns)
+            ascending: If True, lower scores get better ranks. If False, higher scores get better ranks.
+                    Default False assumes higher scores are better (maximize).
+        
+        Returns:
+            DataFrame with added rank columns
+        """
+        if score_columns is None:
+            score_columns = self.score_columns if self.score_columns else self.objective_columns
+        
+        if not score_columns:
+            print("Warning: No score columns specified for ranking")
+            return self.df
+        
+        print(f"Adding rankings for {len(score_columns)} score columns (ascending={ascending})...")
+        
+        for score_col in score_columns:
+            if score_col not in self.df.columns:
+                print(f"Warning: Score column '{score_col}' not found, skipping")
+                continue
+            
+            rank_col = f"{score_col}_rank"
+            
+            # Calculate ranks: method='min' gives same rank to ties, next rank skips
+            # ascending=False means highest score gets rank 1
+            self.df[rank_col] = self.df[score_col].rank(ascending=ascending, method='min').astype(int)
+            
+            if self.verbose:
+                print(f"  {score_col}: ranks 1-{self.df[rank_col].max()} (best score: {self.df[score_col].max():.6f})")
+        
+        print(f"Rankings added successfully")
+        return self.df
     
     def calculate_weighted_scores(self, score_columns: List[str], weights: List[float] = None) -> pd.DataFrame:
         """Calculate weighted average of specified score columns and add as 'weighted_score' column."""
@@ -492,6 +524,9 @@ class ComprehensiveLayoutAnalyzer:
         if missing_cols:
             raise ValueError(f"Score columns not found in data: {missing_cols}")
         
+        # SAVE THE SCORE COLUMNS FOR LATER USE
+        self.score_columns = score_columns
+        
         df = self.df.copy()
         
         # Default to equal weights if not specified
@@ -499,7 +534,7 @@ class ComprehensiveLayoutAnalyzer:
             weights = [1.0] * len(score_columns)
         elif len(weights) != len(score_columns):
             raise ValueError(f"Number of weights ({len(weights)}) must match number of score columns ({len(score_columns)})")
-        
+                
         # Normalize weights to sum to 1
         weight_sum = sum(weights)
         if weight_sum == 0:
@@ -607,7 +642,7 @@ class ComprehensiveLayoutAnalyzer:
             
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        plot_path = self.output_dir / 'layouts_compare_moo_scores_scatter.png'
+        plot_path = self.output_dir / 'layouts_compare_scores_scatter.png'
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Saved: {plot_path}")
@@ -652,7 +687,7 @@ class ComprehensiveLayoutAnalyzer:
         plt.title(f'2D Objective Space{title_suffix} ({len(self.df):,} solutions)')
         plt.grid(True, alpha=0.3)
         plt.tight_layout()
-        plot_path = self.output_dir / f'layouts_compare_moo_space_2d{"_colored" if has_source_files else ""}.png'
+        plot_path = self.output_dir / f'layouts_compare_space_2d{"_colored" if has_source_files else ""}.png'
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
         print(f"Saved: {plot_path}")
@@ -790,10 +825,6 @@ class ComprehensiveLayoutAnalyzer:
         standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
         scoring_cols = ['weighted_score']
         
-        # Identify other columns (excluding global_rank)
-        metadata_cols = standard_cols + scoring_cols + ['source_rank', 'source_file', 'layout', 'combined_score', 'global_rank']
-        other_cols = sorted([col for col in self.df.columns if col not in metadata_cols])
-        
         # Build ordered column list
         ordered_cols = []
         
@@ -811,14 +842,21 @@ class ComprehensiveLayoutAnalyzer:
         if 'source_rank' in self.df.columns:
             ordered_cols.append('source_rank')
         
-        # Add score columns used in weighting (in specified order)
-        ordered_cols.extend([col for col in self.score_columns if col in self.df.columns])
+        # Add score columns AND their ranks (in pairs)
+        for score_col in self.score_columns:
+            if score_col in self.df.columns:
+                ordered_cols.append(score_col)
+                rank_col = f"{score_col}_rank"
+                if rank_col in self.df.columns:
+                    ordered_cols.append(rank_col)
         
-        # Add remaining columns
-        remaining = [col for col in other_cols if col not in ordered_cols]
-        ordered_cols.extend(remaining)
+        # Add remaining columns (excluding global_rank and any already added)
+        metadata_cols = standard_cols + scoring_cols + ['source_rank', 'source_file', 'layout', 'combined_score', 'global_rank']
+        all_added = ordered_cols + [col for col in self.df.columns if col.endswith('_rank')]
+        remaining = [col for col in self.df.columns if col not in all_added and col not in metadata_cols]
+        ordered_cols.extend(sorted(remaining))
         
-        # Add final metadata columns (excluding global_rank)
+        # Add final metadata columns
         for col in ['source_file', 'layout', 'combined_score']:
             if col in self.df.columns and col not in ordered_cols:
                 ordered_cols.append(col)
@@ -1062,6 +1100,9 @@ Examples:
             
             # Calculate the average score column
             analyzer.calculate_weighted_scores(avg_score_columns, avg_weights)
+            
+            # Add rankings for all score columns used in average
+            analyzer.add_score_rankings(avg_score_columns, ascending=False)  # False = higher is better
 
         # Generate plots if requested
         if args.plot:

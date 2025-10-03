@@ -20,7 +20,7 @@ Usage:
     python generate_configs2.py --input-file ../output/layouts_consolidate_moo_solutions.csv --top-n 50 --sort-by global_rank
 
     # Study
-    python generate_configs2.py --input-file ../output/layouts_filter_patterns.csv
+    poetry run python3 generate_configs2.py --input-file ../output/phase1/layouts_filtered_patterns_and_scores.csv
 
 See **README_keyboards.md** for a full description.
 """
@@ -137,7 +137,8 @@ def remove_specified_positions(positions, items, positions_to_remove):
     return remaining_positions_str, remaining_items_str, removed_positions_str
 
 
-def generate_config_content(items_assigned, positions_assigned, items_to_assign, positions_to_assign):
+def generate_config_content(items_assigned, positions_assigned, items_to_assign, positions_to_assign,
+                            least_frequent_items="", worst_positions=""):
     """Generate YAML configuration content for Step 2."""
     
     config_template = f"""# Configuration file for item-to-position layout optimization.
@@ -146,19 +147,23 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  position_pair_score_table: "input/engram_2key_scores.csv"
-  item_pair_score_table:     "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
-  layout_results_folder:     "output/layouts"
+  item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
+  item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
+  position_pair_score_table:    "input/engram_2key_scores.csv"
+  position_triple_score_table:  None  # "input/engram_3key_order_scores.csv"
+  layout_results_folder:        "output/layouts"
 
 #-----------------------------------------------------------------------
 # MOO (Multi-Objective Optimization) settings
 #-----------------------------------------------------------------------
 moo:
   default_objectives: 
-    - "engram_keys"
-    - "engram_rows"
-    - "engram_columns"
-    - "engram_order"
+    - "engram_key_preference"
+    #- "engram_avg4_score"  # engram_[row_separation, same_row, same_finger, outside]
+    - "engram_row_separation"
+    - "engram_same_row"
+    - "engram_same_finger"
+    #- "engram_outside"  # Irrelevant to this optimization code
   default_weights: [1.0, 1.0, 1.0, 1.0]
   default_maximize: [true, true, true, true]
   default_max_solutions: 10000
@@ -178,8 +183,8 @@ optimization:
   positions_assigned:   "{positions_assigned}"
   items_to_assign:      "{items_to_assign}"
   positions_to_assign:  "{positions_to_assign}"
-  items_to_constrain:      ""   
-  positions_to_constrain:  ""  
+  items_to_constrain:      "{least_frequent_items}"   
+  positions_to_constrain:  "{worst_positions}"  
 
 #-----------------------------------------------------------------------
 # Visualization settings
@@ -220,7 +225,7 @@ def main():
     
     # Add score column for sorting if needed
     score_col = None
-    possible_score_cols = ['global_rank', 'item_score', 'item_pair_score', 'total_score']
+    possible_score_cols = ['weighted_score', 'global_rank']
     for col in possible_score_cols:
         if col in df.columns:
             score_col = col
@@ -234,19 +239,12 @@ def main():
     # Sort by specified column
     if args.sort_by and args.sort_by in df.columns:
         sort_col = args.sort_by
-        # For global_rank, lower is better; for scores, higher is better
-        ascending = (sort_col == 'global_rank')
-        df = df.sort_values(sort_col, ascending=ascending)
-        print(f"Sorted by {sort_col} ({'ascending' if ascending else 'descending'})")
-    elif score_col == 'global_rank':
-        # Default: sort by global_rank if available (lower is better)
-        df = df.sort_values('global_rank', ascending=True)
-        print("Sorted by global_rank (ascending)")
+        df = df.sort_values(sort_col, ascending=False)
+        print(f"Sorted by {sort_col} (descending)")
     else:
         # Default: sort by score (higher is better)
-        ascending = (score_col == 'global_rank')
-        df = df.sort_values(score_col, ascending=ascending)
-        print(f"Sorted by {score_col}")
+        df = df.sort_values(score_col, ascending=False)
+        print(f"Sorted by {score_col} (descending)")
     
     # Select top N if specified
     if args.top_n:
@@ -294,12 +292,6 @@ def main():
                 error_count += 1
                 continue
             
-            # Check for expected layout size (should be 16 for optimal layouts)
-            if len(items) != 16 or len(positions) != 16:
-                if len(items) != 16:  # Only warn if it's not the expected size
-                    print(f"Info: Layout {config_num} has {len(items)} items (expected 16)")
-                # Continue processing - global Pareto might have different sizes
-            
             # Remove specified positions (if any)
             if positions_to_remove:
                 remaining_positions, remaining_items, removed_positions = remove_specified_positions(
@@ -309,21 +301,27 @@ def main():
                 remaining_positions, remaining_items, removed_positions = positions, items, ""
 
             # Get unassigned items and positions, maintaining original order
-            all_positions = "FDESVRWACQZXJKILMUO;,P/."  # 24 positions
+            all_positions = "FJDKEISLVMRUWOA;C,Z/QPX."  # 24 positions
             all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in order
-            
+
+            least_frequent_items = "xj"
+            worst_positions = "QPX."
+
             # Build items_assigned and items_to_assign in correct order
             items_assigned_ordered = ""
             items_to_assign_ordered = ""
-            
+
             for item in all_items_24:
+                # All items should be included, regardless of least_frequent_items
                 if item in remaining_items:
                     items_assigned_ordered += item
                 else:
                     items_to_assign_ordered += item
-            
+
+            # Unassigned positions should only exclude remaining_positions, not worst_positions
+            # worst_positions are part of positions_to_assign (they're just constrained)
             unassigned_positions = ''.join([c for c in all_positions if c not in remaining_positions])
-            
+
             # Check for duplicate layouts after position removal
             layout_key = (items_assigned_ordered, remaining_positions, items_to_assign_ordered, unassigned_positions)
             
@@ -349,7 +347,8 @@ def main():
             # Generate config content using properly ordered items
             config_content = generate_config_content(
                 items_assigned_ordered, remaining_positions,
-                items_to_assign_ordered, unassigned_positions
+                items_to_assign_ordered, unassigned_positions,
+                least_frequent_items, worst_positions
             )
             
             # Write config file
@@ -363,8 +362,6 @@ def main():
             if configs_generated <= 3:
                 print(f"\nConfig #{configs_generated}:")
                 print(f"  Source: {layout.get('source_info', 'unknown')}")
-                if 'global_rank' in layout:
-                    print(f"  Global rank: {layout['global_rank']}")
                 print(f"  Original layout: {items} -> {positions}")
                 if removed_positions:
                     print(f"  After removing {removed_positions}: {remaining_items} -> {remaining_positions}")
