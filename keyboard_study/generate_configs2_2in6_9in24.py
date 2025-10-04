@@ -305,7 +305,7 @@ def main():
             all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in order
 
             least_frequent_items = "xj"
-            worst_positions = "QPX."
+            worst_positions = "Z/QPX."
 
             # Build items_assigned and items_to_assign in correct order
             items_assigned_ordered = ""

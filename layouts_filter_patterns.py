@@ -6,9 +6,25 @@ This script allows filtering of keyboard layouts based on:
 1. Regex patterns to exclude (filter out)
 2. Regex patterns to include (retain only)
 3. Specific letter-position constraints (e.g., 'etaio' should not be in positions 'A;R')
+4. Vertical bigrams (same column, adjacent rows)
+5. Hurdle bigrams (top-to-bottom or bottom-to-top on same hand, any columns)
+
+Vertical bigrams: Two letters in the same column on adjacent rows (e.g., q-a, a-z, w-s)
+Hurdle bigrams: Two letters on the same hand where one is on top row and other is on bottom row,
+                regardless of column (e.g., q-z, q-x, w-c, e-v on left; y-n, u-, on right)
+                This creates a "hurdle" motion over the home row.
 
 The layout_qwerty string follows QWERTY key order: "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 Positions are indexed from 0, so 'A' is position 10, ';' is position 19, 'R' is position 13, etc.
+
+    # Indices:
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    │   │11 │12 │13 │   │   │16 │17 │18 │   │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+    │   │   │   │23 │   │   │26 │   │   │   │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
 
 Usage:
     # Filter out layouts starting with "ht"
@@ -34,7 +50,7 @@ Usage:
         --output output/layouts_filter_empty_spaces.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
 
-    # Keyboard layout optimization study command:
+    # Keyboard layout optimization study commands:
     #   - Don't permit any of the top eight keys to be empty.
     #   - Don't permit common bigrams to be stacked vertically.
     # Up to 25% (cumulative fraction 0.249612493 at "or")
@@ -52,14 +68,12 @@ Usage:
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]" \
         --exclude-vertical-bigrams "$BIGRAMS"
 
-    # Indices:
-    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-    │   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
-    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-    │   │11 │12 │13 │   │   │16 │17 │18 │   │   │
-    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
-    │   │   │   │23 │   │   │26 │   │   │   │
-    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
+    HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
+    poetry run python3 layouts_filter_patterns.py \
+        --input output/layouts_consolidate_moo_solutions.csv \
+        --output output/layouts_filter_patterns.csv --report \
+        --exclude-vertical-bigrams "$BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS"
 
 """
 
@@ -324,6 +338,78 @@ class LayoutPatternFilter:
         
         return patterns
 
+    def generate_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+            """
+            Generate exclusion patterns for bigrams that create top-to-bottom movements on same hand.
+            Excludes any bigram where one letter is on the top row and the other is on the bottom row
+            of the same hand, regardless of column (creates a "hurdle" over the home row).
+            
+            Args:
+                bigrams_str: Comma-separated string of bigrams (e.g., "th,he,qz,wc")
+            
+            Returns:
+                List of regex patterns to exclude hurdle bigram placements
+            """
+            if not bigrams_str:
+                return []
+            
+            bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+            patterns = []
+            
+            # Define hand positions
+            # Left hand: top=0-4 (QWERT), home=10-14 (ASDFG), bottom=20-24 (ZXCVB)
+            # Right hand: top=5-9 (YUIOP), home=15-19 (HJKLñ), bottom=25-29 (NM,./)
+            left_top = list(range(0, 5))      # Q, W, E, R, T
+            left_bottom = list(range(20, 25))  # Z, X, C, V, B
+            
+            right_top = list(range(5, 10))     # Y, U, I, O, P
+            right_bottom = list(range(25, 30)) # N, M, ,, ., /
+            
+            # Filter bottom positions that exist in layout
+            left_bottom = [p for p in left_bottom if p < len(self.QWERTY_ORDER)]
+            right_bottom = [p for p in right_bottom if p < len(self.QWERTY_ORDER)]
+            
+            for bigram in bigrams:
+                if len(bigram) != 2:
+                    continue
+                
+                char1, char2 = bigram[0].lower(), bigram[1].lower()
+                
+                # Left hand: char1 on top, char2 on bottom (any columns)
+                for top_pos in left_top:
+                    for bottom_pos in left_bottom:
+                        if top_pos == 0:
+                            pattern = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                        else:
+                            pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                        patterns.append(pattern)
+                
+                # Left hand: char2 on top, char1 on bottom (any columns)
+                for top_pos in left_top:
+                    for bottom_pos in left_bottom:
+                        if top_pos == 0:
+                            pattern = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                        else:
+                            pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                        patterns.append(pattern)
+                
+                # Right hand: char1 on top, char2 on bottom (any columns)
+                for top_pos in right_top:
+                    for bottom_pos in right_bottom:
+                        pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                        patterns.append(pattern)
+                
+                # Right hand: char2 on top, char1 on bottom (any columns)
+                for top_pos in right_top:
+                    for bottom_pos in right_bottom:
+                        pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                        patterns.append(pattern)
+            
+            if self.verbose:
+                print(f"Generated {len(patterns)} hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom on same hand)")
+            
+            return patterns
+
     def print_position_map(self):
         """Print the QWERTY position mapping for reference."""
         print("QWERTY Position Reference:")
@@ -405,11 +491,13 @@ def main():
     
     # Pattern filtering options
     parser.add_argument('--exclude', type=str, 
-                       help='Comma-separated regex patterns to exclude (filter out)')
+                        help='Comma-separated regex patterns to exclude (filter out)')
     parser.add_argument('--include', type=str,
-                       help='Comma-separated regex patterns to include (retain only)')
+                        help='Comma-separated regex patterns to include (retain only)')
     parser.add_argument('--exclude-vertical-bigrams', type=str,
-                    help='Comma-separated bigrams to exclude when vertically stacked (e.g., "th,he,er")')
+                        help='Comma-separated bigrams to exclude when vertically stacked (e.g., "th,he,er")')
+    parser.add_argument('--exclude-hurdles', type=str,
+                        help='Comma-separated bigrams to exclude when creating top-to-bottom movements on same hand (e.g., "th,qz,wc")')
 
     # Position constraint options
     parser.add_argument('--forbidden-letters', type=str,
@@ -483,7 +571,12 @@ def main():
         if args.exclude_vertical_bigrams:
             vertical_patterns = filter_tool.generate_vertical_exclusion_patterns(args.exclude_vertical_bigrams)
             exclude_patterns.extend(vertical_patterns)
-        
+
+        # Add hurdle bigrams if specified (top-to-bottom movements on same hand)
+        if args.exclude_hurdles:
+            hurdle_patterns = filter_tool.generate_hurdle_exclusion_patterns(args.exclude_hurdles)
+            exclude_patterns.extend(hurdle_patterns)
+
         if args.verbose:
             if exclude_patterns:
                 print(f"Total exclude patterns: {len(exclude_patterns)}")
@@ -491,7 +584,9 @@ def main():
                 print(f"Include patterns: {include_patterns}")
             if args.forbidden_letters and args.forbidden_positions:
                 print(f"Forbidden: letters '{args.forbidden_letters}' in positions '{args.forbidden_positions}'")
-        
+            if args.exclude_hurdles:
+                print(f"Excluding hurdle bigrams (top-to-bottom on same hand): {args.exclude_hurdles}")
+
         # Apply filtering
         filtered_df = filter_tool.filter_layouts(
             exclude_patterns=exclude_patterns,

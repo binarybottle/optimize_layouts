@@ -55,7 +55,7 @@ optimization:
   items_to_assign:      "mfpgwybvkxj"
   positions_to_assign:  "WO;C,Z/QPX."
   items_to_constrain:      "xj"   
-  positions_to_constrain:  "QPX."  
+  positions_to_constrain:  "Z/QPX."  
 
 #-----------------------------------------------------------------------
 # Visualization settings

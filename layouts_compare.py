@@ -24,11 +24,12 @@ Usage:
         --avg-scores "engram_key_preference,engram_avg4_score" \
         --output output/layouts_compare.csv --plot --report --verbose
 
+    # Keyboard layout optimization study command:
     poetry run python3 layouts_compare.py \
-        --input output/analyze_5objectives_phase1/layouts_filter_patterns.csv \
+        --input output/layouts_filter_patterns.csv \
         --include-scores engram_order \
         --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
-        --output output/layouts_compare.csv --plot --report --verbose
+        --output output/layouts_compare_filtered_patterns.csv --plot --report --verbose
 
 """
 

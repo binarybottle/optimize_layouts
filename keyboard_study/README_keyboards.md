@@ -36,17 +36,47 @@ For the following, we:
        (16,765,056,000 total permutations across all 840 configuration files),
        and the result is 840 Pareto fronts, each with many solutions.
        ``run_jobs.py``
-    3. Select the global Pareto front of MOO solutions from the 13-letter layouts.
+    3. Select the global Pareto front of MOO solutions from the 13-letter layouts, 
+       and filter by the criteria below.
        ``layouts_consolidate.py``
+        - Source files: 840
+        - Total original solutions: 220,080
+        - Global Pareto solutions: 220,080
+       ``layouts_filter_patterns.py`` 
+        - Exclude layouts with any of the top 8 keys empty
+          or any of the most frequent bigrams requiring typing with the same finger
+          (where most frequent contributes cumulatively to the top 50% bigram frequency)
+        - Original: 220,080 layouts
+        - Removed: 216,277 layouts
+        - Remaining: 3,803 layouts
+       ``layouts_filter_scores.py``
+        - Exclude layouts with all scores in the lowest 25%
+        - Original: 3,803 layouts
+        - Removed: 3,053 layouts
+        - Remaining: 750 layouts
 2. Optimally arrange the remaining letters.
-    1. For each selected 13-letter layout, generate a new configuration file.
+    1. For each selected 13-letter layout, generate configuration files:
+       - Constrain the two least frequent of the 24 letters to the six least preferred keys.
+       - Create a configuration file for each of the (750) possible arrangements of the two letters. 
        ``generate_configs2.py``
-    2. For each configuration file, optimally arrange the 11 (out of 24) 
-       remaining letters in the 11 remaining keys, again using MOO.
+    2. For each configuration file, optimally arrange the 9 (out of 24) 
+       remaining letters in the 9 remaining keys, again using MOO.
        ``run_jobs.py``
-    3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts.
+    3. Select the global Pareto front of MOO solutions from the 24-letter/key layouts,
+       and remove layouts with the top 50% of bigrams that must be typed by the same finger 
+       and with the top 75% of bigrams that must skip across the home row.
        ``layouts_consolidate.py``
-3. Select the final layout: ``layouts_filter.py``
+        - Source files: 759
+        - Total original solutions: 103,701
+        - Global Pareto solutions: 4,187
+       ``layouts_filter_patterns.py``
+        - Original: 4187 layouts
+        - Removed: 3907 layouts
+        - Remaining: 280 layouts
+       ``layouts_compare.py``
+        - Add trigram engram_order score
+3. Select the final layout.
+      - Top key_preference score of the 280 layouts
 4. Arrange periphery of the 24-letter/key home blocks.
     1. Assign the two least frequent letters (q & z in English) 
        to the two upper-right corner keys.
@@ -61,29 +91,29 @@ For the following, we:
 
   In the example below, the 4 most frequent letters (etao of etaoinsrhldcumfpgwybvkxj
   in English) are assigned to any 4 of the top 8 keys 
-  (available keys are empty; restricted keys are represented by "|||||"):
+  (available keys are empty; restricted keys are represented by "│││"):
 
     ```
-    ╭───────────────────────╮    ╭───────────────────────╮
-    │|||||||||||│     │|||||│    │|||||│  o  │|||||│|||||│
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │|||||│     │  t  │     │    │     │  e  │  a  │|||||│
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │|||||||||||||||||│|||||│    │|||||│|||||||||||||||||│
-    ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │││││││││   │││││││││││││││││   │││││││││││││
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    │││││   │ T │   │││││││││ A │ E │ O │││││││││
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+    │││││││││││││││││││││││││││││││││││││││││
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
     ```
 
   **1.2. Optimally arrange 9 letters in the 12 available of the top 16 keys.**
   Command for optimizing layouts, with constraints specified per configuration file: `bash run_jobs.sh`
 
     ```
-    ╭───────────────────────╮    ╭───────────────────────╮
-    │||||||     │  p  │  u  │    │  l  │  o  │     │|||||│
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │  c  │  s  │  t  │  h  │    │  i  │  e  │  a  │  n  │
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │||||||||||||     │     │    │  r  │     ||||||||||||│
-    ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │││││││││ L │ R │││││││││ D │ I │││││││││││││
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    │ C │ H │ T │ S │││││││││ A │ E │ O │ M │││││
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+    │││││││││   │ N │││││││││   │   │││││││││
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
     ```
 
   **1.3. Select the global Pareto front of 13-letter layouts.**
@@ -96,19 +126,16 @@ For the following, we:
   `python generate_configs2.py; bash run_jobs.sh`
 
     ```
-    ╭───────────────────────╮    ╭───────────────────────╮
-    │  b  |  f  │  p  │  u  │    │  l  │  d  │  r  │  v  │
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┼─────┤
-    │  c  │  s  │  t  │  h  │    │  i  │  e  │  a  │  n  │
-    ├─────┼─────┼─────┼─────┤    ├─────┼─────┼─────┤─────┤
-    │  k  │  x  │  j  │  m  │    │  r  │  g  │  y  │  w  │
-    ╰─────┴─────┴─────┴─────╯    ╰─────┴─────┴─────┴─────╯
+    ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+    │ J │ P │ L │ R │   │   │ D │ I │ W │ Y │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+    │ C │ H │ T │ S │   │   │ A │ E │ O │ M │   │
+    ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+    │ X │ V │ B │ N │   │   │ U │ G │ K │ F │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
     ```
-
-  **2.2. Select the global Pareto front from the 24-letter/key layouts.**
-
-  Rerun the commands in 1.3 above (after renaming the output files):
-  `python optimize_layouts.py; python layouts_filter.py output/global_moo_solutions.csv`
+  "etaoinsrhldcumfpgwybvkxj" -> "KDJLIVFRSEUAM;/W,OPCX.ZQ"
+  "jplr  diwychts  aeomxvbn  ugkf  " → "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 
 
 ## Scoring keyboard layouts
