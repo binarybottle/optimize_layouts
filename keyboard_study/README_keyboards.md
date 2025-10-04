@@ -75,12 +75,14 @@ For the following, we:
         - Remaining: 280 layouts
        ``layouts_compare.py``
         - Add trigram engram_order score
-3. Select the final layout.
-      - Top key_preference score of the 280 layouts
-4. Arrange periphery of the 24-letter/key home blocks.
-    1. Assign the two least frequent letters (q & z in English) 
-       to the two upper-right corner keys.
-    2. Assign punctuation to the two middle columns between the home blocks. 
+    3. Select the layout with the top key_preference score of the 280 layouts.
+3. Arrange the periphery of the 24-letter/key home blocks.
+    1. Compare layout scores for all possible arrangements 
+       of the three least frequent of 26 letters (including Q and Z) 
+       in the three worst keys (including the two upper-right corner keys).
+    2. Select the final layout.
+    3. Assign punctuation to the two middle columns between the home blocks.
+    4. Assign symbols to the Shift-number keys. 
 
 ## Commands for steps 1 and 2.
 
@@ -116,14 +118,24 @@ For the following, we:
     └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
     ```
 
-  **1.3. Select the global Pareto front of 13-letter layouts.**
-  `python layouts_consolidate.py`
+  **1.3. Select the global Pareto front of 13-letter layouts.**              
+      ```bash
+         python layouts_consolidate.py
+         python layouts_filter_patterns.py
+         python layouts_filter_scores.py
+      ```
 
 ### Step 2. Optimally arrange the remaining letters.
 
   **2.1. Optimally arrange the 11 remaining letters in the 11 remaining keys.**
   Rerun the commands above (after renaming variables and folders): 
-  `python generate_configs2.py; bash run_jobs.sh`
+      ```bash
+         python generate_configs2.py
+         bash run_jobs.sh
+         python layouts_consolidate.py
+         python layouts_filter_patterns.py
+         python layouts_filter_scores.py
+      ```
 
     ```
     ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
@@ -137,6 +149,41 @@ For the following, we:
   "etaoinsrhldcumfpgwybvkxj" -> "KDJLIVFRSEUAM;/W,OPCX.ZQ"
   "jplr  diwychts  aeomxvbn  ugkf  " → "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 
+### Step 3. Arrange the periphery of the 24-letter/key home blocks.
+
+Rearrange J, Q, and Z:
+
+poetry run python3 score_layouts.py --compare \
+  engram-jzq:"jplr  diwychts  aeomxvbn  ugkfzq" \
+  engram-jqz:"jplr  diwychts  aeomxvbn  ugkfqz" \
+  engram-qzj:"qplr  diwychts  aeomxvbn  ugkfzj" \
+  engram-qjz:"qplr  diwychts  aeomxvbn  ugkfjz" \
+  engram-zjq:"zplr  diwychts  aeomxvbn  ugkfjq" \
+  engram-zqj:"zplr  diwychts  aeomxvbn  ugkfqj"
+
+Scorer          engram-jzq  engram-jqz  engram-qzj  engram-qjz  engram-zjq  engram-zqj  
+--------------------------------------------------------------------------------------------
+key_preference  0.620041*   0.620041*   0.619816    0.619816    0.620031    0.620031    
+row_separation  0.858036    0.857085    0.859015*   0.857090    0.857265    0.858239    
+same_row        0.765844    0.766256    0.765117    0.764679    0.765805    0.766654*    
+same_finger     0.892718    0.892718    0.892118    0.892118    0.893084*   0.893084*   
+order           0.733348    0.733348    0.732244    0.732244    0.733743*   0.733743*   
+
+  ```
+  poetry run python3 display_layout.py --letters "zplr  diwychts  aeomxvbn  ugkfqj" --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+
+  Letters → Qwerty keys:
+  ZPLR  DIWYCHTS  AEOMXVBN  UGKFQJ
+  QWERTYUIOPASDFGHJKL;ZXCVBNM,./['
+
+  ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+  │ Z │ P │ L │ R │   │   │ D │ I │ W │ Y │ Q │
+  ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+  │ C │ H │ T │ S │   │   │ A │ E │ O │ M │ J │
+  ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
+  │ X │ V │ B │ N │   │   │ U │ G │ K │ F │
+  └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
+  ```
 
 ## Scoring keyboard layouts
 Keyboard layouts are defined by letters assigned to keys.

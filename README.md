@@ -10,12 +10,12 @@ This framework discovers Pareto-optimal layouts by optimizing multiple objective
 It combines direct key-pair score lookup with multi-objective search to find layouts that represent 
 the best trade-offs across an arbitrary number of competing criteria.
 
-## Multi-Objective Optimization (MOO)
+## Multi-Objective Optimization (MOO) with exhaustive search
   ```bash
-    # Basic MOO with default settings in config.yaml (uses exhaustive search)
+    # Basic MOO with default settings in config.yaml
     python optimize_layouts.py --config config.yaml
 
-    # MOO with specific objectives (overrides config defaults)
+    # MOO with specific objectives
     python optimize_layouts.py --config config.yaml \
         --objectives engram_keys,engram_rows,engram_columns,engram_order
 
@@ -24,11 +24,6 @@ the best trade-offs across an arbitrary number of competing criteria.
         --objectives engram_keys,engram_rows,engram_columns,engram_order \
         --weights 1.0,2.0,0.5,0.75 --maximize true,true,false,true \
         --max-solutions 100 --time-limit 3600 --verbose
-
-    # Force branch-and-bound search (faster for 12+ items, but more complex)
-    python optimize_layouts.py --config config.yaml \
-        --objectives engram_keys,engram_rows,engram_columns,engram_order \
-        --search-mode branch-bound
 
     # Validation run
     python optimize_layouts.py --config config.yaml --validate --dry-run
@@ -45,8 +40,10 @@ the best trade-offs across an arbitrary number of competing criteria.
     # Visualize keyboard layout as ASCII
     python display_layout.py --letters "etaoinsrhl" --positions "FDESVRJKIL"
 
-    # Generate rich HTML keyboard
-    python display_layout.py --letters "etaoinsrhl" --positions "FDESVRJKIL" --html
+    # Generate rich HTML keyboard layout
+    python display_layout.py --letters "zplr  diwychts  aeomxvbn  ugkfqj" \
+      --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['" \
+      --html
   ```
 
 ## Architecture
@@ -171,5 +168,5 @@ then modify the run_jobs_local.py script for your needs
 
 ```bash
   python generate_configs.py
-  python run_jobs_local.py
+  python run_jobs.py
 ```
