@@ -7,7 +7,7 @@ paths:
   item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
   position_pair_score_table:    "input/engram_2key_scores.csv"
   item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
-  position_triple_score_table:  None # "input/engram_3key_order_scores.csv"
+  position_triple_score_table:  "input/engram_3key_order_scores.csv"
   layout_results_folder:        "output/layouts"
 
 #-----------------------------------------------------------------------
@@ -19,8 +19,9 @@ moo:
     - "engram_row_separation"
     - "engram_same_row"
     - "engram_same_finger"
-  default_weights: [1.0, 1.0, 1.0, 1.0]
-  default_maximize: [true, true, true, true]
+    - "engram_order"
+  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true
@@ -47,13 +48,20 @@ moo:
 #  positions_assigned:      "JFDK"  
 #  items_to_constrain:      "insr"
 #  positions_to_constrain:  "EISLVMRUWO"
+#optimization:   
+#  items_assigned:       "etaoinsrhldcu"
+#  positions_assigned:   "ILSKEMJFRVDAU"
+#  items_to_assign:      "mfpgwybvkxj"
+#  positions_to_assign:  "WO;C,Z/QPX."
+#  items_to_constrain:      "xj"   
+#  positions_to_constrain:  "Z/QPX."  
 optimization:   
-  items_assigned:       "etaoinsrhldcu"
-  positions_assigned:   "ILSKEMJFRVDAU"
-  items_to_assign:      "mfpgwybvkxj"
-  positions_to_assign:  "WO;C,Z/QPX."
-  items_to_constrain:      "xj"   
-  positions_to_constrain:  "Z/QPX."  
+  items_assigned:       ""
+  positions_assigned:   ""
+  items_to_assign:      "etaoinsrhl"
+  positions_to_assign:  "ASDFJKL;EI"
+  items_to_constrain:      "et"   
+  positions_to_constrain:  "DFJK"  
 
 #-----------------------------------------------------------------------
 # Visualization settings
