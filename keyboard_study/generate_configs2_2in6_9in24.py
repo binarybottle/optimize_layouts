@@ -10,7 +10,7 @@ This script takes the output from run_jobs.py
 (and optionally layouts_[consolidate, compare, filter_scores, filter_patterns]) 
 and generates configuration files for the second optimization round with specific 
 letter-to-key constraints. If --remove-positions is specified, it will remove 
-positions from the global Pareto set, and remove resulting redundant layouts.
+positions from the global Pareto set, and remove redundant layouts.
 
 Usage:
     # Use all global Pareto solutions, after removing items from specified positions
@@ -147,8 +147,10 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
-  item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
+  #item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
+  #item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
+  item_pair_score_table:        "input/frequency/spanish-letter-pair-counts-google-ngrams_normalized.csv"
+  item_triple_score_table:      ""
   position_pair_score_table:    "input/engram_2key_scores.csv"
   position_triple_score_table:  None  # "input/engram_3key_order_scores.csv"
   layout_results_folder:        "output/layouts"
@@ -302,9 +304,11 @@ def main():
 
             # Get unassigned items and positions, maintaining original order
             all_positions = "FJDKEISLVMRUWOA;C,Z/QPX."  # 24 positions
-            all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # Exactly 24 letters in order
+            #all_items_24 = "etaoinsrhldcumfpgwybvkxj"  # English: 24 letters in order
+            all_items_24 = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
 
-            least_frequent_items = "xj"
+            #least_frequent_items = "xj" # English
+            least_frequent_items = "zx" # Spanish
             worst_positions = "Z/QPX."
 
             # Build items_assigned and items_to_assign in correct order

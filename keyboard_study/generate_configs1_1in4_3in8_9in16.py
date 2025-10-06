@@ -47,7 +47,8 @@ Total Search Space
 """
 
 # English letter frequency order:  etaoi / nsrh ldcu / mfpgwybvkxj / qz
-top_items = "etaoinsrhldcu"  # Most frequent letters (in English)
+top_items = "etaoinsrhldcu" # Most frequent letters (English)
+#top_items = "eaonisrldctum" # Most frequent letters (Spanish: eaonisrldctumpbgvqyhfjzxkw)
 ntop_items = len(top_items)
 
 # Define position tiers
@@ -78,7 +79,7 @@ def generate_constraint_sets():
     configs = []
     
     for pos1 in positions_for_item_1:
-        # Only choose from tier1 positions for fixing t,a,o
+        # Only choose from tier1 positions for fixing nfixed top letters
         remaining_tier1 = [pos for pos in tier1_positions if pos != pos1]
         
         # Generate combinations only from tier1 for the 3 remaining fixed items
@@ -87,10 +88,10 @@ def generate_constraint_sets():
                 pos2, pos3, pos4 = permN
                 
                 positions = {
-                    items_assigned[0]: pos1,  # e
-                    items_assigned[1]: pos2,  # t  
-                    items_assigned[2]: pos3,  # a
-                    items_assigned[3]: pos4   # o
+                    items_assigned[0]: pos1,
+                    items_assigned[1]: pos2,  
+                    items_assigned[2]: pos3,
+                    items_assigned[3]: pos4
                 }
                 
                 positions_assigned = ''.join([positions[letter] for letter in items_assigned])

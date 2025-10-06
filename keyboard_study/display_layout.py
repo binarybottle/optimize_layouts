@@ -8,14 +8,23 @@ and displays them on a 32-key keyboard layout (3 rows: 11+11+10 keys).
 Usage:
 
     # Display ASCII keyboard layout with letters and positions:
-    python display_layout.py --letters "kgio'\"dncwphae,.tsrlxjyu-?mfvbqz"
+    python display_layout.py --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj"
 
     # The above is in Qwerty order, so it is the same as:
-    python display_layout.py --letters "kgio'\"dncwphae,.tsrlxjyu-?mfvbqz" \
+    python display_layout.py --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
         --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 
     # To generate a realistic HTML image:
-    python display_layout.py --letters "test" --positions "RTSG" --html
+    python display_layout.py \
+        --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
+        --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+        --html
+
+    # To generate an ortholinear HTML image:
+    python display_layout.py \
+        --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
+        --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+        --html-ortho
 
     # Arbitrary letters and positions:
     python display_layout.py --letters "abc" --positions "P;/"
@@ -86,20 +95,22 @@ def display_ascii(layout, letters, positions, quiet=False):
     if not quiet:
         print(f"\n\n")
 
-def display_html(layout, letters, positions, output_file="keyboard_layout.html"):
+def display_html(layout, letters, positions, output_file="keyboard_layout.html", ortholinear=False):
     """Generate clean HTML file with realistic keyboard layout"""
     
-    html_content = """<!DOCTYPE html>
+    layout_type = "Ortholinear" if ortholinear else "Staggered"
+    
+    html_content = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Keyboard Layout</title>
+    <title>Keyboard Layout - {layout_type}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
     <style>
-        body {
+        body {{
             font-family: 'Atkinson Hyperlegible', sans-serif;
             background: white;
             padding: 50px;
@@ -108,24 +119,24 @@ def display_html(layout, letters, positions, output_file="keyboard_layout.html")
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-        }
+        }}
         
-        .keyboard {
+        .keyboard {{
             background: #444444;
             padding: 20px;
             border-radius: 8px;
-        }
+        }}
         
-        .row {
+        .row {{
             display: flex;
             margin-bottom: 6px;
-        }
+        }}
         
-        .row:last-child {
+        .row:last-child {{
             margin-bottom: 0;
-        }
+        }}
         
-        .key {
+        .key {{
             width: 40px;
             height: 40px;
             background: white;
@@ -138,12 +149,16 @@ def display_html(layout, letters, positions, output_file="keyboard_layout.html")
             font-size: 16px;
             font-weight: 400;
             color: black;
-        }
+        }}
         
-        .key:last-child {
+        .key:last-child {{
             margin-right: 0;
-        }
-        
+        }}
+        """
+    
+    # Add stagger offsets only if not ortholinear
+    if not ortholinear:
+        html_content += """
         .row-home {
             margin-left: 10px;
         }
@@ -151,7 +166,9 @@ def display_html(layout, letters, positions, output_file="keyboard_layout.html")
         .row-bottom {
             margin-left: 34px;
         }
-
+"""
+    
+    html_content += """
     </style>
 </head>
 <body>
@@ -159,12 +176,16 @@ def display_html(layout, letters, positions, output_file="keyboard_layout.html")
     
     # Generate rows
     for row_idx, row in enumerate(layout):
-        if row_idx == 1:
-            row_class = "row-home"
-        elif row_idx == 2:
-            row_class = "row-bottom"
+        if not ortholinear:
+            if row_idx == 1:
+                row_class = "row-home"
+            elif row_idx == 2:
+                row_class = "row-bottom"
+            else:
+                row_class = ""
         else:
             row_class = ""
+            
         html_content += f'\n        <div class="row {row_class}">'
         
         for key in row:
@@ -182,7 +203,7 @@ def display_html(layout, letters, positions, output_file="keyboard_layout.html")
     with open(output_file, 'w', encoding='utf-8') as f:
         f.write(html_content)
     
-    print(f"\nHTML keyboard generated: {output_file}")
+    print(f"\nHTML keyboard generated: {output_file} ({layout_type})")
     print(f"Letters placed: {len(letters)}/32 keys used")
 
 def validate_inputs(letters, positions):
@@ -208,12 +229,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Display modes:
-  (default)  Unicode box-drawing keyboard
-  --html     Generate clean HTML keyboard
+  (default)      Unicode box-drawing keyboard
+  --html         Generate staggered HTML keyboard
+  --html-ortho   Generate ortholinear (grid) HTML keyboard
 
 Examples:
   python display_layout.py --letters "etaoin" --positions "FDESGH"
-  python display_layout.py --items "etaoin" --keys "FDESGH" --html
+  python display_layout.py --letters "etaoin" --positions "FDESGH" --html
+  python display_layout.py --letters "etaoin" --positions "FDESGH" --html-ortho
         """
 )
     
@@ -229,7 +252,10 @@ Examples:
     
     # Display mode options
     parser.add_argument('--html', action='store_true',
-                        help='Generate clean HTML file')
+                        help='Generate staggered HTML file')
+    
+    parser.add_argument('--html-ortho', action='store_true',
+                        help='Generate ortholinear (grid-aligned) HTML file')
     
     parser.add_argument('--output', default='keyboard_layout.html',
                         help='Output filename for HTML mode (default: keyboard_layout.html)')
@@ -275,13 +301,13 @@ Examples:
         print("Valid positions are: Q W E R T Y U I O P [ A S D F G H J K L ; ' Z X C V B N M , . /")
     
     # Choose display mode
-    if args.html:
-        display_html(layout, letters, positions, args.output)
+    if args.html or args.html_ortho:
+        display_html(layout, letters, positions, args.output, ortholinear=args.html_ortho)
     else:  # Default to ASCII
         display_ascii(layout, letters, positions, quiet)
     
     # Show empty keys if requested (ASCII mode only)
-    if args.show_empty and not args.html:
+    if args.show_empty and not (args.html or args.html_ortho):
         print(f"\nEMPTY KEY POSITIONS:")
         print("-" * 40)
         empty_positions = []
