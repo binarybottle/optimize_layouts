@@ -50,6 +50,7 @@ Usage:
         --output output/layouts_filter_empty_spaces.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
 
+    
     # Keyboard layout optimization study commands:
     #   - Don't permit any of the top eight keys to be empty.
     #   - Don't permit common bigrams to be stacked vertically.
@@ -62,12 +63,6 @@ Usage:
     # From 75% to 90% (cumulative fraction 0.921126837 at "au")
     BIGRAMS90="ul,ni,ts,mo,ow,pa,im,mi,ai,sh,ir,su,id,os,iv,ia,am,fi,ci,vi,pl,ig,tu,ev,ld,ry,mp,fe,bl,ab,gh,ty,op,wo,sa,ay,ex,ke,fr,oo,av,ag,if,ap,gr,od,bo,sp,rd,do,uc,bu,ei,ov,by,rm,ep,tt,oc,fa,ef,cu,rn,sc,gi,da,yo,cr,cl,du,ga,qu,ue,ff,ba,ey,ls,va,um,pp,ua,up,lu,go,ht,ru,ug,ds,lt,pi,rc,rr,eg,au"
     BIGRAMS="$BIGRAMS25,$BIGRAMS50" #,$BIGRAMS75" #,$BIGRAMS90"
-    poetry run python3 layouts_filter_patterns.py \
-        --input output/layouts_consolidate_moo_solutions.csv \
-        --output output/layouts_filter_patterns.csv --report \
-        --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]" \
-        --exclude-vertical-bigrams "$BIGRAMS"
-
     HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
     poetry run python3 layouts_filter_patterns.py \
         --input output/layouts_consolidate_moo_solutions.csv \

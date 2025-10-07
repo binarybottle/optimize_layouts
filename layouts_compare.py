@@ -27,8 +27,7 @@ Usage:
     # Keyboard layout optimization study command:
     poetry run python3 layouts_compare.py \
         --input output/layouts_filter_patterns.csv \
-        --include-scores engram_order \
-        --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger \
+        --avg-scores engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_order \
         --output output/layouts_compare_filtered_patterns.csv --plot --report --verbose
 
 """
