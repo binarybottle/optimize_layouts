@@ -45,15 +45,15 @@ Usage:
         --forbidden-letters "etaio" \
         --forbidden-positions "A;R"
 
+    # Remove rows/layouts that have any of the top eight keys empty.
     python layouts_filter_patterns.py \
         --input output/layouts_consolidate_moo_solutions.csv \
         --output output/layouts_filter_empty_spaces.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
 
     
-    # Keyboard layout optimization study commands:
-    #   - Don't permit any of the top eight keys to be empty.
-    #   - Don't permit common bigrams to be stacked vertically.
+    # Keyboard layout optimization study command:
+    # Don't permit common bigrams to be stacked vertically or to require hurdles.
     # Up to 25% (cumulative fraction 0.249612493 at "or")
     BIGRAMS25="th,he,in,er,an,re,on,at,en,nd,ti,es,or"
     # From 25% to 50% (cumulative fraction 0.497485843 at "ea")

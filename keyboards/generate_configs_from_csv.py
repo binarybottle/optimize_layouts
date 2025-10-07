@@ -15,9 +15,13 @@ Usage:
     # For 24-character layout (default)
     python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
 
-    # Test with filtered patterns
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns.csv --remove-positions "X.QPZ/C,WO"
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns.csv --remove-positions "X.QPZ/" --layout-size 26
+    # Keyboard layout optimization study commands:
+    # Step 2: Optimally arrange the next 10 most frequent letters to fill the top 20 keys.
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step1.csv
+    # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 6 letters).
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step2.csv --remove-positions "X.QPZ/" --layout-size 24
+    # Step 4: Optimally assign the 8 least frequent of 26 letters to the 8 least preferred keys (after unassigning 6 letters).
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step3.csv --remove-positions "X.QPZ/" --layout-size 26
 
 See **README.md** for instructions to run batches of config files in parallel.
 
