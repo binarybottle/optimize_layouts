@@ -20,9 +20,9 @@ from collections import deque
 import argparse
 
 # Configuration
-CONFIG_PREFIX = "output/configs2/config_"
+CONFIG_PREFIX = "output/configs/config_"
 CONFIG_SUFFIX = ".yaml"
-OUTPUT_DIR = "output/layouts2"
+OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
 SCRIPT_PATH = "optimize_layouts.py" 
 OBJECTIVES = "engram_order,engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
@@ -109,7 +109,7 @@ class AdaptiveOptimizer:
                 stderr_redirect = None
             else:
                 # Create log directory if it doesn't exist
-                log_dir = Path("output/logs2")
+                log_dir = Path("output/logs")
                 log_dir.mkdir(exist_ok=True)
                 
                 # Redirect to log files

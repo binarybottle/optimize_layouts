@@ -4,18 +4,8 @@
 Generate configuration files to run keyboard layout optimizations in parallel 
 with specific letter-to-key constraints specified in each file.
 
-This is Step 1 in a process to optimally arrange the 24 most frequent letters 
-in the 24 keys of the home block of a keyboard. 
-
-There are two versions of this script:
-  - generate_configs1.py generates an initial set of sparse keyboard layouts as config files.
-  - optimize_moo.py generates optimal keyboard layouts for a given config file.
-  - generate_configs2.py generates a new set of config files based on the optimal keyboard layouts.
-
-Usage: ``python generate_configs1.py``
+Usage: ``python generate_configs_from_scratch.py``
     
-See **README_keyboards.md** for a full description.
-
 See **README.md** for instructions to run batches of config files in parallel.
 
 """
@@ -23,28 +13,12 @@ import os
 import yaml
 import itertools
 
+#--------------------------------------------------------------------------------#
+# Parameters for generating configurations
+#--------------------------------------------------------------------------------#
 # Configuration: output directory and number of layouts per configuration
-OUTPUT_DIR = '../output/configs1'
+OUTPUT_DIR = '../output/configs'
 CONFIG_FILE = '../config.yaml'
-
-# Example with 13 letters to be arranged within 16 keys
-"""
-Configuration File Generation
-Fixed Items (etao):
-  - 'e' fixed to 4 positions: JKIL
-  - 't', 'a', 'o' fixed to 3 positions from remaining 7 tier1 positions (210 permutations)
-  - Total config files: 840
-
-Per-Configuration Search Space (with 9 items in 12 available positions)
-Constrained items ("nsrh"):
-  - 4 items in 12 constrained positions: 11,880 permutations
-Free items ("ldcu"):
-  - 4 items arranged in any of the remaining 8 positions: 1,680 permutations
-  - Per configuration total: 11,880 × 1,680 = 19,958,400 permutations
-Total Search Space
-  - 840 config files × 19,958,400 permutations = 16,765,056,000 total permutations
-
-"""
 
 # English letter frequency order:  etaoi / nsrh ldcu / mfpgwybvkxj / qz
 top_items = "etaoinsrhldcu" # Most frequent letters (English)
@@ -62,6 +36,9 @@ positions_for_item_1 = tier1_right_positions  # Constrain top item to these posi
 nfixed_items = 4  # Number of fixed items (if modify, update below permN's pos1...)
 nconstrained_items = 4  # Number of constrained items
 nconstrained_positions = 10  # Number of constrained positions
+#--------------------------------------------------------------------------------#
+
+# Derived parameters
 items_assigned  = top_items[:nfixed_items]           # First letters to assign
 items_to_assign = top_items[nfixed_items:ntop_items] # Remaining of top letters to assign
 items_to_constrain = top_items[nfixed_items:nfixed_items + nconstrained_items]

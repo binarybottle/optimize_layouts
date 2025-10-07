@@ -1,28 +1,26 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate configuration files from global Pareto optimal keyboard layouts.
-
-This is Step 2 in a process to optimally arrange the 24 most frequent letters 
-in the 24 keys of the home block of a keyboard. 
-
-This script takes the output from run_jobs.py 
-(and optionally layouts_[consolidate, compare, filter_scores, filter_patterns]) 
-and generates configuration files for the second optimization round with specific 
-letter-to-key constraints. If --remove-positions is specified, it will remove 
-positions from the global Pareto set, and remove redundant layouts.
+Generate configuration files to run keyboard layout optimizations in parallel 
+with specific letter-to-key constraints specified in each file.
+This script takes a csv file as input, such as from run_jobs.py 
+(and optionally layouts_[consolidate, compare, filter_scores, filter_patterns]). 
+If --remove-positions is specified, it will remove positions, 
+and remove redundant layouts.
 
 Usage:
-    # Use all global Pareto solutions, after removing items from specified positions
-    python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
-    
-    # Use "top" N solutions from global Pareto set with specific ranking criteria
-    python generate_configs2.py --input-file ../output/layouts_consolidate_moo_solutions.csv --top-n 50 --sort-by global_rank
+    # For 26-character layout, after removing items from specified positions
+    python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --layout-size 26 --remove-positions "A;"
 
-    # Study
-    poetry run python3 generate_configs2.py --input-file ../output/phase1/layouts_filtered_patterns_and_scores.csv
+    # For 24-character layout (default)
+    python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
 
-See **README_keyboards.md** for a full description.
+    # Test with filtered patterns
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns.csv --remove-positions "X.QPZ/C,WO"
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns.csv --remove-positions "X.QPZ/" --layout-size 26
+
+See **README.md** for instructions to run batches of config files in parallel.
+
 """
 import os
 import pandas as pd
@@ -85,7 +83,7 @@ def parse_global_pareto_csv(filepath: str) -> pd.DataFrame:
 def remove_specified_positions(positions, items, positions_to_remove):
     """
     Remove specified positions from a layout.
-    PRESERVES the original item order by only removing items at the specified positions.
+    Preserves the original item order by only removing items at the specified positions.
     
     Args:
         positions: String of positions from Step 1 (e.g., "FDESRJKUIMVLA;OW")
@@ -120,7 +118,7 @@ def remove_specified_positions(positions, items, positions_to_remove):
     if missing_positions:
         print(f"Warning: Requested positions not found in layout: {missing_positions}")
     
-    # Build remaining lists in ORIGINAL order
+    # Build remaining lists in original order
     remaining_positions = []
     remaining_items = []
     
@@ -139,7 +137,7 @@ def remove_specified_positions(positions, items, positions_to_remove):
 
 def generate_config_content(items_assigned, positions_assigned, items_to_assign, positions_to_assign,
                             least_frequent_items="", worst_positions=""):
-    """Generate YAML configuration content for Step 2."""
+    """Generate YAML configuration content."""
     
     config_template = f"""# Configuration file for item-to-position layout optimization.
 
@@ -151,7 +149,7 @@ paths:
   position_pair_score_table:    "input/engram_2key_scores.csv"
   item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
   position_triple_score_table:  "input/engram_3key_order_scores.csv"
-  layout_results_folder:        "output/layouts2"
+  layout_results_folder:        "output/layouts"
 
 #-----------------------------------------------------------------------
 # MOO (Multi-Objective Optimization) settings
@@ -178,10 +176,10 @@ moo:
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_assigned:       "{items_assigned}"
-  positions_assigned:   "{positions_assigned}"
-  items_to_assign:      "{items_to_assign}"
-  positions_to_assign:  "{positions_to_assign}"
+  items_assigned:          "{items_assigned}"
+  positions_assigned:      "{positions_assigned}"
+  items_to_assign:         "{items_to_assign}"
+  positions_to_assign:     "{positions_to_assign}"
   items_to_constrain:      "{least_frequent_items}"   
   positions_to_constrain:  "{worst_positions}"  
 
@@ -299,20 +297,29 @@ def main():
             else:
                 remaining_positions, remaining_items, removed_positions = positions, items, ""
 
-            # Get unassigned items and positions, maintaining original order
-            all_positions = "FJDKEISLVMRUWOA;C,Z/" #QPX."  # 24 positions
-            all_items_24  = "etaoinsrhldcumfpgwyb" #vkxj"  # English: 24 letters in order
-            #all_items_24 = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
+            if args.layout_size == 26:
+                all_positions = "FJDKEISLVMRUWOA;C,Z/QPX.'["  # 26 positions
+                all_items_26 =  "etaoinsrhldcumfpgwybvkxjqz"   # English: all 26 letters
+                # To constrain:
+                least_frequent_items = ""  # "qzxj"  # English
+                worst_positions = ""  # "Z/QPX.'["
+                layout_size = 26
+            else:
+                all_positions = "FJDKEISLVMRUWOA;C,Z/QPX."
+                all_items_24 = "etaoinsrhldcumfpgwybvkxj"   # English: 24 letters in order
+                #all_items_24 = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
+                # To constrain:
+                least_frequent_items = ""  # "xj"  # English
+                least_frequent_items = ""  # "zx"  # Spanish
+                worst_positions = ""  # "Z/QPX."
+                layout_size = 24
 
-            least_frequent_items = "" #"xj" # English
-            #least_frequent_items = "zx" # Spanish
-            worst_positions = "" #"Z/QPX."
+            all_items = all_items_26 if args.layout_size == 26 else all_items_24
 
             # Build items_assigned and items_to_assign in correct order
             items_assigned_ordered = ""
             items_to_assign_ordered = ""
-
-            for item in all_items_24:
+            for item in all_items:
                 # All items should be included, regardless of least_frequent_items
                 if item in remaining_items:
                     items_assigned_ordered += item
@@ -340,11 +347,11 @@ def main():
             # Ensure we have the right counts
             total_items = len(items_assigned_ordered) + len(items_to_assign_ordered)
             total_positions = len(remaining_positions) + len(unassigned_positions)
-            if total_items != 24:
-                print(f"Warning: Item count mismatch in config {config_num}. Assigned: {len(items_assigned_ordered)}, Unassigned: {len(items_to_assign_ordered)}, Total: {total_items}")
-            if total_positions != 24:
-                print(f"Warning: Position count mismatch in config {config_num}. Assigned: {len(remaining_positions)}, Unassigned: {len(unassigned_positions)}, Total: {total_positions}")
-            
+            if total_items != layout_size:
+                print(f"Warning: Item count mismatch...")
+            if total_positions != layout_size:
+                print(f"Warning: Position count mismatch...")
+
             # Generate config content using properly ordered items
             config_content = generate_config_content(
                 items_assigned_ordered, remaining_positions,
@@ -375,7 +382,6 @@ def main():
             error_count += 1
             continue
     
-    print(f"\nStep 2 complete!")
     print(f"Generated {configs_generated} configuration files in '{args.output_path}'")
     if error_count > 0:
         print(f"Skipped {error_count} layouts due to errors")
@@ -398,19 +404,19 @@ def parse_arguments():
         description='Generate Step 2 configurations from global Pareto optimal solutions',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Examples:
+Example:
   # Use all global Pareto solutions, after removing items from specified positions
-  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
-    
-  # Use "top" N solutions from global Pareto set with specific ranking criteria
-  python generate_configs2.py --input-file ../output/global_moo_solutions.csv --top-n 50 --sort-by global_rank
+  python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
         """
     )
     
     parser.add_argument('--input-file', type=str, required=True,
                        help='Path to global Pareto solutions CSV file')
-    parser.add_argument('--output-path', type=str, default='../output/configs2',
-                       help='Path to output Step 2 configurations')
+    parser.add_argument('--output-path', type=str, default='../output/configs',
+                       help='Path to output configuration files')
+    parser.add_argument('--layout-size', type=int, default=24,
+                       choices=[24, 26],
+                       help='Layout size: 24 or 26 characters (default: 24)')
     parser.add_argument('--remove-positions', type=str, required=False,
                        help='Positions to remove (e.g., "A;" for A and semicolon)')
     parser.add_argument('--top-n', type=int, default=None,
