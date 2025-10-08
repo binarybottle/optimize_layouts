@@ -20,10 +20,10 @@ Usage:
     python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
 
     # Keyboard layout optimization study commands:
-    # Step 2: Optimally arrange the next 10 most frequent letters to fill the top 20 keys.
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step1.csv
-    # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 6 letters).
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step2.csv --remove-positions "X.QPZ/" --layout-size 24
+    # Step 2: Optimally (re)arrange the next 10 most frequent letters (after unassigning 2 letters) to fill the top 18 keys.
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/moo_204_results_config_20251006_064050.csv --remove-positions "A;"
+    # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 4 letters).
+    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step2.csv --remove-positions "WOC," --layout-size 24
     # Step 4: Optimally assign the 8 least frequent of 26 letters to the 8 least preferred keys (after unassigning 6 letters).
     poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step3.csv --remove-positions "X.QPZ/" --layout-size 26
 
@@ -307,22 +307,29 @@ def main():
 
             if args.layout_size == 26:
                 all_positions = "FJDKEISLVMRUWOA;C,Z/QPX.'["  # 26 positions
-                all_items_26 =  "etaoinsrhldcumfpgwybvkxjqz"   # English: all 26 letters
+                all_items =  "etaoinsrhldcumfpgwybvkxjqz"   # English: all 26 letters
                 # To constrain:
                 least_frequent_items = ""  # "qzxj"  # English
-                worst_positions = ""  # "Z/QPX.'["
+                worst_positions = ""       # "Z/QPX.'["
                 layout_size = 26
-            else:
+            elif args.layout_size == 24:
                 all_positions = "FJDKEISLVMRUWOA;C,Z/QPX."
-                all_items_24 = "etaoinsrhldcumfpgwybvkxj"   # English: 24 letters in order
-                #all_items_24 = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
+                all_items = "etaoinsrhldcumfpgwybvkxj"   # English: 24 letters in order
+                #all_items = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
                 # To constrain:
                 least_frequent_items = ""  # "xj"  # English
                 least_frequent_items = ""  # "zx"  # Spanish
-                worst_positions = ""  # "Z/QPX."
+                worst_positions = ""       # "Z/QPX."
                 layout_size = 24
-
-            all_items = all_items_26 if args.layout_size == 26 else all_items_24
+            else:
+                all_positions = "FJDKEISLVMRUWOA;C,"  # Z/QPX."
+                all_items     = "etaoinsrhldcumfpgw"  # ybvkxj"  # English: 18 letters in order
+                #all_items    = "eaonisrldctumpbgvq"  # yhfjzx"  # Spanish: 18 letters in order
+                # To constrain:
+                least_frequent_items = ""  # "xj"  # English
+                least_frequent_items = ""  # "zx"  # Spanish
+                worst_positions = ""       # "Z/QPX."
+                layout_size = 18
 
             # Build items_assigned and items_to_assign in correct order
             items_assigned_ordered = ""
@@ -422,8 +429,7 @@ Example:
                        help='Path to global Pareto solutions CSV file')
     parser.add_argument('--output-path', type=str, default='../output/configs',
                        help='Path to output configuration files')
-    parser.add_argument('--layout-size', type=int, default=24,
-                       choices=[24, 26],
+    parser.add_argument('--layout-size', type=int,choices=[24, 26],
                        help='Layout size: 24 or 26 characters (default: 24)')
     parser.add_argument('--remove-positions', type=str, required=False,
                        help='Positions to remove (e.g., "A;" for A and semicolon)')

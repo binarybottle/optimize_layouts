@@ -26,6 +26,7 @@ OUTPUT_DIR = "output/layouts"
 TOTAL_CONFIGS = 1000
 SCRIPT_PATH = "optimize_layouts.py" 
 OBJECTIVES = "engram_order,engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
+
 # Adaptive scaling parameters
 MAX_MEMORY_PERCENT = 90  # Scale down if memory exceeds this
 MAX_CPU_PERCENT = 95     # Scale down if CPU exceeds this
