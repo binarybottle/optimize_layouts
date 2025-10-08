@@ -345,12 +345,20 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         summary_df = summary_df.sort_values('average_score', ascending=False)
         
         # Prepare output columns in requested order:
-        # layout, letters, positions, average_score, then original metrics
+        # layout, layout_qwerty (or letters+positions), average_score, then original metrics
         output_columns = ['layout']
         
-        # Add layout string columns if available
+        # Add layout string column(s) - detect if letters is full QWERTY layout or MOO format
         if has_layout_data:
-            output_columns.extend(['letters', 'positions'])
+            # Check if letters is full 32-char QWERTY layout format
+            sample_letters = summary_df['letters'].iloc[0] if len(summary_df) > 0 else ""
+            if len(sample_letters) == 32:
+                # Full QWERTY layout - rename to layout_qwerty for display_layouts.py compatibility
+                summary_df = summary_df.rename(columns={'letters': 'layout_qwerty'})
+                output_columns.append('layout_qwerty')
+            else:
+                # MOO format or other - keep both letters and positions
+                output_columns.extend(['letters', 'positions'])
         
         # Add average score column
         output_columns.append('average_score')
@@ -1101,7 +1109,7 @@ Supported CSV formats (auto-detected):
                        help='Generate comprehensive analysis report')
     parser.add_argument('--sort-by',
                        help='Metric to sort by in scatter plot (default: first metric)')
-    parser.add_argument('--output-dir', default='../output',
+    parser.add_argument('--output-dir', default='output',
                        help='Output directory for report and plots without explicit paths')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Print detailed information')

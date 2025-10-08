@@ -8,7 +8,7 @@ solutions while preserving global optimality guarantees.
 
 Key Features:
 - Branch-and-bound with multi-objective upper bound calculation (faster)
-- Exhaustive enumeration (slower but guaranteed complete)
+- Exhaustive enumeration (slower but guaranteed complete, DEFAULT)
 - Pareto dominance checking and front maintenance
 - Constraint handling for partial assignments
 - Progress tracking and termination conditions
@@ -16,11 +16,11 @@ Key Features:
 - JIT-compiled performance-critical functions
 
 Usage:
-    # Branch-and-bound (default, faster)
-    pareto_front, stats = moo_search(config, scorer, search_mode='branch-bound')
-    
-    # Exhaustive enumeration (slower, guaranteed complete)
+    # Exhaustive enumeration (default, slower but guaranteed complete)
     pareto_front, stats = moo_search(config, scorer, search_mode='exhaustive')
+    
+    # Branch-and-bound (faster)
+    pareto_front, stats = moo_search(config, scorer, search_mode='branch-bound')
 """
 
 import numpy as np
@@ -236,7 +236,7 @@ class MOOUpperBoundCalculator:
         # Find the unassigned item and available positions
         unassigned_item = next(i for i in range(len(partial_mapping)) if partial_mapping[i] < 0)
         
-        # FIXED: used_positions corresponds to available positions in search, not all scorer positions
+        # used_positions corresponds to available positions in search, not all scorer positions
         available_positions = [i for i in range(len(used_positions)) if not used_positions[i]]
         
         # Test all possible assignments for the remaining item
@@ -417,39 +417,49 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     """
     opt = config.optimization
     
-    # Handle the correct semantics - items_to_assign are the ones being optimized
-    items_list = list(opt.items_to_assign)  # Items being optimized
-    positions_list = list(opt.positions_to_assign)  # Positions available for optimization
+    # Get items and positions
+    items_to_optimize = list(opt.items_to_assign)  # Items being optimized
+    positions_available = list(opt.positions_to_assign)  # Positions available for optimization
     
-    # Get pre-assignment info for solution construction
+    # Get pre-assignment info
     items_assigned = list(opt.items_assigned) if opt.items_assigned else []
     positions_assigned = list(opt.positions_assigned) if opt.positions_assigned else []
     
-    n_items = len(items_list)
-    n_positions = len(positions_list)
+    # Create FULL item and position lists (matching scorer's view)
+    all_items = items_assigned + items_to_optimize
+    all_positions = positions_assigned + positions_available
     
-    # Set up constraint arrays
+    n_items_total = len(all_items)  # Total items (for mapping array)
+    n_items_to_optimize = len(items_to_optimize)  # Items to search over
+    n_positions_total = len(all_positions)  # Total positions
+    
+    # Set up constraint arrays using FULL lists
     constrained_items = np.array([
-        i for i, item in enumerate(items_list) 
+        i for i, item in enumerate(all_items) 
         if item in opt.items_to_constrain_set
     ], dtype=np.int32)
     
     constrained_positions = np.array([
-        i for i, pos in enumerate(positions_list) 
+        i for i, pos in enumerate(all_positions) 
         if pos.upper() in opt.positions_to_constrain_set
     ], dtype=np.int32)
     
     if len(constrained_items) > 0:
-        print(f"  Constrained items: {[items_list[i] for i in constrained_items]}")
-        print(f"  Constraint positions: {[positions_list[i] for i in constrained_positions]}")
+        print(f"  Constrained items: {[all_items[i] for i in constrained_items]}")
+        print(f"  Constraint positions: {[all_positions[i] for i in constrained_positions]}")
     
-    # Initialize search state
-    initial_mapping = np.full(n_items, -1, dtype=np.int16)
-    initial_used = np.zeros(n_positions, dtype=bool)
+    # Initialize search state with FULL mapping array
+    initial_mapping = np.full(n_items_total, -1, dtype=np.int16)
+    initial_used = np.zeros(n_positions_total, dtype=bool)
     
-    # Handle pre-assigned items - NOTE: These are already handled in the scorer
-    if opt.items_assigned:
-        print(f"  Pre-assigned: {list(opt.items_assigned)} -> {list(opt.positions_assigned)}")
+    # Pre-fill preassigned items in mapping
+    if items_assigned and positions_assigned:
+        print(f"  Pre-assigned: {items_assigned} -> {positions_assigned}")
+        for item, pos in zip(items_assigned, positions_assigned):
+            item_idx = all_items.index(item)
+            pos_idx = all_positions.index(pos.upper())
+            initial_mapping[item_idx] = pos_idx
+            initial_used[pos_idx] = True
     
     # Initialize upper bound calculator
     bound_calc = MOOUpperBoundCalculator(scorer)
@@ -458,23 +468,23 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     if len(constrained_items) > 0:
         # Two-phase constraint handling
         phase1_perms = factorial(len(constrained_positions)) // factorial(len(constrained_positions) - len(constrained_items)) if len(constrained_positions) >= len(constrained_items) else 0
-        remaining_items = n_items - len(constrained_items)
-        remaining_positions = n_positions - len(constrained_items)
+        remaining_items = n_items_to_optimize - len(constrained_items)
+        remaining_positions = len(positions_available) - len(constrained_items)
         phase2_perms = factorial(remaining_positions) // factorial(remaining_positions - remaining_items) if remaining_positions >= remaining_items else 0
         estimated_nodes = phase1_perms * phase2_perms * 2
     else:
         # Single phase
-        total_perms = factorial(n_positions) // factorial(n_positions - n_items) if n_positions >= n_items else 0
+        total_perms = factorial(len(positions_available)) // factorial(len(positions_available) - n_items_to_optimize) if len(positions_available) >= n_items_to_optimize else 0
         estimated_nodes = total_perms * 2  # Rough estimate including internal nodes
     
     if verbose:
         print("Starting Branch-and-Bound Multi-Objective Search...")
-        print(f"  Items to assign: {items_list}")
-        print(f"  Available positions: {positions_list}")
+        print(f"  Items to assign: {items_to_optimize}")
+        print(f"  Available positions: {positions_available}")
         print(f"  Search limits: {max_solutions or 'unlimited'} solutions, {time_limit or 'unlimited'} seconds")
         print(f"  Estimated search nodes: {estimated_nodes:,}")
     else:
-        print(f"Branch-and-bound search: {n_items} items in {n_positions} positions...")
+        print(f"Branch-and-bound search: {n_items_to_optimize} items in {len(positions_available)} positions...")
         print(f"  Estimated search nodes: {estimated_nodes:,}")
 
     # Initialize search data structures
@@ -516,7 +526,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
                 scorer.clear_cache()
             
             # Check if solution is complete
-            if current_depth == n_items:
+            if current_depth == n_items_total:
                 # Validate constraints
                 if len(constrained_items) > 0:
                     if not validate_constraints_jit(current_mapping, constrained_items, constrained_positions):
@@ -532,14 +542,10 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
                 # Create complete solution including pre-assignments
                 complete_mapping = {}
                 
-                # Add pre-assigned items first
-                for item, pos in zip(items_assigned, positions_assigned):
-                    complete_mapping[item] = pos
-                
-                # Add optimized items
-                for i in range(n_items):
-                    item = items_list[i]
-                    pos = positions_list[current_mapping[i]]
+                # Add ALL items (preassigned + optimized)
+                for i in range(len(all_items)):
+                    item = all_items[i]
+                    pos = all_positions[current_mapping[i]]
                     complete_mapping[item] = pos
                 
                 new_solution = {
@@ -558,27 +564,12 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
                 # Calculate upper bound vector for this partial solution
                 upper_bound_vector = bound_calc.calculate_upper_bound_vector(current_mapping, current_used)
 
-                # DEBUG
-                #if stats.nodes_processed <= 100 or stats.nodes_processed % 10 == 0:  # Debug first 100 nodes, then every 10th
-                #    unassigned_count = sum(1 for x in current_mapping if x == -1)
-                #    print(f"Node {stats.nodes_processed}: {unassigned_count} unassigned, bounds: {[f'{x:.3f}' for x in upper_bound_vector]}")
-                #    if len(pareto_front) > 0:
-                #        print(f"  Best Pareto: {[f'{x:.3f}' for x in pareto_front[0]['objectives']]}")
-
                 # Check if this branch can be pruned
                 can_prune = False
-                dominating_solution_idx = -1
-                for j, pareto_solution in enumerate(pareto_front):
+                for pareto_solution in pareto_front:
                     if pareto_dominates(pareto_solution['objectives'], upper_bound_vector):
                         can_prune = True
-                        dominating_solution_idx = j
                         break
-                
-                # DEBUG
-                #if can_prune and stats.nodes_processed <= 100:
-                #    print(f"  -> PRUNED by solution {dominating_solution_idx}")
-                #elif not can_prune and stats.nodes_processed <= 20:
-                #    print(f"  -> CONTINUE (not dominated)")
                 
                 if can_prune:
                     stats.nodes_pruned += 1
@@ -593,7 +584,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
             if next_item in constrained_items:
                 valid_positions = [pos for pos in constrained_positions if not current_used[pos]]
             else:
-                valid_positions = [pos for pos in range(n_positions) if not current_used[pos]]
+                valid_positions = [pos for pos in range(n_positions_total) if not current_used[pos]]
             
             # Try each valid position (add to stack in reverse order for consistent ordering)
             for pos in reversed(valid_positions):
@@ -610,7 +601,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
         pbar = tqdm(total=min(estimated_nodes, 1000000), desc="Searching", unit=" nodes")
     
     try:
-        dfs_search_with_pruning(initial_mapping, initial_used, 0, pbar)
+        dfs_search_with_pruning(initial_mapping, initial_used, len(items_assigned), pbar)
         
         # Update final progress
         if pbar:
@@ -644,7 +635,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     return pareto_front, stats
 
 
-def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions: Optional[int] = None, 
+def exhaustive_moo_search(config: Config, scorer, search_mode: str, max_solutions: Optional[int] = None, 
                          time_limit: Optional[float] = None, progress_bar: bool = True,
                          verbose: bool = False) -> Tuple[List[Dict], SearchStats]:
     """
@@ -656,6 +647,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
     Args:
         config: Configuration object with optimization settings
         scorer: Multi-objective scorer (WeightedMOOScorer)
+        search_mode: Search mode string for reporting
         max_solutions: Maximum number of solutions to find (None for unlimited)
         time_limit: Time limit in seconds (None for unlimited)
         progress_bar: Whether to show progress bar
@@ -666,61 +658,71 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
     """
     opt = config.optimization
     
-    # Handle the correct semantics - items_to_assign are the ones being optimized
-    items_list = list(opt.items_to_assign)  # Items being optimized
-    positions_list = list(opt.positions_to_assign)  # Positions available for optimization
+    # Get items and positions
+    items_to_optimize = list(opt.items_to_assign)  # Items being optimized
+    positions_available = list(opt.positions_to_assign)  # Positions available for optimization
     
-    # Get pre-assignment info for solution construction
+    # Get pre-assignment info
     items_assigned = list(opt.items_assigned) if opt.items_assigned else []
     positions_assigned = list(opt.positions_assigned) if opt.positions_assigned else []
     
-    n_items = len(items_list)
-    n_positions = len(positions_list)
+    # Create FULL item and position lists (matching scorer's view)
+    all_items = items_assigned + items_to_optimize
+    all_positions = positions_assigned + positions_available
     
-    # Set up constraint arrays
+    n_items_total = len(all_items)  # Total items (for mapping array)
+    n_items_to_optimize = len(items_to_optimize)  # Items to search over
+    n_positions_total = len(all_positions)  # Total positions
+    
+    # Set up constraint arrays using FULL lists
     constrained_items = np.array([
-        i for i, item in enumerate(items_list) 
+        i for i, item in enumerate(all_items) 
         if item in opt.items_to_constrain_set
     ], dtype=np.int32)
     
     constrained_positions = np.array([
-        i for i, pos in enumerate(positions_list) 
+        i for i, pos in enumerate(all_positions) 
         if pos.upper() in opt.positions_to_constrain_set
     ], dtype=np.int32)
     
     if len(constrained_items) > 0:
-        print(f"  Constrained items: {[items_list[i] for i in constrained_items]}")
-        print(f"  Constraint positions: {[positions_list[i] for i in constrained_positions]}")
+        print(f"  Constrained items: {[all_items[i] for i in constrained_items]}")
+        print(f"  Constraint positions: {[all_positions[i] for i in constrained_positions]}")
     
-    # Initialize search state
-    initial_mapping = np.full(n_items, -1, dtype=np.int16)
-    initial_used = np.zeros(n_positions, dtype=bool)
+    # Initialize search state with FULL mapping array
+    initial_mapping = np.full(n_items_total, -1, dtype=np.int16)
+    initial_used = np.zeros(n_positions_total, dtype=bool)
     
-    # Handle pre-assigned items
-    if opt.items_assigned:
-        print(f"  Pre-assigned: {list(opt.items_assigned)} -> {list(opt.positions_assigned)}")
+    # Pre-fill preassigned items in mapping
+    if items_assigned and positions_assigned:
+        print(f"  Pre-assigned: {items_assigned} -> {positions_assigned}")
+        for item, pos in zip(items_assigned, positions_assigned):
+            item_idx = all_items.index(item)
+            pos_idx = all_positions.index(pos.upper())
+            initial_mapping[item_idx] = pos_idx
+            initial_used[pos_idx] = True
     
     # Calculate search space size for progress estimation
     if len(constrained_items) > 0:
         # Two-phase constraint handling
         phase1_perms = factorial(len(constrained_positions)) // factorial(len(constrained_positions) - len(constrained_items)) if len(constrained_positions) >= len(constrained_items) else 0
-        remaining_items = n_items - len(constrained_items)
-        remaining_positions = n_positions - len(constrained_items)
+        remaining_items = n_items_to_optimize - len(constrained_items)
+        remaining_positions = len(positions_available) - len(constrained_items)
         phase2_perms = factorial(remaining_positions) // factorial(remaining_positions - remaining_items) if remaining_positions >= remaining_items else 0
         estimated_nodes = phase1_perms * phase2_perms * 2
     else:
         # Single phase
-        total_perms = factorial(n_positions) // factorial(n_positions - n_items) if n_positions >= n_items else 0
+        total_perms = factorial(len(positions_available)) // factorial(len(positions_available) - n_items_to_optimize) if len(positions_available) >= n_items_to_optimize else 0
         estimated_nodes = total_perms * 2  # Rough estimate including internal nodes
     
     if verbose:
         print("Starting Exhaustive Multi-Objective Search...")
-        print(f"  Items to assign: {items_list}")
-        print(f"  Available positions: {positions_list}")
+        print(f"  Items to assign: {items_to_optimize}")
+        print(f"  Available positions: {positions_available}")
         print(f"  Search limits: {max_solutions or 'unlimited'} solutions, {time_limit or 'unlimited'} seconds")
         print(f"  Estimated search nodes: {estimated_nodes:,}")
     else:
-        print(f"Exhaustive search: {n_items} items in {n_positions} positions...")
+        print(f"Exhaustive search: {n_items_to_optimize} items in {len(positions_available)} positions...")
         print(f"  Estimated search nodes: {estimated_nodes:,}")
 
     # Initialize search data structures
@@ -761,7 +763,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
                 scorer.clear_cache()
             
             # Check if solution is complete
-            if current_depth == n_items:
+            if current_depth == n_items_total:
                 # Validate constraints
                 if len(constrained_items) > 0:
                     if not validate_constraints_jit(current_mapping, constrained_items, constrained_positions):
@@ -777,14 +779,10 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
                 # Create complete solution including pre-assignments
                 complete_mapping = {}
                 
-                # Add pre-assigned items first
-                for item, pos in zip(items_assigned, positions_assigned):
-                    complete_mapping[item] = pos
-                
-                # Add optimized items
-                for i in range(n_items):
-                    item = items_list[i]
-                    pos = positions_list[current_mapping[i]]
+                # Add ALL items (preassigned + optimized)
+                for i in range(len(all_items)):
+                    item = all_items[i]
+                    pos = all_positions[current_mapping[i]]
                     complete_mapping[item] = pos
                 
                 new_solution = {
@@ -806,7 +804,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
             if next_item in constrained_items:
                 valid_positions = [pos for pos in constrained_positions if not current_used[pos]]
             else:
-                valid_positions = [pos for pos in range(n_positions) if not current_used[pos]]
+                valid_positions = [pos for pos in range(n_positions_total) if not current_used[pos]]
             
             # Try each valid position (add to stack in reverse order for consistent ordering)
             for pos in reversed(valid_positions):
@@ -823,7 +821,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
         pbar = tqdm(total=min(estimated_nodes, 1000000), desc="Searching", unit=" nodes")
     
     try:
-        dfs_search_exhaustive(initial_mapping, initial_used, 0, pbar)
+        dfs_search_exhaustive(initial_mapping, initial_used, len(items_assigned), pbar)
         
         # Update final progress
         if pbar:
@@ -861,7 +859,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str,max_solutions
 
 def moo_search(config: Config, scorer, max_solutions: Optional[int] = None, 
                time_limit: Optional[float] = None, progress_bar: bool = True,
-               verbose: bool = False, search_mode: str = 'branch-bound') -> Tuple[List[Dict], SearchStats]:
+               verbose: bool = False, search_mode: str = 'exhaustive') -> Tuple[List[Dict], SearchStats]:
     """
     Multi-objective Pareto search with selectable algorithm.
     
@@ -872,7 +870,7 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
         time_limit: Time limit in seconds (None for unlimited)
         progress_bar: Whether to show progress bar
         verbose: Whether to show detailed output
-        search_mode: 'branch-bound' (faster) or 'exhaustive' (complete)
+        search_mode: 'exhaustive' (default, guaranteed complete) or 'branch-bound' (faster)
         
     Returns:
         Tuple of (pareto_front, search_stats)
@@ -899,7 +897,7 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
             config, scorer, max_solutions, time_limit, progress_bar, verbose)
     
     else:
-        raise ValueError(f"Unknown search mode: {search_mode}. Use 'branch-bound' or 'exhaustive'")
+        raise ValueError(f"Unknown search mode: {search_mode}. Use 'exhaustive' or 'branch-bound'")
 
 
 def analyze_pareto_front(pareto_front: List[Dict], objective_names: Optional[List[str]] = None) -> None:

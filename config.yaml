@@ -31,8 +31,8 @@ moo:
 # Optimization settings
 #
 # Example keyboard layout optimization problem:
-#   Items:     etaoinsrhl dcumfpgwyb vkxj qz
-#   Positions: FJDKEISLVM RUWOA;C,Z/ QPX. '[
+#   Items:     etaoinsrhl dcumfpgwyb vkxjqz
+#   Positions: FJDKEISLVM RUWOA;C,Z/ QPX.'[
 #-----------------------------------------------------------------------
 #   _to_assign:    Items to arrange in available positions
 #   _assigned:     Items already assigned to positions
