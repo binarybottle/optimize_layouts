@@ -572,7 +572,7 @@ def main():
                        help='Generate statistical report')
     parser.add_argument('--plot', action='store_true',
                        help='Generate visualization showing retained vs removed data')
-    parser.add_argument('--output-dir', default='output',
+    parser.add_argument('--output-dir', default='../output',
                        help='Output directory for reports and plots')
     
     parser.add_argument('--verbose', '-v', action='store_true',

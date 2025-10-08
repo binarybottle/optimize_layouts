@@ -501,7 +501,7 @@ def main():
                        help='QWERTY position characters where forbidden letters should not appear (e.g., "A;R")')
     
     # Output options
-    parser.add_argument('--output-dir', default='output',
+    parser.add_argument('--output-dir', default='../output',
                        help='Output directory for reports')
     parser.add_argument('--report', action='store_true',
                        help='Generate filtering report')

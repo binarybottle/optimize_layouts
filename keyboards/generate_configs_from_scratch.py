@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate configuration files to run keyboard layout optimizations in parallel 
-with specific letter-to-key constraints specified in each file.
+Generate configuration files to run layout optimizations in parallel 
+with specific item-to-position constraints specified in each file.
 
 Usage: ``python generate_configs_from_scratch.py``
     

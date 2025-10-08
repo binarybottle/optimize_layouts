@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Keyboard layout comparison with metric filtering and average-based sorting
+Comprehensive Keyboard Layout Comparison and Visualization Tool
 
-Creates parallel coordinates and heatmap plots comparing keyboard layouts 
-across performance metrics, and allows filtering to specific metrics in a specified order.
-Layouts are automatically sorted by average performance across selected metrics.
+Combines metric comparison, visualization, and analysis for keyboard layouts.
+Creates parallel coordinates, heatmaps, scatter plots, Pareto fronts, correlation
+matrices, and stability analysis. Supports multiple CSV formats with auto-detection.
 
 Data Format Support (Auto-Detected)
 ===============================================
@@ -20,42 +20,31 @@ Column Meanings:
 - items: Letters in assignment order (e.g., "etaoinsrhldcum")
 - positions/keys: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
 
-Core metrics are recommended by default. Experimental distance/efficiency 
-and time/speed metrics can be included but have significant limitations:
-- Distance metrics oversimplify biomechanics (ignore lateral stretching, finger strength, etc.)
-- Time metrics contain QWERTY practice bias from empirical data
-
 Examples:
-    # Standard format with layout_qwerty column (preferred)
-    python compare_layouts.py --tables layout_scores.csv
+    # Basic comparison with auto-detected metrics
+    python layouts_compare.py --tables layout_scores.csv
 
-    # MOO format with items + positions (auto-converted)
-    python compare_layouts.py --tables moo_results.csv --metrics engram dvorak7 comfort
+    # Multiple tables with specific metrics
+    python layouts_compare.py --tables scores1.csv scores2.csv \
+        --metrics engram_avg4_score comfort dvorak7
 
-    # Core metrics only (recommended)
-    python compare_layouts.py \
-        --metrics engram_avg4_score dvorak7 comfort_combo comfort comfort_key \
-        --tables layout_scores.csv
+    # Full analysis with all visualizations and report
+    python layouts_compare.py --tables layouts.csv \
+        --metrics engram_key_preference engram_avg4_score comfort \
+        --plot --report --summary summary.csv
 
-    # Include experimental distance/time metrics (caution: limitations noted above)
-    python compare_layouts.py --metrics engram_avg4_score comfort comfort_key dvorak7 \
-        --tables layout_scores.csv --experimental-metrics
+    # Sort scatter plot by specific metric
+    python layouts_compare.py --tables layouts.csv \
+        --metrics engram comfort dvorak7 --plot --sort-by comfort
 
-    # Create plots with specific metrics and save summary
-    python compare_layouts.py --tables layouts.csv \
-        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside \
-        --summary summary.csv
-    
-    # Compare multiple tables with core metrics
-    python compare_layouts.py --metrics engram_avg4_score comfort comfort_key dvorak7 \
-        --output output/compare_layouts.png --tables layout_scores1.csv layout_scores2.csv
-
-    # Study
-    poetry run python3 compare_layouts.py \
-        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_avg4_score \
-        --output ../output/compare_layouts.png \
-        --tables ../output/layouts_filter_patterns.csv ../output/moo2-1in4-4in8-9in16/layouts_compare_results.csv
-    
+    # Keyboard layout optimization study command:
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/step4_8in26/layouts_filter_patterns_7254_to_936.csv \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
+        --output compare_layouts \
+        --summary compare_layouts.csv \
+        --sort-by engram_same_row \
+        --report --plot --verbose
 
 Input format examples:
   
@@ -63,24 +52,13 @@ Input format examples:
   layout,layout_qwerty,engram,dvorak7,comfort
   Dvorak,',.pyfgcrlaeoiduhtns;qjkxbmwvz,0.712,0.698,0.654
   
-  Standard format:
-  layout,letters,positions,engram,dvorak7,comfort
-  Dvorak,',.pyfgcrlaeoiduhtns;qjkxbmwvz,QWERTYUIOPASDFGHJKL;ZXCVBNM,./[',0.712,0.698,0.654
-  
   MOO format (auto-converted):
   config_id,items,positions,engram_key_preference,engram_avg4_score
   2438,etaoinsrhldcum,KJ;ASDVRLFUEIM,0.742,0.960
 
 Summary output:
   CSV with columns: index, layout, [layout_qwerty, positions], average_score, [metric_values]
-  - index: 1-based ranking by performance
-  - layout_qwerty: what letter is at each QWERTY position (preferred format)
-  - positions: QWERTY reference positions  
   Layouts ordered by average performance across selected metrics (higher = better)
-  
-Performance-based coloring:
-  Parallel plot lines are colored from dark red (best) to light red (worst) based on average performance.
-
 """
 
 import argparse
@@ -88,10 +66,37 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+import matplotlib.cm as cm
+import seaborn as sns
 from pathlib import Path
 import sys
 from typing import List, Dict, Tuple, Optional
-import matplotlib.cm as cm
+from collections import defaultdict
+from datetime import datetime
+
+# High-contrast color palette for visualizations
+PLOT_COLORS = [
+    '#1f77b4',  # Blue
+    '#000000',  # Black  
+    '#2ca02c',  # Green
+    '#ff9896',  # Light Red
+    '#d62728',  # Red
+    '#008080',  # Teal
+    '#17becf',  # Cyan
+    '#800080',  # Purple
+    '#9467bd',  # Purple
+    '#8c564b',  # Brown
+    '#e377c2',  # Pink
+    '#7f7f7f',  # Gray
+    '#bcbd22',  # Olive
+]
+
+def get_colors(n_colors: int) -> List[str]:
+    """Get high-contrast colors, cycling if needed."""
+    if n_colors <= len(PLOT_COLORS):
+        return PLOT_COLORS[:n_colors]
+    else:
+        return [PLOT_COLORS[i % len(PLOT_COLORS)] for i in range(n_colors)]
 
 def parse_layout_string(layout_string: str) -> tuple:
     """Parse layout string to extract letters and their positions."""
@@ -186,9 +191,6 @@ def load_layout_data(file_path: str, verbose: bool = False) -> pd.DataFrame:
         if positions_col and positions_col != 'positions':
             df = df.rename(columns={positions_col: 'positions'})
         
-        # Note: The script already handles the conversion internally in parse_layout_string
-        # if needed for MOO format items+positions
-        
         # Find scorer columns (numeric columns after layout, letters, positions)
         scorer_columns = []
         for col in df.columns[3:]:  # Skip layout, letters, positions
@@ -219,30 +221,8 @@ def find_available_metrics(dfs: List[pd.DataFrame], verbose: bool = False) -> Li
     
     if verbose:
         print(f"\nFound {len(available_metrics)} scorer metrics available:")
-        
-        # Categorize metrics for better display
-        core_metrics = []
-        experimental_metrics = []
-        
-        for metric in available_metrics:
-            metric_lower = metric.lower()
-            if (metric_lower.startswith('distance') or metric_lower.startswith('efficiency') or
-                metric_lower.startswith('time') or metric_lower.startswith('speed') or
-                metric_lower == 'distance' or metric_lower == 'efficiency' or
-                metric_lower == 'time' or metric_lower == 'speed'):
-                experimental_metrics.append(metric)
-            else:
-                core_metrics.append(metric)
-        
-        if core_metrics:
-            print(f"  Core metrics ({len(core_metrics)}):")
-            for i, metric in enumerate(core_metrics):
-                print(f"    {i+1:2d}. {metric}")
-        
-        if experimental_metrics:
-            print(f"  Experimental metrics ({len(experimental_metrics)}) - use with caution:")
-            for i, metric in enumerate(experimental_metrics):
-                print(f"    {i+1:2d}. {metric}")
+        for i, metric in enumerate(available_metrics):
+            print(f"  {i+1:2d}. {metric}")
     
     return available_metrics
 
@@ -308,7 +288,7 @@ def normalize_data(dfs: List[pd.DataFrame], metrics: List[str]) -> List[pd.DataF
     
     return normalized_dfs
 
-def get_colors(num_tables: int) -> List[str]:
+def get_table_colors(num_tables: int) -> List[str]:
     """Get color scheme based on number of tables."""
     if num_tables == 1:
         return ['gray']
@@ -553,6 +533,8 @@ def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str],
         print(f"Heatmap saved to {heatmap_path}")
     else:
         plt.show()
+    
+    plt.close()
 
 def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str], 
                         metrics: List[str], output_path: Optional[str] = None,
@@ -587,7 +569,7 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
         print(f"Using performance-based coloring for {total_layouts} layouts")
     else:
         # Use original table-based coloring
-        colors = get_colors(len(dfs))
+        colors = get_table_colors(len(dfs))
     
     # Plot parameters
     x_positions = range(len(metrics))
@@ -691,6 +673,366 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
         print(f"Parallel plot saved to {parallel_path}")
     else:
         plt.show()
+    
+    plt.close()
+
+def plot_objective_scatter(dfs: List[pd.DataFrame], table_names: List[str],
+                          metrics: List[str], output_path: Optional[str] = None,
+                          sort_by: Optional[str] = None) -> None:
+    """Create scatter plot of objective scores."""
+    if not metrics:
+        return
+    
+    # Combine all dataframes
+    all_data = []
+    for df, table_name in zip(dfs, table_names):
+        df_copy = df.copy()
+        if len(dfs) > 1:
+            df_copy['table'] = table_name
+        all_data.append(df_copy)
+    
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    # Determine sort column
+    if sort_by and sort_by in metrics:
+        sort_col = sort_by
+    else:
+        sort_col = metrics[0]  # Default to first metric
+    
+    # Sort by selected metric
+    df_sorted = combined_df.sort_values(sort_col, ascending=False)
+    
+    plt.figure(figsize=(14, 8))
+    
+    colors = get_colors(len(metrics))
+    x_positions = range(len(df_sorted))
+    
+    for i, metric in enumerate(metrics):
+        if metric in df_sorted.columns:
+            plt.scatter(x_positions, df_sorted[metric], 
+                       marker='.', s=1, alpha=0.7, 
+                       label=metric, color=colors[i])
+    
+    plt.xlabel(f'Solution Index (sorted by {sort_col})')
+    plt.ylabel('Objective Score')
+    plt.title(f'Multi-Objective Scores ({len(df_sorted):,} solutions)')
+    
+    try:
+        legend = plt.legend(markerscale=20, frameon=True)
+        if legend:
+            legend.get_frame().set_alpha(0.9)
+    except Exception as e:
+        print(f"Warning: Could not create legend: {e}")
+        
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    if output_path:
+        if output_path.endswith('.png'):
+            scatter_path = output_path.replace('.png', '_scatter.png')
+        else:
+            scatter_path = output_path + '_scatter.png'
+        plt.savefig(scatter_path, dpi=300, bbox_inches='tight')
+        print(f"Scatter plot saved to {scatter_path}")
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_pareto_front_2d(dfs: List[pd.DataFrame], table_names: List[str],
+                        metrics: List[str], output_path: Optional[str] = None) -> None:
+    """Create 2D Pareto front if we have exactly 2 objectives."""
+    if len(metrics) != 2:
+        return
+    
+    # Combine all dataframes
+    all_data = []
+    for df, table_name in zip(dfs, table_names):
+        df_copy = df.copy()
+        if len(dfs) > 1:
+            df_copy['table'] = table_name
+        all_data.append(df_copy)
+    
+    combined_df = pd.concat(all_data, ignore_index=True)
+    
+    x_col, y_col = metrics[0], metrics[1]
+    has_tables = 'table' in combined_df.columns and len(dfs) > 1
+    
+    plt.figure(figsize=(12, 8))
+    
+    if has_tables:
+        # Color by table
+        colors = get_colors(len(table_names))
+        table_color_map = dict(zip(table_names, colors))
+        
+        for table_name in table_names:
+            table_data = combined_df[combined_df['table'] == table_name]
+            plt.scatter(table_data[x_col], table_data[y_col], 
+                       alpha=0.6, s=50, label=f'{table_name} ({len(table_data)})',
+                       color=table_color_map[table_name])
+        
+        try:
+            legend = plt.legend(loc='center left', bbox_to_anchor=(1, 0.5), frameon=True)
+            if legend:
+                legend.get_frame().set_alpha(0.9)
+        except Exception as e:
+            print(f"Warning: Could not create legend: {e}")
+            
+        title_suffix = " - Colored by Table"
+    else:
+        plt.scatter(combined_df[x_col], combined_df[y_col], 
+                   alpha=0.6, s=50, color='blue')
+        title_suffix = ""
+    
+    plt.xlabel(x_col)
+    plt.ylabel(y_col)
+    plt.title(f'2D Objective Space{title_suffix} ({len(combined_df):,} solutions)')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    
+    if output_path:
+        if output_path.endswith('.png'):
+            pareto_path = output_path.replace('.png', '_pareto2d.png')
+        else:
+            pareto_path = output_path + '_pareto2d.png'
+        plt.savefig(pareto_path, dpi=300, bbox_inches='tight')
+        print(f"2D Pareto plot saved to {pareto_path}")
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_correlation_matrix(dfs: List[pd.DataFrame], table_names: List[str],
+                           metrics: List[str], output_path: Optional[str] = None) -> None:
+    """Create correlation matrix of objectives."""
+    if len(metrics) < 2:
+        return
+    
+    # Combine all dataframes
+    all_data = pd.concat(dfs, ignore_index=True)
+    
+    # Get objective data
+    obj_data = all_data[metrics].dropna()
+    if obj_data.empty:
+        return
+        
+    corr_matrix = obj_data.corr()
+    
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0,
+               square=True, linewidths=0.5, fmt='.2f')
+    plt.title(f'Metric Correlation Matrix ({len(obj_data):,} solutions)')
+    plt.tight_layout()
+    
+    if output_path:
+        if output_path.endswith('.png'):
+            corr_path = output_path.replace('.png', '_correlation.png')
+        else:
+            corr_path = output_path + '_correlation.png'
+        plt.savefig(corr_path, dpi=300, bbox_inches='tight')
+        print(f"Correlation matrix saved to {corr_path}")
+    else:
+        plt.show()
+    
+    plt.close()
+
+def plot_stability_matrix(dfs: List[pd.DataFrame], table_names: List[str],
+                         output_path: Optional[str] = None) -> None:
+    """Create letter-position stability heatmap."""
+    # Combine all dataframes
+    all_data = pd.concat(dfs, ignore_index=True)
+    
+    if 'items' not in all_data.columns or 'positions' not in all_data.columns:
+        return
+        
+    print("Creating stability matrix...")
+    
+    # Calculate assignment frequencies
+    letter_positions = defaultdict(set)
+    position_letters = defaultdict(set)
+    assignment_counts = defaultdict(int)
+    
+    for _, row in all_data.iterrows():
+        items = list(row['items'])
+        positions = list(row['positions'])
+        
+        for letter, position in zip(items, positions):
+            letter_positions[letter].add(position)
+            position_letters[position].add(letter)
+            assignment_counts[(letter, position)] += 1
+    
+    # Sort by stability (fewer positions/letters = more stable)
+    letters_by_stability = sorted(letter_positions.keys(), 
+                                key=lambda x: len(letter_positions[x]))
+    positions_by_stability = sorted(position_letters.keys(), 
+                                  key=lambda x: len(position_letters[x]))
+    
+    # Create matrix
+    matrix = np.zeros((len(letters_by_stability), len(positions_by_stability)))
+    letter_indices = {letter: i for i, letter in enumerate(letters_by_stability)}
+    position_indices = {pos: i for i, pos in enumerate(positions_by_stability)}
+    
+    for (letter, position), count in assignment_counts.items():
+        if letter in letter_indices and position in position_indices:
+            matrix[letter_indices[letter], position_indices[position]] = count
+    
+    # Plot heatmap
+    plt.figure(figsize=(16, 12))
+    annot_matrix = np.where(matrix == 0, '', matrix.astype(int).astype(str))
+    
+    sns.heatmap(matrix, 
+               xticklabels=positions_by_stability,
+               yticklabels=letters_by_stability,
+               cmap='Reds', linewidths=0.5, square=True,
+               annot=annot_matrix, fmt='', annot_kws={'size': 8},
+               cbar_kws={'label': 'Assignment Count'})
+    
+    plt.title(f'Letter-Position Stability Matrix ({len(all_data):,} solutions)')
+    plt.xlabel('Positions (ordered by stability)')
+    plt.ylabel('Letters (ordered by stability)')
+    plt.tick_params(left=False, bottom=False)
+    plt.xticks(rotation=0)
+    plt.yticks(rotation=0)
+    plt.tight_layout()
+    
+    if output_path:
+        if output_path.endswith('.png'):
+            stability_path = output_path.replace('.png', '_stability.png')
+        else:
+            stability_path = output_path + '_stability.png'
+        plt.savefig(stability_path, dpi=300, bbox_inches='tight')
+        print(f"Stability matrix saved to {stability_path}")
+    else:
+        plt.show()
+    
+    plt.close()
+
+def generate_report(dfs: List[pd.DataFrame], table_names: List[str], 
+                   metrics: List[str], summary_df: Optional[pd.DataFrame] = None,
+                   output_dir: Path = Path('output')) -> str:
+    """Generate comprehensive analysis report."""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    report_path = output_dir / f'layout_comparison_report_{timestamp}.txt'
+    
+    # Combine all dataframes for overall stats
+    all_data = pd.concat(dfs, ignore_index=True)
+    
+    with open(report_path, 'w') as f:
+        f.write("="*70 + "\n")
+        f.write("KEYBOARD LAYOUT COMPARISON REPORT\n")
+        f.write("="*70 + "\n\n")
+        f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Total solutions analyzed: {len(all_data):,}\n")
+        f.write(f"Number of tables: {len(dfs)}\n")
+        f.write(f"Metrics analyzed: {len(metrics)}\n\n")
+        
+        # Table summary
+        f.write("-"*70 + "\n")
+        f.write("DATA SOURCES\n")
+        f.write("-"*70 + "\n")
+        for i, (df, name) in enumerate(zip(dfs, table_names), 1):
+            f.write(f"{i}. {name}: {len(df):,} layouts\n")
+        f.write("\n")
+        
+        # Metrics summary
+        f.write("-"*70 + "\n")
+        f.write("METRICS ANALYZED\n")
+        f.write("-"*70 + "\n")
+        for i, metric in enumerate(metrics, 1):
+            f.write(f"{i:2d}. {metric}\n")
+        f.write("\n")
+        
+        # Statistical summary
+        f.write("-"*70 + "\n")
+        f.write("METRIC STATISTICS\n")
+        f.write("-"*70 + "\n")
+        for metric in metrics:
+            if metric in all_data.columns:
+                values = all_data[metric].dropna()
+                f.write(f"\n{metric}:\n")
+                f.write(f"  Count:  {len(values):,}\n")
+                f.write(f"  Mean:   {values.mean():.6f}\n")
+                f.write(f"  Std:    {values.std():.6f}\n")
+                f.write(f"  Min:    {values.min():.6f}\n")
+                f.write(f"  25%:    {values.quantile(0.25):.6f}\n")
+                f.write(f"  Median: {values.median():.6f}\n")
+                f.write(f"  75%:    {values.quantile(0.75):.6f}\n")
+                f.write(f"  Max:    {values.max():.6f}\n")
+        f.write("\n")
+        
+        # Top performers
+        if summary_df is not None and len(summary_df) > 0:
+            f.write("-"*70 + "\n")
+            f.write("TOP 20 PERFORMING LAYOUTS (by average score)\n")
+            f.write("-"*70 + "\n")
+            display_cols = ['layout']
+            if 'table' in summary_df.columns:
+                display_cols.append('table')
+            display_cols.append('average_score')
+            display_cols.extend([m for m in metrics if m in summary_df.columns][:3])
+            
+            top_20 = summary_df[display_cols].head(20)
+            f.write(top_20.to_string(index=False))
+            f.write("\n\n")
+        
+        # Correlation insights
+        if len(metrics) >= 2:
+            obj_data = all_data[metrics].dropna()
+            if not obj_data.empty:
+                corr_matrix = obj_data.corr()
+                f.write("-"*70 + "\n")
+                f.write("METRIC CORRELATIONS\n")
+                f.write("-"*70 + "\n")
+                f.write("\nHighest positive correlations:\n")
+                # Get upper triangle of correlation matrix
+                corr_pairs = []
+                for i in range(len(metrics)):
+                    for j in range(i+1, len(metrics)):
+                        corr_pairs.append((metrics[i], metrics[j], corr_matrix.iloc[i, j]))
+                corr_pairs.sort(key=lambda x: abs(x[2]), reverse=True)
+                for metric1, metric2, corr in corr_pairs[:5]:
+                    f.write(f"  {metric1} <-> {metric2}: {corr:.3f}\n")
+                f.write("\n")
+        
+        # Stability insights (if available)
+        if 'items' in all_data.columns and 'positions' in all_data.columns:
+            f.write("-"*70 + "\n")
+            f.write("LETTER-POSITION STABILITY\n")
+            f.write("-"*70 + "\n")
+            
+            letter_positions = defaultdict(set)
+            position_letters = defaultdict(set)
+            
+            for _, row in all_data.iterrows():
+                items = list(row['items'])
+                positions = list(row['positions'])
+                for letter, position in zip(items, positions):
+                    letter_positions[letter].add(position)
+                    position_letters[position].add(letter)
+            
+            # Most stable letters
+            letters_by_stability = sorted(letter_positions.keys(), 
+                                        key=lambda x: len(letter_positions[x]))
+            f.write("\nMost stable letters (fewest positions):\n")
+            for letter in letters_by_stability[:10]:
+                positions_list = sorted(letter_positions[letter])
+                f.write(f"  {letter}: {len(positions_list)} positions - {', '.join(positions_list)}\n")
+            
+            # Most stable positions
+            positions_by_stability = sorted(position_letters.keys(), 
+                                          key=lambda x: len(position_letters[x]))
+            f.write("\nMost stable positions (fewest letters):\n")
+            for position in positions_by_stability[:10]:
+                letters_list = sorted(position_letters[position])
+                f.write(f"  {position}: {len(letters_list)} letters - {', '.join(letters_list)}\n")
+            f.write("\n")
+        
+        f.write("="*70 + "\n")
+        f.write("END OF REPORT\n")
+        f.write("="*70 + "\n")
+    
+    print(f"\nAnalysis report saved: {report_path}")
+    return str(report_path)
 
 def print_summary_stats(dfs: List[pd.DataFrame], table_names: List[str], metrics: List[str]) -> None:
     """Print summary statistics for the loaded data."""
@@ -718,66 +1060,57 @@ def print_summary_stats(dfs: List[pd.DataFrame], table_names: List[str], metrics
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Create parallel coordinates plots and heatmaps comparing keyboard layouts',
+        description='Comprehensive keyboard layout comparison and visualization',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  # Preferred format with layout_qwerty column
-  python compare_layouts.py --tables layouts.csv
+  # Basic comparison with all available metrics
+  python layouts_compare.py --tables layouts.csv
   
-  # MOO format with items+positions (auto-converted)
-  python compare_layouts.py --tables moo_results.csv --metrics engram dvorak7
+  # Multiple tables with specific metrics and all visualizations
+  python layouts_compare.py --tables scores1.csv scores2.csv \\
+      --metrics engram_avg4_score comfort dvorak7 --plot --report
   
-  # Core metrics only (recommended)
-  python compare_layouts.py --tables layouts.csv --metrics engram dvorak7 comfort_combo comfort comfort_key
+  # Create summary table sorted by performance
+  python layouts_compare.py --tables layouts.csv \\
+      --metrics engram comfort --summary results.csv
   
-  # Include experimental distance/time metrics (caution: limitations)
-  python compare_layouts.py --tables layouts.csv --metrics engram comfort efficiency --experimental-metrics
-  
-  # Create summary table with performance sorting
-  python compare_layouts.py --tables layouts.csv --metrics engram comfort dvorak7 --summary layout_summary.csv
-  
-  # Multiple tables with filtered metrics and summary
-  python compare_layouts.py --tables scores1.csv scores2.csv --metrics comfort engram --summary combined_summary.csv
+  # Full analysis with custom sort
+  python layouts_compare.py --tables layouts.csv \\
+      --metrics engram comfort dvorak7 --plot --report \\
+      --sort-by comfort --summary summary.csv
 
-Input format support (auto-detected):
-  Preferred: layout,layout_qwerty,scorer1,scorer2,...
-  Standard:  layout,letters,positions,scorer1,scorer2,...  
-  MOO:       config_id,items,positions,objective1,objective2,...
-  
-  - layout_qwerty: what's at each QWERTY position (preferred)
-  - letters: what's at each QWERTY position (standard)
-  - items: letters in assignment order + positions where they go (MOO)
-
-Summary output:
-  CSV with columns: index, layout, [layout_qwerty, positions], average_score, [metric_values]
-  - index: 1-based ranking by performance
-  - layout_qwerty: what letter is at each QWERTY position
-  - positions: QWERTY reference positions
-  Layouts ordered by average performance across selected metrics (higher = better)
-
-Core vs Experimental Metrics:
-  Core metrics (recommended): engram, comfort, comfort_key, dvorak7
-  Experimental metrics (use with caution): efficiency*, speed*
-  
-  Experimental metrics have significant limitations:
-  - Distance/efficiency metrics oversimplify biomechanics (ignore lateral stretching, finger strength, etc.)
-  - Time/speed metrics contain QWERTY practice bias from empirical data
+Supported CSV formats (auto-detected):
+  - Preferred: layout,layout_qwerty,metric1,metric2,...
+  - Standard:  layout,letters,positions,metric1,metric2,...  
+  - MOO:       config_id,items,positions,metric1,metric2,...
         """
     )
     
     parser.add_argument('--tables', nargs='+', required=True,
-                       help='One or more CSV files: layout scoring (score_layouts.py --csv) or optimization results (optimize_moo.py)')
+                       help='One or more CSV files with layout data')
     parser.add_argument('--metrics', nargs='*',
-                       help='Specific metrics to include (in order). If not specified, all available metrics are used alphabetically.')
+                       help='Specific metrics to include (in order). If not specified, all available metrics are used.')
     parser.add_argument('--output', '-o', 
-                       help='Output file path (if not specified, plots are shown)')
+                       help='Output file path for plots (generates multiple files with suffixes)')
     parser.add_argument('--summary', 
-                       help='Create summary table sorted by average performance and save to CSV file (e.g., --summary summary.csv)')
+                       help='Create summary table sorted by average performance and save to CSV')
+    parser.add_argument('--plot', action='store_true',
+                       help='Generate additional visualization plots (scatter, Pareto, correlation, stability)')
+    parser.add_argument('--report', action='store_true',
+                       help='Generate comprehensive analysis report')
+    parser.add_argument('--sort-by',
+                       help='Metric to sort by in scatter plot (default: first metric)')
+    parser.add_argument('--output-dir', default='../output',
+                       help='Output directory for report and plots without explicit paths')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Print detailed information')
     
     args = parser.parse_args()
+    
+    # Create output directory
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Validate files exist
     for table_path in args.tables:
@@ -815,29 +1148,48 @@ Core vs Experimental Metrics:
     if args.verbose:
         print_summary_stats(dfs, table_names, metrics)
 
-    # Create summary table only if explicitly requested
+    # Create summary table (needed for performance-based coloring)
     summary_df = None
-    if args.summary:  # <-- ONLY create summary when --summary is specified
+    if args.summary or args.plot:
         if args.verbose:
             print(f"\nCreating performance summary...")
         normalized_dfs = normalize_data(dfs, metrics)
-        summary_df = create_sorted_summary(normalized_dfs, table_names, metrics, args.summary)
+        summary_df = create_sorted_summary(normalized_dfs, table_names, metrics, 
+                                          args.summary if args.summary else None)
     
-    # Create plots (unless only summary requested)
-    if args.output is not None or not args.summary:
+    # Always create core plots (parallel and heatmap)
+    if args.verbose:
+        print(f"\nCreating core visualization plots...")
+        print(f"Tables: {len(dfs)}")
+        print(f"Total layouts: {sum(len(df) for df in dfs)}")
+        print(f"Metrics to plot: {len(metrics)} - {', '.join(metrics)}")
+        if summary_df is not None and len(summary_df) > 0:
+            print(f"Using performance-based coloring for parallel plot")
+    
+    # Determine output path
+    plot_output = args.output if args.output else str(output_dir / 'layout_comparison.png')
+    
+    # Generate parallel coordinates plot
+    create_parallel_plot(dfs, table_names, metrics, plot_output, summary_df)
+    
+    # Generate heatmap plot
+    create_heatmap_plot(dfs, table_names, metrics, plot_output)
+    
+    # Generate additional plots if requested
+    if args.plot:
         if args.verbose:
-            print(f"\nCreating visualization plots...")
-            print(f"Tables: {len(dfs)}")
-            print(f"Total layouts: {sum(len(df) for df in dfs)}")
-            print(f"Metrics to plot: {len(metrics)} - {', '.join(metrics)}")
-            if summary_df is not None and len(summary_df) > 0:
-                print(f"Using performance-based coloring for parallel plot")
+            print(f"\nCreating additional visualization plots...")
         
-        # Generate parallel coordinates plot with optional performance-based coloring
-        create_parallel_plot(dfs, table_names, metrics, args.output, summary_df)
-
-        # Generate heatmap plot
-        create_heatmap_plot(dfs, table_names, metrics, args.output)
+        plot_objective_scatter(dfs, table_names, metrics, plot_output, args.sort_by)
+        plot_pareto_front_2d(dfs, table_names, metrics, plot_output)
+        plot_correlation_matrix(dfs, table_names, metrics, plot_output)
+        plot_stability_matrix(dfs, table_names, plot_output)
+    
+    # Generate report if requested
+    if args.report:
+        generate_report(dfs, table_names, metrics, summary_df, output_dir)
+    
+    print(f"\nAnalysis complete!")
 
 if __name__ == "__main__":
     main()

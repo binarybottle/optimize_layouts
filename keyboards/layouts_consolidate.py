@@ -20,15 +20,13 @@ Usage:
     python layouts_consolidate.py --max-files 100 --verbose
 
     # Custom pattern and objectives
-    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger"
+    python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" \
+        --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_order"
 
-    # Keyboard layout optimization study commands:
+    # Keyboard layout optimization study command:
     poetry run python3 layouts_consolidate.py \
-        --objectives engram_key_preference engram_avg4_score \
-        --maximize true true
-    poetry run python3 layouts_consolidate.py \
-        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger \
-        --maximize true true true true
+        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
+        --maximize true true true true true
 
 """
 
@@ -568,12 +566,12 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
 
 def main():
     parser = argparse.ArgumentParser(description='Select global Pareto optimal layouts')
-    parser.add_argument('--input-dir', default='output/layouts/', 
+    parser.add_argument('--input-dir', default='../output/layouts/', 
                        help='Directory containing MOO results CSV files')
-    parser.add_argument('--output-file', default='output/layouts_consolidate_moo_solutions.csv',
+    parser.add_argument('--output-file', default='../output/layouts_consolidate_moo_solutions.csv',
                        help='Output CSV file for global Pareto solutions')
     parser.add_argument('--objectives', nargs='+', 
-                       default=['engram_key_preference','row_separation','engram_same_row','engram_same_finger'],
+                       default=['engram_key_preference','engram_row_separation','engram_same_row','engram_same_finger','engram_order'],
                        help='Objective columns to use for Pareto filtering')
     parser.add_argument('--maximize', nargs='+', type=lambda x: x.lower() == 'true',
                        default=[True, True, True, True],

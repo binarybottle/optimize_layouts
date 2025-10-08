@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
 """
 --------------------------------------------------------------------------------
-Generate configuration files to run keyboard layout optimizations in parallel 
-with specific letter-to-key constraints specified in each file.
+Generate configuration files to run layout optimizations in parallel 
+with specific item-to-position constraints specified in each file.
 This script takes a csv file as input, such as from run_jobs.py 
 (and optionally layouts_[consolidate, compare, filter_scores, filter_patterns]). 
 If --remove-positions is specified, it will remove positions, 
 and remove redundant layouts.
+
+NOTE: Since this script was created for keyboard layout optimization, 
+it expects a 24- or 26-item layout (for English letters).
+Modify the code as needed for other use cases. 
 
 Usage:
     # For 26-character layout, after removing items from specified positions

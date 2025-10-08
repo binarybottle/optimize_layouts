@@ -8,10 +8,6 @@ License: MIT License (see LICENSE)
 
 ## Scripts in this folder
 
-**Configuration generation:**
-- `generate_configs1_*.py` - Generate initial configuration files with letter-to-key constraints (Step 1)
-- `generate_configs2_*.py` - Generate configurations from global Pareto optimal solutions (Step 2)
-
 **Visualization:**
 - `display_layout.py` - Visualize single 32-key layouts (ASCII or HTML output)
 - `display_layouts.py` - Display multiple layouts from CSV (auto-detects format)
