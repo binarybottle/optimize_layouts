@@ -21,11 +21,19 @@ Usage:
 
     # Keyboard layout optimization study commands:
     # Step 2: Optimally (re)arrange the next 10 most frequent letters (after unassigning 2 letters) to fill the top 18 keys.
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/moo_204_results_config_20251006_064050.csv --remove-positions "A;"
+    poetry run python3 generate_configs_from_csv.py \
+        --input-file ../output/moo_204_results_config_20251006_064050.csv \
+        --remove-positions "A;"
     # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 4 letters).
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step2.csv --remove-positions "WOC," --layout-size 24
+    poetry run python3 generate_configs_from_csv.py \
+        --input-file ../output/layouts_filter_patterns_step2.csv \
+        --remove-positions "WOC," \
+        --layout-size 24
     # Step 4: Optimally assign the 8 least frequent of 26 letters to the 8 least preferred keys (after unassigning 6 letters).
-    poetry run python3 generate_configs_from_csv.py --input-file ../output/layouts_filtered_patterns_step3.csv --remove-positions "X.QPZ/" --layout-size 26
+    poetry run python3 generate_configs_from_csv.py \
+        --input-file ../output/layouts_filter_patterns_step3.csv \
+        --remove-positions "X.QPZ/" \
+        --layout-size 26
 
 See **README.md** for instructions to run batches of config files in parallel.
 
@@ -168,9 +176,9 @@ moo:
     - "engram_row_separation"
     - "engram_same_row"
     - "engram_same_finger"
-    - "engram_order"
-  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0]
-  default_maximize: [true, true, true, true, true]
+    #- "engram_order"
+  default_weights: [1.0, 1.0, 1.0, 1.0] #, 1.0]
+  default_maximize: [true, true, true, true] #, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true
