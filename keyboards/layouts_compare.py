@@ -37,7 +37,7 @@ Examples:
     python layouts_compare.py --tables layouts.csv \
         --metrics engram comfort dvorak7 --plot --sort-by comfort
 
-    # Keyboard layout optimization study command:
+    # Keyboard layout optimization study commands:
     poetry run python3 layouts_compare.py \
         --tables ../output/engram_en/step4_8in26/layouts_filter_patterns_7254_to_936.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
@@ -45,6 +45,15 @@ Examples:
         --summary compare_layouts.csv \
         --sort-by engram_same_row \
         --report --plot --verbose
+
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_12_layouts.csv \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
+                engram_order \
+                engram_outside \
+                dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward \ 
+                comfort \
+        --output compare_12_layouts --summary compare_12_layouts.csv --sort-by engram_same_row --report --plot --verbose
 
 Input format examples:
   
