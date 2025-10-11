@@ -30,10 +30,9 @@ Usage:
         --input-file ../output/layouts_filter_patterns_step2.csv \
         --remove-positions "WOC," \
         --layout-size 24
-    # Step 4: Optimally assign the 8 least frequent of 26 letters to the 8 least preferred keys (after unassigning 6 letters).
+    # Step 4: Optimally assign the 2 least frequent of 26 letters to the 2 least preferred keys.
     poetry run python3 generate_configs_from_csv.py \
         --input-file ../output/layouts_filter_patterns_step3.csv \
-        --remove-positions "X.QPZ/" \
         --layout-size 26
 
 See **README.md** for instructions to run batches of config files in parallel.
@@ -211,7 +210,7 @@ visualization:
 
 
 def main():
-    """Main function to process global Pareto layouts and generate Step 2 configurations."""
+    """Main function to process global Pareto layouts and generate configurations."""
     args = parse_arguments()
     
     if args.remove_positions:
@@ -285,9 +284,9 @@ def main():
             
         layouts.append(layout)
     
-    print(f"Processing {len(layouts)} layouts to generate Step 2 configurations...")
+    print(f"Processing {len(layouts)} layouts to generate configurations...")
     
-    # Generate Step 2 configurations
+    # Generate configurations
     os.makedirs(args.output_path, exist_ok=True)
     
     configs_generated = 0
@@ -355,11 +354,11 @@ def main():
             # worst_positions are part of positions_to_assign (they're just constrained)
             unassigned_positions = ''.join([c for c in all_positions if c not in remaining_positions])
 
-            # Check for duplicate layouts after position removal
-            layout_key = (items_assigned_ordered, remaining_positions, items_to_assign_ordered, unassigned_positions)
-            
+            # Create a key that preserves the actual mapping
+            layout_key = (remaining_items, remaining_positions)
+
             if layout_key in unique_layouts:
-                print(f"Duplicate layout found for config {config_num}, skipping (same as config {unique_layouts[layout_key]['config_num']})")
+                print(f"Duplicate layout found for config {config_num}, skipping...")
                 skipped_duplicates += 1
                 continue
             
@@ -426,7 +425,7 @@ def main():
 def parse_arguments():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description='Generate Step 2 configurations from global Pareto optimal solutions',
+        description='Generate configurations from global Pareto optimal solutions',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Example:

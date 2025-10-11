@@ -39,14 +39,16 @@ Examples:
         --summary sorted_by_engram.csv
 
     # Keyboard layout optimization study commands:
+    # Steps 2-4 (Step 3 does not include engram_order; Step 4 includes engram_outside):
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
-        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \
         --output ../output/compare_layouts \
         --summary ../output/compare_layouts.csv \
         --sort-by engram_key_preference \
         --report --plot --verbose
 
+    # Compare 12 layouts against Engram baseline
     poetry run python3 layouts_compare.py \
         --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_12_layouts.csv \
         --output ../output/compare_12_layouts --summary ../output/compare_12_layouts.csv \
@@ -1013,10 +1015,10 @@ def plot_stability_matrix(dfs: List[pd.DataFrame], table_names: List[str],
 
 def generate_report(dfs: List[pd.DataFrame], table_names: List[str], 
                    metrics: List[str], summary_df: Optional[pd.DataFrame] = None,
-                   output_dir: Path = Path('output')) -> str:
+                   output_dir: Path = Path('../output')) -> str:
     """Generate comprehensive analysis report."""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    report_path = output_dir / f'layout_comparison_report_{timestamp}.txt'
+    report_path = output_dir / f'layouts_compare_report_{timestamp}.txt'
     
     # Combine all dataframes for overall stats
     all_data = pd.concat(dfs, ignore_index=True)
@@ -1205,7 +1207,7 @@ Supported CSV formats (auto-detected):
                        help='Generate comprehensive analysis report')
     parser.add_argument('--sort-by',
                        help='Metric to sort by in all visualizations (heatmap, parallel, scatter). Default: average of all metrics')
-    parser.add_argument('--output-dir', default='output',
+    parser.add_argument('--output-dir', default='../output',
                        help='Output directory for report and plots without explicit paths')
     parser.add_argument('--verbose', '-v', action='store_true',
                        help='Print detailed information')
@@ -1277,7 +1279,7 @@ Supported CSV formats (auto-detected):
             print(f"Sample layouts from summary: {list(summary_df['layout'].head(3))}")
     
     # Determine output path
-    plot_output = args.output if args.output else str(output_dir / 'layout_comparison.png')
+    plot_output = args.output if args.output else str(output_dir / 'layouts_compare.png')
     
     # Pass normalized_dfs to avoid re-normalization
     # Generate parallel coordinates plot

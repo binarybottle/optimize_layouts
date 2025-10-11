@@ -5,68 +5,6 @@ Filter MOO keyboard layouts based on objective scores.
 This script helps reduce large sets of MOO solutions to manageable subsets for further analysis.
 It finds layouts that perform in the top percentage for ALL objectives simultaneously.
 
-Input/Output Format> poetry run python3 layouts_filter_scores.py --input output/phase1/5objectives/layouts_compare.csv --top-percent 75 --plot --report --verbose
-Loaded 3803 valid layouts from output/phase1/5objectives/layouts_compare.csv
-Detected objective columns: ['engram_key_preference', 'engram_key_preference_rank', 'engram_row_separation', 'engram_row_separation_rank', 'engram_same_row', 'engram_same_row_rank', 'engram_same_finger', 'engram_same_finger_rank', 'engram_order']
-engram_key_preference: threshold 0.7759, 2877 layouts qualify
-engram_key_preference_rank: threshold 892.0000, 2912 layouts qualify
-engram_row_separation: threshold 0.9339, 2918 layouts qualify
-engram_row_separation_rank: threshold 770.0000, 3034 layouts qualify
-engram_same_row: threshold 0.8672, 2876 layouts qualify
-engram_same_row_rank: threshold 939.0000, 2865 layouts qualify
-engram_same_finger: threshold 0.9540, 2968 layouts qualify
-engram_same_finger_rank: threshold 671.0000, 3133 layouts qualify
-engram_order: threshold 0.6709, 2852 layouts qualify
-Filtering breakdown:
-  Original layouts: 3803
-  Passed individual thresholds (union): 3803 (100.0%)
-  Passed intersection requirement: 750 (19.7%)
-  Filtered by thresholds: 0 (0.0%)
-  Filtered by intersection: 3053 (80.3%)
-
-Filtering complete!
-Input: 3803 layouts
-Filtered (kept): 750 layouts (19.7%)
-Removed: 3053 layouts (80.3%)
-Filtered results saved to: output/layouts_filter_scores_layouts_compare_intersection.csv
-
-Removal breakdown:
-  Failed individual thresholds: 0 layouts
-  Failed intersection requirement: 3053 layouts
-
-Per-objective analysis of removed layouts:
-  engram_key_preference: 926/3053 removed layouts below threshold 0.7759
-  engram_key_preference_rank: 891/3053 removed layouts below threshold 892.0000
-  engram_row_separation: 885/3053 removed layouts below threshold 0.9339
-  engram_row_separation_rank: 769/3053 removed layouts below threshold 770.0000
-  engram_same_row: 927/3053 removed layouts below threshold 0.8672
-  engram_same_row_rank: 938/3053 removed layouts below threshold 939.0000
-  engram_same_finger: 835/3053 removed layouts below threshold 0.9540
-  engram_same_finger_rank: 670/3053 removed layouts below threshold 671.0000
-  engram_order: 951/3053 removed layouts below threshold 0.6709
-Statistical report: output/layouts_filter_scores_report_20251002_171346.txt
-Filtering visualization: output/layouts_filter_scores_plots_20251002_171346.png
-Filtered objective scatter: output/layouts_filter_scores_scatter_20251002_171347.png
-
-Retained dataset summary:
-  engram_key_preference: 0.7772 - 0.7834 (mean: 0.7803, std: 0.0019, +0.2%)
-  engram_key_preference_rank: 1033.0000 - 2498.0000 (mean: 1904.0173, std: 411.3344, +1.6%)
-  engram_row_separation: 0.9339 - 0.9433 (mean: 0.9399, std: 0.0028, +0.2%)
-  engram_row_separation_rank: 770.0000 - 2779.0000 (mean: 1838.2413, std: 597.0287, +6.0%)
-  engram_same_row: 0.8672 - 0.8831 (mean: 0.8772, std: 0.0042, +0.3%)
-  engram_same_row_rank: 939.0000 - 2830.0000 (mean: 1747.4147, std: 522.2212, +-7.3%)
-  engram_same_finger: 0.9540 - 0.9634 (mean: 0.9595, std: 0.0030, +0.4%)
-  engram_same_finger_rank: 671.0000 - 2695.0000 (mean: 1777.2000, std: 614.4482, +-2.7%)
-  engram_order: 0.6709 - 0.7832 (mean: 0.7037, std: 0.0224, +1.8%)
-
-Quality check:
-
-Filtering successful! Retained 750 diverse layouts (19.7%):
-- items: letters in assignment order (e.g., "etaoinsrhldcum") 
-- positions: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
-- layout_qwerty: layout string in 32-key QWERTY order (QWERTYUIOPASDFGHJKL;ZXCVBNM,./[')
-  with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
-
 Usage:
     # Intersection filtering (layouts that score well in ALL objectives)
     python layouts_filter_scores.py --input moo_analysis_results.csv --top-percent 10 --report --plot
@@ -76,7 +14,7 @@ Usage:
 
     # Keyboard layout optimization study command:
     poetry run python3 layouts_filter_scores.py \
-        --input output/phase1/5objectives/layouts_compare.csv \
+        --input ../output/layouts_filter_patterns.csv \
         --top-percent 75 --plot --report --verbose
 
 """
@@ -606,8 +544,8 @@ def main():
         else:
             # Generate both filenames based on input filename
             input_stem = Path(args.input).stem
-            output_file = f"output/layouts_filter_scores_{input_stem}_intersection.csv"
-            removed_file = f"output/layouts_filter_scores_removed_{input_stem}.csv"
+            output_file = f"../output/layouts_filter_scores_{input_stem}_intersection.csv"
+            removed_file = f"../output/layouts_filter_scores_removed_{input_stem}.csv"
         
         # Save filtered results
         standardized_df = filter_tool.standardize_output_columns(filtered_df)

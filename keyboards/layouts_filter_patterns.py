@@ -68,6 +68,20 @@ Usage:
         --exclude-vertical-bigrams "$BIGRAMS" \
         --exclude-hurdles "$HURDLE_BIGRAMS"
 
+    # Step 4 (include only layouts with z,q,j,x in last two positions)
+    poetry run python3 layouts_filter_patterns.py \
+        --input ../output/layouts_consolidate_moo_solutions.csv \
+        --output ../output/layouts_filter_patterns_zqjx.csv --report \
+        --exclude-vertical-bigrams "$BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS" \
+        --include "^.{30}[zqjxZQJX][zqjxZQJX]"
+    poetry run python3 layouts_filter_patterns.py \
+        --input ../output/layouts_consolidate_moo_solutions.csv \
+        --output ../output/layouts_filter_patterns_zqjx.csv --report \
+        --exclude-vertical-bigrams "$BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS" \
+        --include "^.{30}[zqjxkZQJXK][zqjxkZQJXK]"
+
 """
 
 import pandas as pd
