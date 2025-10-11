@@ -20,6 +20,7 @@ Usage:
     python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
 
     # Keyboard layout optimization study commands:
+    # For each Step, modify default_objectives, default_weights, and default_maximize accordingly.
     # Step 2: Optimally (re)arrange the next 10 most frequent letters (after unassigning 2 letters) to fill the top 18 keys.
     poetry run python3 generate_configs_from_csv.py \
         --input-file ../output/moo_204_results_config_20251006_064050.csv \
@@ -176,9 +177,10 @@ moo:
     - "engram_row_separation"
     - "engram_same_row"
     - "engram_same_finger"
-    #- "engram_order"
-  default_weights: [1.0, 1.0, 1.0, 1.0] #, 1.0]
-  default_maximize: [true, true, true, true] #, true]
+    - "engram_order"
+    - "engram_outside"
+  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  default_maximize: [true, true, true, true, true, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true

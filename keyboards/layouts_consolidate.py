@@ -24,9 +24,19 @@ Usage:
         --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_order"
 
     # Keyboard layout optimization study command:
+    # Step 2 (5 objectives):
     poetry run python3 layouts_consolidate.py \
         --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
         --maximize true true true true true
+    # Step 3 (4 objectives):
+    poetry run python3 layouts_consolidate.py \
+        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger \
+        --maximize true true true true
+    # Step 4 (6 objectives):
+    poetry run python3 layouts_consolidate.py \
+        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside engram_order \
+        --maximize true true true true true true
+    
 
 """
 

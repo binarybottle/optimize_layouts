@@ -33,27 +33,30 @@ Examples:
         --metrics engram_key_preference engram_avg4_score comfort \
         --plot --report --summary summary.csv
 
-    # Sort scatter plot by specific metric
+    # Sort all visualizations (heatmap, parallel, scatter) by specific metric
     python layouts_compare.py --tables layouts.csv \
-        --metrics engram comfort dvorak7 --plot --sort-by comfort
+        --metrics engram comfort dvorak7 --plot --sort-by engram \
+        --summary sorted_by_engram.csv
 
     # Keyboard layout optimization study commands:
     poetry run python3 layouts_compare.py \
-        --tables ../output/engram_en/step4_8in26/layouts_filter_patterns_7254_to_936.csv \
+        --tables ../output/layouts_filter_patterns.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
-        --output compare_layouts \
-        --summary compare_layouts.csv \
-        --sort-by engram_same_row \
+        --output ../output/compare_layouts \
+        --summary ../output/compare_layouts.csv \
+        --sort-by engram_key_preference \
         --report --plot --verbose
 
     poetry run python3 layouts_compare.py \
         --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_12_layouts.csv \
+        --output ../output/compare_12_layouts --summary ../output/compare_12_layouts.csv \
+        --sort-by engram_same_row --report --plot --verbose \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
                 engram_order \
                 engram_outside \
-                dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward \ 
-                comfort \
-        --output compare_12_layouts --summary compare_12_layouts.csv --sort-by engram_same_row --report --plot --verbose
+                dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan \
+                dvorak7_columns dvorak7_remote dvorak7_inward
+                comfort
 
 Input format examples:
   
@@ -313,8 +316,9 @@ def get_table_colors(num_tables: int) -> List[str]:
         return [cmap(i / num_tables) for i in range(num_tables)]
 
 def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str], 
-                         metrics: List[str], summary_output: Optional[str] = None) -> pd.DataFrame:
-    """Create summary table sorted by average performance."""
+                         metrics: List[str], summary_output: Optional[str] = None,
+                         sort_by: Optional[str] = None) -> pd.DataFrame:
+    """Create summary table sorted by specified metric or average performance."""
     
     all_summaries = []
     
@@ -350,8 +354,11 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         else:
             summary_df['average_score'] = 0
         
-        # Sort by average score (descending - best first)
-        summary_df = summary_df.sort_values('average_score', ascending=False)
+        # Sort by specified metric or average score (descending - best first)
+        if sort_by and sort_by in summary_df.columns:
+            summary_df = summary_df.sort_values(sort_by, ascending=False)
+        else:
+            summary_df = summary_df.sort_values('average_score', ascending=False)
         
         # Prepare output columns in requested order:
         # layout, layout_qwerty (or letters+positions), average_score, then original metrics
@@ -394,9 +401,12 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     # Combine all tables
     combined_summary = pd.concat(all_summaries, ignore_index=True)
     
-    # If multiple tables, sort globally by average score
+    # If multiple tables, sort globally by specified metric or average score
     if len(dfs) > 1:
-        combined_summary = combined_summary.sort_values('average_score', ascending=False)
+        if sort_by and sort_by in combined_summary.columns:
+            combined_summary = combined_summary.sort_values(sort_by, ascending=False)
+        else:
+            combined_summary = combined_summary.sort_values('average_score', ascending=False)
     
     # Round average scores to remove floating point precision issues
     if 'average_score' in combined_summary.columns:
@@ -410,76 +420,128 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         combined_summary.to_csv(summary_output, index=False)
         print(f"\nSummary saved to {summary_output}")
     
-    print(f"Best performing layouts (by average score):")
+    # Print best performing layouts with appropriate label
+    if sort_by and sort_by in combined_summary.columns:
+        print(f"Best performing layouts (sorted by {sort_by}):")
+        sort_col = sort_by
+    else:
+        print(f"Best performing layouts (by average score):")
+        sort_col = 'average_score'
     
     # Show top 10 layouts
     display_cols = ['layout']
     if 'table' in combined_summary.columns:
         display_cols.append('table')
-    display_cols.append('average_score')
+    display_cols.append(sort_col)
+    if sort_col != 'average_score' and 'average_score' in combined_summary.columns:
+        display_cols.append('average_score')
     
     top_layouts = combined_summary[display_cols].head(10)
     for i, (_, row) in enumerate(top_layouts.iterrows(), 1):
         if 'table' in row:
-            print(f"  {i:2d}. {row['layout']} ({row['table']}) - Avg Score: {row['average_score']:.3f}")
+            if sort_col != 'average_score' and 'average_score' in row:
+                print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
+            else:
+                print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}")
         else:
-            print(f"  {i:2d}. {row['layout']} - Avg Score: {row['average_score']:.3f}")
+            if sort_col != 'average_score' and 'average_score' in row:
+                print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
+            else:
+                print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}")
     
     return combined_summary
 
-def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str], 
-                       metrics: List[str], output_path: Optional[str] = None) -> None:
-    """Create heatmap visualization with layouts on y-axis and metrics on x-axis."""
+def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[str], 
+                       metrics: List[str], output_path: Optional[str] = None,
+                       summary_df: Optional[pd.DataFrame] = None,
+                       sort_by: Optional[str] = None) -> None:
+    """Create heatmap visualization with layouts on y-axis and metrics on x-axis.
     
-    # Normalize data across all tables
-    normalized_dfs = normalize_data(dfs, metrics)
+    Args:
+        normalized_dfs: Already normalized dataframes (0-1 scale)
+        summary_df: Pre-sorted summary dataframe for ordering (if None, sorts within tables)
+    """
     
-    # Prepare data with sorting within each table by average performance
-    all_data = []
-    layout_names = []
-    
-    for i, (df, table_name) in enumerate(zip(normalized_dfs, table_names)):
-        # Collect data for this table
-        table_data = []
-        table_layout_names = []
+    # If we have a summary_df, use its ordering; otherwise sort within each table
+    if summary_df is not None and len(summary_df) > 0:
+        # Use the order from summary_df
+        all_data = []
+        layout_names = []
         
-        for _, row in df.iterrows():
-            # Get metric values for this layout
-            metric_values = []
-            valid_count = 0
+        # Create a lookup for quick access to layout data
+        layout_lookup = {}
+        for df, table_name in zip(normalized_dfs, table_names):
+            for _, row in df.iterrows():
+                layout_name = row.get('layout', '')
+                if layout_name:
+                    metric_values = []
+                    valid_count = 0
+                    for metric in metrics:
+                        if metric in row and pd.notna(row[metric]):
+                            metric_values.append(row[metric])
+                            valid_count += 1
+                        else:
+                            metric_values.append(0.0)
+                    if valid_count >= len(metrics) * 0.5:
+                        layout_lookup[layout_name] = metric_values
+        
+        # Add layouts in summary order
+        for _, row in summary_df.iterrows():
+            layout_name = row.get('layout', '')
+            if layout_name in layout_lookup:
+                all_data.append(layout_lookup[layout_name])
+                layout_names.append(layout_name)
+    else:
+        # Original behavior: sort within each table
+        all_data = []
+        layout_names = []
+        
+        for i, (df, table_name) in enumerate(zip(normalized_dfs, table_names)):
+            # Collect data for this table
+            table_data = []
+            table_layout_names = []
             
-            for metric in metrics:
-                if metric in row and pd.notna(row[metric]):
-                    metric_values.append(row[metric])
-                    valid_count += 1
-                else:
-                    metric_values.append(0.0)  # Default for missing data
+            for _, row in df.iterrows():
+                # Get metric values for this layout
+                metric_values = []
+                valid_count = 0
+                
+                for metric in metrics:
+                    if metric in row and pd.notna(row[metric]):
+                        metric_values.append(row[metric])
+                        valid_count += 1
+                    else:
+                        metric_values.append(0.0)  # Default for missing data
+                
+                # Skip layouts with too much missing data
+                if valid_count < len(metrics) * 0.5:
+                    continue
+                
+                table_data.append(metric_values)
+                layout_name = row.get('layout', f'Layout_{len(table_layout_names)+1}')
+                table_layout_names.append(layout_name)
             
-            # Skip layouts with too much missing data
-            if valid_count < len(metrics) * 0.5:
+            if not table_data:
                 continue
             
-            table_data.append(metric_values)
-            layout_name = row.get('layout', f'Layout_{len(table_layout_names)+1}')
-            table_layout_names.append(layout_name)
-        
-        if not table_data:
-            continue
-        
-        # Convert to numpy array for sorting
-        table_matrix = np.array(table_data)
-        
-        # Sort this table's layouts by average performance (descending)
-        table_averages = np.mean(table_matrix, axis=1)
-        sort_indices = np.argsort(table_averages)[::-1]  # Descending order
-        
-        # Apply sorting
-        sorted_table_data = table_matrix[sort_indices]
-        sorted_table_names = [table_layout_names[idx] for idx in sort_indices]
-        
-        # Add to combined data
-        all_data.extend(sorted_table_data.tolist())
-        layout_names.extend(sorted_table_names)
+            # Convert to numpy array for sorting
+            table_matrix = np.array(table_data)
+            
+            # Sort this table's layouts by specified metric or average performance (descending)
+            if sort_by and sort_by in metrics:
+                sort_metric_idx = metrics.index(sort_by)
+                sort_values = table_matrix[:, sort_metric_idx]
+            else:
+                sort_values = np.mean(table_matrix, axis=1)
+            sort_indices = np.argsort(sort_values)[::-1]  # Descending order
+            
+            # Apply sorting
+            sorted_table_data = table_matrix[sort_indices]
+            sorted_table_names = [table_layout_names[idx] for idx in sort_indices]
+            
+            # Add to combined data
+            all_data.extend(sorted_table_data.tolist())
+            layout_names.extend(sorted_table_names)
     
     if not all_data:
         print("No valid data found for heatmap")
@@ -523,9 +585,16 @@ def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str],
                        color=text_color, fontsize=7, weight='bold')
     
     # Title with sorting info
-    sort_info = " (sorted by avg. performance)"
-    if len(dfs) > 1:
-        sort_info = " (sorted within each table)"
+    if summary_df is not None and len(summary_df) > 0:
+        if sort_by and sort_by in metrics:
+            sort_info = f" (sorted by {sort_by})"
+        else:
+            sort_info = " (sorted by avg. performance)"
+    else:
+        if sort_by and sort_by in metrics:
+            sort_info = f" (sorted by {sort_by} within each table)"
+        else:
+            sort_info = " (sorted by avg. within each table)"
     
     title = f'Keyboard Layout Comparison Heatmap{sort_info}\n{len(layout_names)} layouts across {len(metrics)} metrics'
     
@@ -553,12 +622,15 @@ def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str], 
+def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[str], 
                         metrics: List[str], output_path: Optional[str] = None,
                         summary_df: Optional[pd.DataFrame] = None) -> None:
-    """Create parallel coordinates plot with performance-based coloring."""
-    # Normalize data across all tables
-    normalized_dfs = normalize_data(dfs, metrics)
+    """Create parallel coordinates plot with performance-based coloring.
+    
+    Args:
+        normalized_dfs: Already normalized dataframes (0-1 scale)
+        summary_df: Pre-sorted summary dataframe for coloring (if None, uses table-based colors)
+    """
     
     # Set up the plot
     fig, ax = plt.subplots(figsize=(max(12, len(metrics) * 1.2), 10))
@@ -586,7 +658,7 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
         print(f"Using performance-based coloring for {total_layouts} layouts")
     else:
         # Use original table-based coloring
-        colors = get_table_colors(len(dfs))
+        colors = get_table_colors(len(normalized_dfs))
     
     # Plot parameters
     x_positions = range(len(metrics))
@@ -665,7 +737,22 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
     
     # Title and legend
     if use_performance_colors:
-        title_suffix = f'\nPerformance-ordered visualization: dark red = best, light red = worst'
+        if summary_df is not None and 'average_score' in summary_df.columns:
+            # Check if we sorted by a specific metric
+            sort_metric = None
+            for metric in metrics:
+                if metric in summary_df.columns:
+                    # Compare if this metric's values match the order
+                    if summary_df[metric].equals(summary_df[metric].sort_values(ascending=False)):
+                        sort_metric = metric
+                        break
+            
+            if sort_metric:
+                title_suffix = f'\nPerformance-ordered by {sort_metric}: dark red = best, light red = worst'
+            else:
+                title_suffix = f'\nPerformance-ordered by average: dark red = best, light red = worst'
+        else:
+            title_suffix = f'\nPerformance-ordered visualization: dark red = best, light red = worst'
     else:
         title_suffix = f'\nParallel coordinates across {len(metrics)} scoring methods'
     
@@ -673,7 +760,7 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
                 fontsize=16, fontweight='bold', pad=20)
 
     # Show legend
-    if len(dfs) > 1 or len(dfs[0]) <= 10 or use_performance_colors:
+    if len(normalized_dfs) > 1 or len(normalized_dfs[0]) <= 10 or use_performance_colors:
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
     
     plt.tight_layout()
@@ -1117,7 +1204,7 @@ Supported CSV formats (auto-detected):
     parser.add_argument('--report', action='store_true',
                        help='Generate comprehensive analysis report')
     parser.add_argument('--sort-by',
-                       help='Metric to sort by in scatter plot (default: first metric)')
+                       help='Metric to sort by in all visualizations (heatmap, parallel, scatter). Default: average of all metrics')
     parser.add_argument('--output-dir', default='output',
                        help='Output directory for report and plots without explicit paths')
     parser.add_argument('--verbose', '-v', action='store_true',
@@ -1165,14 +1252,13 @@ Supported CSV formats (auto-detected):
     if args.verbose:
         print_summary_stats(dfs, table_names, metrics)
 
-    # Create summary table (needed for performance-based coloring)
-    summary_df = None
-    if args.summary or args.plot:
-        if args.verbose:
-            print(f"\nCreating performance summary...")
-        normalized_dfs = normalize_data(dfs, metrics)
-        summary_df = create_sorted_summary(normalized_dfs, table_names, metrics, 
-                                          args.summary if args.summary else None)
+    # Always create summary table (needed for performance-based coloring and sorting)
+    if args.verbose:
+        print(f"\nCreating performance summary...")
+    normalized_dfs = normalize_data(dfs, metrics)
+    summary_df = create_sorted_summary(normalized_dfs, table_names, metrics, 
+                                      args.summary if args.summary else None,
+                                      args.sort_by)
     
     # Always create core plots (parallel and heatmap)
     if args.verbose:
@@ -1180,17 +1266,25 @@ Supported CSV formats (auto-detected):
         print(f"Tables: {len(dfs)}")
         print(f"Total layouts: {sum(len(df) for df in dfs)}")
         print(f"Metrics to plot: {len(metrics)} - {', '.join(metrics)}")
+        if args.sort_by:
+            if args.sort_by in metrics:
+                print(f"Sorting by: {args.sort_by}")
+            else:
+                print(f"Warning: sort-by metric '{args.sort_by}' not in selected metrics, using average")
+        print(f"Summary has {len(summary_df)} layouts" if summary_df is not None else "Summary is None")
         if summary_df is not None and len(summary_df) > 0:
             print(f"Using performance-based coloring for parallel plot")
+            print(f"Sample layouts from summary: {list(summary_df['layout'].head(3))}")
     
     # Determine output path
     plot_output = args.output if args.output else str(output_dir / 'layout_comparison.png')
     
+    # Pass normalized_dfs to avoid re-normalization
     # Generate parallel coordinates plot
-    create_parallel_plot(dfs, table_names, metrics, plot_output, summary_df)
+    create_parallel_plot(normalized_dfs, table_names, metrics, plot_output, summary_df)
     
-    # Generate heatmap plot
-    create_heatmap_plot(dfs, table_names, metrics, plot_output)
+    # Generate heatmap plot  
+    create_heatmap_plot(normalized_dfs, table_names, metrics, plot_output, summary_df, args.sort_by)
     
     # Generate additional plots if requested
     if args.plot:
