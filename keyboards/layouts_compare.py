@@ -21,25 +21,24 @@ Column Meanings:
 - positions/keys: QWERTY positions where those letters go (e.g., "KJ;ASDVRLFUEIM")
 
 Examples:
-    # Basic comparison with auto-detected metrics
+    # Basic comparison with auto-detected metrics:
     python layouts_compare.py --tables layout_scores.csv
 
-    # Multiple tables with specific metrics
+    # Multiple tables with specific metrics:
     python layouts_compare.py --tables scores1.csv scores2.csv \
         --metrics engram_avg4_score comfort dvorak7
 
-    # Full analysis with all visualizations and report
+    # Full analysis with all visualizations and report:
     python layouts_compare.py --tables layouts.csv \
         --metrics engram_key_preference engram_avg4_score comfort \
         --plot --report --summary summary.csv
 
-    # Sort all visualizations (heatmap, parallel, scatter) by specific metric
+    # Sort all visualizations (heatmap, parallel, scatter) by specific metric:
     python layouts_compare.py --tables layouts.csv \
-        --metrics engram comfort dvorak7 --plot --sort-by engram \
+        --metrics engram comfort dvorak7 --plot --sort-by engram_key_preference \
         --summary sorted_by_engram.csv
 
     # Keyboard layout optimization study commands:
-    # Steps 2-4 (Step 3 does not include engram_order; Step 4 includes engram_outside):
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \

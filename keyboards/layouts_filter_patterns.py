@@ -27,18 +27,18 @@ Positions are indexed from 0, so 'A' is position 10, ';' is position 19, 'R' is 
     └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
 
 Usage:
-    # Filter out layouts starting with "ht"
+    # Filter out layouts starting with "ht":
     python layouts_filter_patterns.py --input data.csv --exclude "^ht"
     
-    # Retain only layouts with 'e' in first 5 positions
+    # Retain only layouts with 'e' in first 5 positions:
     python layouts_filter_patterns.py --input data.csv --include "^.{0,4}e"
     
-    # Exclude layouts where letters 'etaio' appear in positions A (10) or R (13)
+    # Exclude layouts where letters 'etaio' appear in positions A (10) or R (13):
     python layouts_filter_patterns.py --input data.csv \
         --forbidden-letters "etaio" \
         --forbidden-positions "AR"
     
-    # Combine multiple filters
+    # Combine multiple filters:
     python layouts_filter_patterns.py --input data.csv \
         --exclude "^ht" \
         --include "e.*a.*o" \
@@ -51,7 +51,14 @@ Usage:
         --output ../output/layouts_filter_empty_spaces.csv --report \
         --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
 
-    
+    # Include only layouts with z,q,j,x in last two positions:
+    poetry run python3 layouts_filter_patterns.py \
+        --input ../output/layouts_consolidate_moo_solutions.csv \
+        --output ../output/layouts_filter_patterns_zqjx.csv --report \
+        --exclude-vertical-bigrams "$BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS" \
+        --include "^.{30}[zqjxZQJX][zqjxZQJX]"
+
     # Keyboard layout optimization study command:
     # Don't permit common bigrams to be stacked vertically or to require hurdles.
     #   Up to 25% (cumulative fraction 0.249612493 at "or")
@@ -68,19 +75,13 @@ Usage:
         --exclude-vertical-bigrams "$BIGRAMS" \
         --exclude-hurdles "$HURDLE_BIGRAMS"
 
-    # Step 4 (include only layouts with z,q,j,x in last two positions)
-    poetry run python3 layouts_filter_patterns.py \
-        --input ../output/layouts_consolidate_moo_solutions.csv \
-        --output ../output/layouts_filter_patterns_zqjx.csv --report \
-        --exclude-vertical-bigrams "$BIGRAMS" \
-        --exclude-hurdles "$HURDLE_BIGRAMS" \
-        --include "^.{30}[zqjxZQJX][zqjxZQJX]"
-    poetry run python3 layouts_filter_patterns.py \
-        --input ../output/layouts_consolidate_moo_solutions.csv \
-        --output ../output/layouts_filter_patterns_zqjx.csv --report \
-        --exclude-vertical-bigrams "$BIGRAMS" \
-        --exclude-hurdles "$HURDLE_BIGRAMS" \
-        --include "^.{30}[zqjxkZQJXK][zqjxkZQJXK]"
+        
+
+
+
+
+
+
 
 """
 

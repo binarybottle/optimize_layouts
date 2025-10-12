@@ -23,7 +23,7 @@ Usage:
     # For each Step, modify default_objectives, default_weights, and default_maximize accordingly.
     # Step 2: Optimally (re)arrange the next 10 most frequent letters (after unassigning 2 letters) to fill the top 18 keys.
     poetry run python3 generate_configs_from_csv.py \
-        --input-file ../output/moo_204_results_config_20251006_064050.csv \
+        --input-file ../output/moo_results_E_on_left_config_20251011_123131.csv \
         --remove-positions "A;"
     # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 4 letters).
     poetry run python3 generate_configs_from_csv.py \
@@ -340,14 +340,13 @@ def main():
                 worst_positions = ""       # "Z/QPX."
                 layout_size = 18
 
-            # Build items_assigned and items_to_assign in correct order
-            items_assigned_ordered = ""
+            # Preserve the actual mapping from Step N-1
+            items_assigned_ordered = remaining_items  # Keep original order!
+
+            # Only the unassigned letters should be in frequency order
             items_to_assign_ordered = ""
             for item in all_items:
-                # All items should be included, regardless of least_frequent_items
-                if item in remaining_items:
-                    items_assigned_ordered += item
-                else:
+                if item not in remaining_items:
                     items_to_assign_ordered += item
 
             # Unassigned positions should only exclude remaining_positions, not worst_positions

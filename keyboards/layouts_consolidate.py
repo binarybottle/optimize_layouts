@@ -13,31 +13,21 @@ Output Format:
   with spaces for unassigned positions, such as: "  cr  du  oinl  teha   s  m     "
 
 Usage:
-    # Basic usage
+    # Basic usage:
     python layouts_consolidate.py
 
-    # Test with limited files first  
+    # Test with limited files first: 
     python layouts_consolidate.py --max-files 100 --verbose
 
-    # Custom pattern and objectives
+    # Custom pattern and objectives:
     python layouts_consolidate.py --file-pattern "moo_results_config_*.csv" \
         --objectives "engram_key_preference,engram_row_separation,engram_same_row,engram_same_finger,engram_order"
 
     # Keyboard layout optimization study command:
-    # Step 2 (5 objectives):
-    poetry run python3 layouts_consolidate.py \
-        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order \
-        --maximize true true true true true
-    # Step 3 (4 objectives):
-    poetry run python3 layouts_consolidate.py \
-        --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger \
-        --maximize true true true true
-    # Step 4 (6 objectives):
     poetry run python3 layouts_consolidate.py \
         --objectives engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside engram_order \
         --maximize true true true true true true
     
-
 """
 
 import os
