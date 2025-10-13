@@ -396,7 +396,7 @@ def main():
                 print(f"  Original layout: {items} -> {positions}")
                 if removed_positions:
                     print(f"  After removing {removed_positions}: {remaining_items} -> {remaining_positions}")
-                print(f"  Items assigned (freq order): {items_assigned_ordered}")
+                print(f"  Items assigned: {items_assigned_ordered}")
                 print(f"  Items to assign (freq order): {items_to_assign_ordered}")
                 print(f"  Config file: {os.path.basename(config_file)}")
         

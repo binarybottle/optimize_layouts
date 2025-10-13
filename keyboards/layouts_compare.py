@@ -42,8 +42,8 @@ Examples:
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \
-        --output ../output/compare_layouts \
-        --summary ../output/compare_layouts.csv \
+        --output ../output/layouts_compare \
+        --summary ../output/layouts_compare.csv \
         --sort-by engram_key_preference \
         --report --plot --verbose
 
