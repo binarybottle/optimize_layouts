@@ -51,12 +51,12 @@ Examples:
     poetry run python3 layouts_compare.py \
         --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_12_layouts.csv \
         --output ../output/compare_12_layouts --summary ../output/compare_12_layouts.csv \
-        --sort-by engram_same_row --report --plot --verbose \
+        --sort-by engram_key_preference --report --plot --verbose \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
                 engram_order \
                 engram_outside \
                 dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan \
-                dvorak7_columns dvorak7_remote dvorak7_inward
+                dvorak7_columns dvorak7_remote dvorak7_inward \
                 comfort
 
 Input format examples:
@@ -355,11 +355,10 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         else:
             summary_df['average_score'] = 0
         
-        # Sort by specified metric or average score (descending - best first)
+        # Sort by specified metric if requested (descending - best first)
         if sort_by and sort_by in summary_df.columns:
             summary_df = summary_df.sort_values(sort_by, ascending=False)
-        else:
-            summary_df = summary_df.sort_values('average_score', ascending=False)
+        # Otherwise preserve original table order (no sorting by default)
         
         # Prepare output columns in requested order:
         # layout, layout_qwerty (or letters+positions), average_score, then original metrics
@@ -402,12 +401,10 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     # Combine all tables
     combined_summary = pd.concat(all_summaries, ignore_index=True)
     
-    # If multiple tables, sort globally by specified metric or average score
-    if len(dfs) > 1:
-        if sort_by and sort_by in combined_summary.columns:
-            combined_summary = combined_summary.sort_values(sort_by, ascending=False)
-        else:
-            combined_summary = combined_summary.sort_values('average_score', ascending=False)
+    # If multiple tables and sort requested, sort globally by specified metric
+    if len(dfs) > 1 and sort_by and sort_by in combined_summary.columns:
+        combined_summary = combined_summary.sort_values(sort_by, ascending=False)
+    # Otherwise preserve original table order
     
     # Round average scores to remove floating point precision issues
     if 'average_score' in combined_summary.columns:
@@ -421,13 +418,13 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         combined_summary.to_csv(summary_output, index=False)
         print(f"\nSummary saved to {summary_output}")
     
-    # Print best performing layouts with appropriate label
+    # Print layouts with appropriate label
     if sort_by and sort_by in combined_summary.columns:
-        print(f"Best performing layouts (sorted by {sort_by}):")
+        print(f"Layouts (sorted by {sort_by}):")
         sort_col = sort_by
     else:
-        print(f"Best performing layouts (by average score):")
-        sort_col = 'average_score'
+        print(f"Layouts (in original table order):")
+        sort_col = 'average_score'  # For display purposes
     
     # Show top 10 layouts
     display_cols = ['layout']
@@ -555,7 +552,7 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
     fig, ax = plt.subplots(figsize=(max(12, len(metrics) * 0.8), max(8, len(layout_names) * 0.3)))
     
     # Create heatmap
-    im = ax.imshow(data_matrix, cmap='RdYlBu_r', aspect='auto', vmin=0, vmax=1)
+    im = ax.imshow(data_matrix, cmap='viridis', aspect='equal', vmin=0, vmax=1)
     
     # Set ticks and labels
     ax.set_xticks(range(len(metrics)))

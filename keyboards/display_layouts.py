@@ -19,17 +19,21 @@ Usage:
     python display_layouts.py layouts.csv
 
 CSV Examples:
-  # Preferred format
+  # Preferred format:
   layout,layout_qwerty
   Dvorak,',.pyfgcrlaeoiduhtns;qjkxbmwvz
   
-  # Standard format  
+  # Standard format:
   layout,letters,positions
   Dvorak,',.pyfgcrlaeoiduhtns;qjkxbmwvz,QWERTYUIOPASDFGHJKL;ZXCVBNM,./[
   
-  # MOO format (auto-converted)
+  # MOO format (auto-converted):
   config_id,items,positions
   2438,etaoinsrhldcum,KJ;ASDVRLFUEIM
+
+  # Keyboard layout optimization study command:
+  poetry run python3 display_layouts.py ../output/layouts_compare.csv
+  
 """
 
 import argparse
