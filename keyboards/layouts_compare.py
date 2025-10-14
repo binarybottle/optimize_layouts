@@ -587,12 +587,12 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
         if sort_by and sort_by in metrics:
             sort_info = f" (sorted by {sort_by})"
         else:
-            sort_info = " (sorted by avg. performance)"
+            sort_info = ""
     else:
         if sort_by and sort_by in metrics:
             sort_info = f" (sorted by {sort_by} within each table)"
         else:
-            sort_info = " (sorted by avg. within each table)"
+            sort_info = ""
     
     title = f'Keyboard Layout Comparison Heatmap{sort_info}\n{len(layout_names)} layouts across {len(metrics)} metrics'
     
