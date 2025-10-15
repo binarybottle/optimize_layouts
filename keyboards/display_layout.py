@@ -8,21 +8,21 @@ and displays them on a 32-key keyboard layout (3 rows: 11+11+10 keys).
 Usage:
 
     # Display ASCII keyboard layout with letters and positions:
-    python display_layout.py --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj"
+    python display_layout.py --letters "byou'\"dngvhiae,.trsckjxw-?mlfpqz"
 
     # The above is in Qwerty order, so it is the same as:
-    python display_layout.py --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
+    python display_layout.py --letters "byou'\"dngvhiae,.trsckjxw-?mlfpqz" \
         --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 
     # To generate a realistic HTML image:
     python display_layout.py \
-        --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
+        --letters "byou'\"dngvhiae,.trsckjxw-?mlfpqz" \
         --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
         --html
 
     # To generate an ortholinear HTML image:
     python display_layout.py \
-        --letters "zplr'\"diwychts,.aeomxvbn-?ugkfqj" \
+        --letters "byou'\"dngvhiae,.trsckjxw-?mlfpqz" \
         --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
         --html-ortho
 

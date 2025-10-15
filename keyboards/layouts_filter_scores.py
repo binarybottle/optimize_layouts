@@ -544,8 +544,10 @@ def main():
         else:
             # Generate both filenames based on input filename
             input_stem = Path(args.input).stem
-            output_file = f"../output/layouts_filter_scores_{input_stem}_intersection.csv"
-            removed_file = f"../output/layouts_filter_scores_removed_{input_stem}.csv"
+            #output_file = f"../output/layouts_filter_scores_{input_stem}_intersection.csv"
+            #removed_file = f"../output/layouts_filter_scores_removed_{input_stem}.csv"
+            output_file = f"../output/layouts_filter_scores_intersection.csv"
+            removed_file = f"../output/layouts_filter_scores_removed.csv"
         
         # Save filtered results
         standardized_df = filter_tool.standardize_output_columns(filtered_df)

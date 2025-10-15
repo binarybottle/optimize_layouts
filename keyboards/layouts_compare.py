@@ -39,18 +39,27 @@ Examples:
         --summary sorted_by_engram.csv
 
     # Keyboard layout optimization study commands:
+    # Steps 1-3 (6 metrics)
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
-        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside engram_order \
         --output ../output/layouts_compare \
         --summary ../output/layouts_compare.csv \
         --sort-by engram_key_preference \
         --report --plot --verbose
-
-    # Compare 12 layouts against Engram baseline
+    # Step 4 (5 vs. 6 metrics)
     poetry run python3 layouts_compare.py \
-        --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_12_layouts.csv \
-        --output ../output/compare_12_layouts --summary ../output/compare_12_layouts.csv \
+        --tables ../output/layouts_filter_patterns.csv \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_outside engram_order \
+        --output ../output/layouts_compare \
+        --summary ../output/layouts_compare.csv \
+        --sort-by average_score \
+        --report --plot --verbose
+
+    # Compare layouts against Engram
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/scores_engram.csv ../output/engram_en/scores_layouts.csv \
+        --output ../output/compare_layouts --summary ../output/compare_layouts.csv \
         --sort-by engram_key_preference --report --plot --verbose \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
                 engram_order \
