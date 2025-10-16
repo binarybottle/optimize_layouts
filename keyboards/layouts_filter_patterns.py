@@ -6,73 +6,63 @@ This script allows filtering of keyboard layouts based on:
 1. Regex patterns to exclude (filter out)
 2. Regex patterns to include (retain only)
 3. Specific letter-position constraints (e.g., 'etaio' should not be in positions 'A;R')
-4. Vertical bigrams (same column, adjacent rows)
+4. Vertical bigrams (same column, any rows)
 5. Hurdle bigrams (top-to-bottom or bottom-to-top on same hand, any columns)
+6. Same-finger hurdle bigrams (top-to-bottom on same column/finger)
+7. Adjacent-finger hurdle bigrams (top-to-bottom on adjacent columns/fingers)
 
-Vertical bigrams: Two letters in the same column on adjacent rows (e.g., q-a, a-z, w-s)
+IMPORTANT: All bigram filters are layout-agnostic. They prevent the specified bigrams from 
+being placed in problematic positions in ANY new layout, regardless of where those letters 
+appear in QWERTY.
+
+Vertical bigrams: Two letters in the same column, any rows (e.g., if layout has 'e' at top 
+                  and 'd' at bottom of same column). Useful for common same-hand bigrams 
+                  like "ed", "er", "de", "as", "an", "re" and high-frequency bigrams like 
+                  "th", "he", "in" to prevent awkward vertical stacking.
+
 Hurdle bigrams: Two letters on the same hand where one is on top row and other is on bottom row,
-                regardless of column (e.g., q-z, q-x, w-c, e-v on left; y-n, u-, on right)
-                This creates a "hurdle" motion over the home row.
+                regardless of column. This creates a "hurdle" motion over the home row.
+                Examples: For a new layout, prevent "ed", "re", "an" (typically same-hand) or 
+                "th", "he", "in" (typically cross-hand) from being placed as top-to-bottom 
+                on the same hand.
+
+Same-finger hurdles: Subset of hurdles - only top-to-bottom on the same column (same finger).
+                     Most restrictive for same-column placement.
+
+Adjacent-finger hurdles: Top-to-bottom movements on adjacent columns (adjacent fingers).
+                        Specific position pairs like Q-X, R-C, Y-M, P-.
 
 The layout_qwerty string follows QWERTY key order: "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
 Positions are indexed from 0, so 'A' is position 10, ';' is position 19, 'R' is position 13, etc.
 
     # Indices:
     ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
-    │   │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │   │   │
+    │ 0 │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │ 9 │   │
     ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
-    │   │11 │12 │13 │   │   │16 │17 │18 │   │   │
+    │10 │11 │12 │13 │   │   │16 │17 │18 │19 │   │
     ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤───┘
-    │   │   │   │23 │   │   │26 │   │   │   │
-    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘    
+    │20 │21 │22 │23 │   │   │26 │27 │28 │29 │
+    └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘      
 
 Usage:
-    # Filter out layouts starting with "ht":
-    python layouts_filter_patterns.py --input data.csv --exclude "^ht"
-    
-    # Retain only layouts with 'e' in first 5 positions:
-    python layouts_filter_patterns.py --input data.csv --include "^.{0,4}e"
-    
-    # Exclude layouts where letters 'etaio' appear in positions A (10) or R (13):
-    python layouts_filter_patterns.py --input data.csv \
-        --forbidden-letters "etaio" \
-        --forbidden-positions "AR"
-    
-    # Combine multiple filters:
-    python layouts_filter_patterns.py --input data.csv \
-        --exclude "^ht" \
-        --include "e.*a.*o" \
-        --forbidden-letters "etaio" \
-        --forbidden-positions "A;R"
-
-    # Remove rows/layouts that have any of the top eight keys empty.
-    python layouts_filter_patterns.py \
-        --input ../output/layouts_consolidate_moo_solutions.csv \
-        --output ../output/layouts_filter_empty_spaces.csv --report \
-        --exclude "^.{2}[ ],^.{7}[ ],^.{11}[ ],^.{12}[ ],^.{13}[ ],^.{16}[ ],^.{17}[ ],^.{18}[ ]"
-
-    # Include only layouts with z,q,j,x in last two positions:
-    poetry run python3 layouts_filter_patterns.py \
-        --input ../output/layouts_consolidate_moo_solutions.csv \
-        --output ../output/layouts_filter_patterns_zqjx.csv --report \
-        --include "^.{30}[zqjxZQJX][zqjxZQJX]"
 
     # Keyboard layout optimization study command:
     # Don't permit common bigrams to be stacked vertically or to require hurdles.
-    #   Up to 25% (cumulative fraction 0.249612493 at "or")
     BIGRAMS25="th,he,in,er,an,re,on,at,en,nd,ti,es,or"
-    #   25% to 50% (cumulative fraction 0.497485843 at "ea")
     BIGRAMS50="te,of,ed,is,it,al,ar,st,to,nt,ng,se,ha,as,ou,io,le,ve,co,me,de,hi,ri,ro,ic,ne,ea"
-    #   50% to 75% (cumulative fraction 0.727855962 at "na")
     BIGRAMS75="ra,ce,li,ch,ll,be,ma,si,om,ur,ca,el,ta,la,ns,di,fo,ho,pe,ec,pr,no,ct,us,ac,ot,il,tr,ly,nc,et,ut,ss,so,rs,un,lo,wa,ge,ie,wh,ee,wi,em,ad,ol,rt,po,we,na"
     BIGRAMS90="ul,ni,ts,mo,ow,pa,im,mi,ai,sh,ir,su,id,os,iv,ia,am,fi,ci,vi,pl,ig,tu,ev,ld,ry,mp,fe,bl,ab,gh,ty,op,wo,sa,ay,ex,ke,fr,oo,av,ag,if,ap,gr,od,bo,sp,rd,do,uc,bu,ei,ov,by,rm,ep,tt,oc,fa,ef,cu,rn,sc,gi,da,yo,cr,cl,du,ga,qu,ue,ff,ba,ey,ls,va,um,pp,ua,up,lu,go,ht,ru,ug,ds,lt,pi,rc,rr,eg,au"
-    BIGRAMS="$BIGRAMS25,$BIGRAMS50"
-    HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50"  # ,$BIGRAMS75,$BIGRAMS90"
+    SAME_FINGER_BIGRAMS="$BIGRAMS25,$BIGRAMS50"
+    HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
+    SAME_FINGER_HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75,$BIGRAMS90"
+    #ADJACENT_FINGER_HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
+    #   --exclude-adjacent-hurdles "$ADJACENT_FINGER_HURDLE_BIGRAMS"
     poetry run python3 layouts_filter_patterns.py \
         --input ../output/layouts_consolidate_moo_solutions.csv \
         --output ../output/layouts_filter_patterns.csv --report \
-        --exclude-vertical-bigrams "$BIGRAMS" \
-        --exclude-hurdles "$HURDLE_BIGRAMS"
+        --exclude-vertical-bigrams "$SAME_FINGER_BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS" \
+        --exclude-same-finger-hurdles "$SAME_FINGER_HURDLE_BIGRAMS"
 
 """
 
@@ -257,8 +247,23 @@ class LayoutPatternFilter:
         Generate exclusion patterns for bigrams that should not be vertically stacked.
         Checks same-column placement across all row pairs: top-home, home-bottom, and top-bottom.
         
+        This function is layout-agnostic: it prevents the specified bigrams from being placed
+        in the same column (same finger) regardless of which columns they occupy. For each bigram,
+        it generates patterns for all 10 possible columns.
+        
+        Examples of bigrams to exclude:
+        - Common same-hand bigrams in QWERTY: "ed" and "de"
+        - High-frequency bigrams that would be awkward vertically: "th", "he", "in"
+          (even if typically cross-hand in QWERTY, we prevent them from being
+          placed vertically in any new layout)
+        
+        For instance, if "th" is in the bigram list:
+        - Excludes layouts where 't' is at position 0 (Q) and 'h' is at position 10 (A)
+        - Excludes layouts where 't' is at position 3 (R) and 'h' is at position 23 (V)
+        - ...and so on for all 10 columns in both directions
+        
         Args:
-            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,er")
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,in,er,an,re")
         
         Returns:
             List of regex patterns to exclude vertical bigram placements
@@ -310,7 +315,7 @@ class LayoutPatternFilter:
                 
                 patterns.extend([pattern3, pattern4])
             
-            # Top row to bottom row stacking (positions 0-9 to 20-29) - NEW!
+            # Top row to bottom row stacking (positions 0-9 to 20-29)
             for i in range(10):
                 top_pos = i
                 bottom_pos = i + 20
@@ -333,81 +338,255 @@ class LayoutPatternFilter:
                 patterns.extend([pattern5, pattern6])
         
         if self.verbose:
-            print(f"Generated {len(patterns)} vertical exclusion patterns for {len(bigrams)} bigrams (including non-adjacent rows)")
+            print(f"Generated {len(patterns)} vertical exclusion patterns for {len(bigrams)} bigrams (all same-column combinations)")
         
         return patterns
 
     def generate_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
-            """
-            Generate exclusion patterns for bigrams that create top-to-bottom movements on same hand.
-            Excludes any bigram where one letter is on the top row and the other is on the bottom row
-            of the same hand, regardless of column (creates a "hurdle" over the home row).
+        """
+        Generate exclusion patterns for bigrams that create top-to-bottom movements on same hand.
+        Excludes any bigram where one letter is on the top row and the other is on the bottom row
+        of the same hand, regardless of column (creates a "hurdle" over the home row).
+        
+        This checks all possible top-to-bottom placements on each hand:
+        - Left hand: Any combination of positions 0-4 (QWERT) with 20-24 (ZXCVB)
+        - Right hand: Any combination of positions 5-9 (YUIOP) with 25-29 (NM,./)
+        
+        Examples of bigrams to exclude:
+        - Common same-hand QWERTY bigrams: "ed" and "de"
+        - High-frequency cross-hand bigrams: "th" and "he"
+          (prevents them from being placed as hurdles in any new layout)
+        
+        For instance, if "th" is in the list:
+        - Excludes 't' at position 0 (Q) with 'h' at any of positions 20-24 (Z,X,C,V,B)
+        
+        Args:
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,qz,wc")
+        
+        Returns:
+            List of regex patterns to exclude hurdle bigram placements
+        """
+        if not bigrams_str:
+            return []
+        
+        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+        patterns = []
+        
+        # Define hand positions
+        # Left hand: top=0-4 (QWERT), bottom=20-24 (ZXCVB)
+        # Right hand: top=5-9 (YUIOP), bottom=25-29 (NM,./)
+        left_top = list(range(0, 5))       # Q, W, E, R, T
+        left_bottom = list(range(20, 25))  # Z, X, C, V, B
+        
+        right_top = list(range(5, 10))     # Y, U, I, O, P
+        right_bottom = list(range(25, 30)) # N, M, ,, ., /
+        
+        # Filter bottom positions that exist in layout
+        left_bottom = [p for p in left_bottom if p < len(self.QWERTY_ORDER)]
+        right_bottom = [p for p in right_bottom if p < len(self.QWERTY_ORDER)]
+        
+        for bigram in bigrams:
+            if len(bigram) != 2:
+                continue
             
-            Args:
-                bigrams_str: Comma-separated string of bigrams (e.g., "th,he,qz,wc")
+            char1, char2 = bigram[0].lower(), bigram[1].lower()
             
-            Returns:
-                List of regex patterns to exclude hurdle bigram placements
-            """
-            if not bigrams_str:
-                return []
+            # Left hand: char1 on top, char2 on bottom (any columns)
+            for top_pos in left_top:
+                for bottom_pos in left_bottom:
+                    if top_pos == 0:
+                        pattern = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                    else:
+                        pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                    patterns.append(pattern)
             
-            bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
-            patterns = []
+            # Left hand: char2 on top, char1 on bottom (any columns)
+            for top_pos in left_top:
+                for bottom_pos in left_bottom:
+                    if top_pos == 0:
+                        pattern = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                    else:
+                        pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                    patterns.append(pattern)
             
-            # Define hand positions
-            # Left hand: top=0-4 (QWERT), home=10-14 (ASDFG), bottom=20-24 (ZXCVB)
-            # Right hand: top=5-9 (YUIOP), home=15-19 (HJKLñ), bottom=25-29 (NM,./)
-            left_top = list(range(0, 5))      # Q, W, E, R, T
-            left_bottom = list(range(20, 25))  # Z, X, C, V, B
+            # Right hand: char1 on top, char2 on bottom (any columns)
+            for top_pos in right_top:
+                for bottom_pos in right_bottom:
+                    pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                    patterns.append(pattern)
             
-            right_top = list(range(5, 10))     # Y, U, I, O, P
-            right_bottom = list(range(25, 30)) # N, M, ,, ., /
+            # Right hand: char2 on top, char1 on bottom (any columns)
+            for top_pos in right_top:
+                for bottom_pos in right_bottom:
+                    pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                    patterns.append(pattern)
+        
+        if self.verbose:
+            print(f"Generated {len(patterns)} hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom on same hand, any columns)")
+        
+        return patterns
+
+    def generate_same_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+        """
+        Generate exclusion patterns for bigrams that create same-finger hurdle movements.
+        Same-finger hurdles are top-to-bottom movements in the same column (same finger).
+        This is the most restrictive hurdle filter, focusing only on same-column transitions.
+        
+        This function is layout-agnostic: it checks all possible same-column placements:
+        - Left hand: (0,20) Q-Z, (1,21) W-X, (2,22) E-C, (3,23) R-V
+        - Right hand: (6,26) Y-N, (7,27) U-M, (8,28) I-comma, (9,29) O-period
+        
+        For instance, if "ed" is in the list:
+        - Excludes 'e' at position 2 (E) with 'd' at position 22 (C)
+        - Excludes 'd' at position 7 (U) with 'e' at position 27 (M)
+        - ...and so on for all 8 same-column pairs
+        
+        Args:
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,in,ed,er,an")
+        
+        Returns:
+            List of regex patterns to exclude same-finger hurdle bigram placements
+        """
+
+        if not bigrams_str:
+            return []
+        
+        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+        patterns = []
+        
+        # Define same-finger hurdle position pairs: (top_pos, bottom_pos) in same column
+        # Left hand columns
+        same_finger_pairs = [
+            (0, 20),   # Q-Z (left pinky)
+            (1, 21),   # W-X (left ring)
+            (2, 22),   # E-C (left middle)
+            (3, 23),   # R-V (left index)
+        ]
+        
+        # Right hand columns  
+        same_finger_pairs.extend([
+            (6, 26),   # Y-N (right index)
+            (7, 27),   # U-M (right middle)
+            (8, 28),   # I-, (right ring)
+            (9, 29),   # O-. (right pinky)
+        ])
+        
+        for bigram in bigrams:
+            if len(bigram) != 2:
+                continue
             
-            # Filter bottom positions that exist in layout
-            left_bottom = [p for p in left_bottom if p < len(self.QWERTY_ORDER)]
-            right_bottom = [p for p in right_bottom if p < len(self.QWERTY_ORDER)]
+            char1, char2 = bigram[0].lower(), bigram[1].lower()
             
-            for bigram in bigrams:
-                if len(bigram) != 2:
+            for top_pos, bottom_pos in same_finger_pairs:
+                # Skip if positions are outside layout bounds
+                if bottom_pos >= len(self.QWERTY_ORDER):
                     continue
                 
-                char1, char2 = bigram[0].lower(), bigram[1].lower()
+                # char1 on top, char2 on bottom
+                if top_pos == 0:
+                    pattern1 = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                else:
+                    pattern1 = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
                 
-                # Left hand: char1 on top, char2 on bottom (any columns)
-                for top_pos in left_top:
-                    for bottom_pos in left_bottom:
-                        if top_pos == 0:
-                            pattern = f"^{char1}.{{{bottom_pos-1}}}{char2}"
-                        else:
-                            pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
-                        patterns.append(pattern)
+                # char2 on top, char1 on bottom (reverse direction)
+                if top_pos == 0:
+                    pattern2 = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                else:
+                    pattern2 = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
                 
-                # Left hand: char2 on top, char1 on bottom (any columns)
-                for top_pos in left_top:
-                    for bottom_pos in left_bottom:
-                        if top_pos == 0:
-                            pattern = f"^{char2}.{{{bottom_pos-1}}}{char1}"
-                        else:
-                            pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
-                        patterns.append(pattern)
-                
-                # Right hand: char1 on top, char2 on bottom (any columns)
-                for top_pos in right_top:
-                    for bottom_pos in right_bottom:
-                        pattern = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
-                        patterns.append(pattern)
-                
-                # Right hand: char2 on top, char1 on bottom (any columns)
-                for top_pos in right_top:
-                    for bottom_pos in right_bottom:
-                        pattern = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
-                        patterns.append(pattern)
+                patterns.extend([pattern1, pattern2])
+        
+        if self.verbose:
+            print(f"Generated {len(patterns)} same-finger hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom, same column)")
+        
+        return patterns
+
+    def generate_adjacent_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+        """
+        Generate exclusion patterns for bigrams that create adjacent-finger hurdle motions.
+        Adjacent-finger hurdles are top-to-bottom movements on adjacent columns (adjacent fingers).
+        
+        This function is layout-agnostic: it checks specific adjacent-finger position pairs:
+        - Left hand: (0,21) Q-X pinky→ring, 
+                     (1,22) W-C ring→middle, 
+                     (2,21) E-X middle→ring,
+                     (3,22) R-C index→middle
+        - Right hand: (6,27) Y-M index→middle, 
+                      (7,28) U-comma middle→ring, 
+                      (8,27) I-M ring→middle, 
+                      (9,28) P-period pinky→ring
+
+        # Keyboard layout:
+        ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+        │ 0 │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │ 9 │
+        ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+        │10 │11 │12 │13 │   │   │16 │17 │18 │19 │
+        ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+        │20 │21 │22 │23 │   │   │26 │27 │28 │29 │
+        └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+        
+        For instance, if "th" is in the list:
+        - Excludes 't' at position 3 (R) with 'h' at position 22 (C)
+        - Excludes 'h' at position 1 (W) with 't' at position 22 (C)
+        - ...and so on for all 8 adjacent-finger pairs
+        
+        Args:
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,in,ed,er,an")
+        
+        Returns:
+            List of regex patterns to exclude adjacent-finger hurdle bigram placements
+        """
+        if not bigrams_str:
+            return []
+        
+        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+        patterns = []
+        
+        # Define adjacent-finger hurdle position pairs: (top_pos, bottom_pos)
+        adjacent_finger_pairs = [
+            (0, 21),   # Q-X (left pinky to left ring)
+            (1, 22),   # W-C (left ring to left middle)
+            (2, 23),   # E-V (middle index to left index)
+            (1, 20),   # W-Z (left ring to left pinky)
+            (2, 21),   # E-X (left middle to left ring)
+            (3, 22),   # R-C (left index to left middle)
+            (6, 27),   # Y-M (right index to right middle)
+            (7, 28),   # U-. (right middle to right ring)
+            (8, 29),   # O-/ (right ring to right pinky)
+            (7, 26),   # I-N (right middle to right index)
+            (8, 27),   # I-M (right ring to right middle)
+            (9, 28),   # P-. (right pinky to right ring)
+        ]
+        
+        for bigram in bigrams:
+            if len(bigram) != 2:
+                continue
             
-            if self.verbose:
-                print(f"Generated {len(patterns)} hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom on same hand)")
+            char1, char2 = bigram[0].lower(), bigram[1].lower()
             
-            return patterns
+            for top_pos, bottom_pos in adjacent_finger_pairs:
+                # Skip if positions are outside layout bounds
+                if bottom_pos >= len(self.QWERTY_ORDER):
+                    continue
+                
+                # char1 on top, char2 on bottom
+                if top_pos == 0:
+                    pattern1 = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                else:
+                    pattern1 = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                
+                # char2 on top, char1 on bottom (reverse direction)
+                if top_pos == 0:
+                    pattern2 = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                else:
+                    pattern2 = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                
+                patterns.extend([pattern1, pattern2])
+        
+        if self.verbose:
+            print(f"Generated {len(patterns)} adjacent-finger hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom, adjacent columns)")
+        
+        return patterns
 
     def print_position_map(self):
         """Print the QWERTY position mapping for reference."""
@@ -497,6 +676,10 @@ def main():
                         help='Comma-separated bigrams to exclude when vertically stacked (e.g., "th,he,er")')
     parser.add_argument('--exclude-hurdles', type=str,
                         help='Comma-separated bigrams to exclude when creating top-to-bottom movements on same hand (e.g., "th,qz,wc")')
+    parser.add_argument('--exclude-same-finger-hurdles', type=str,
+                        help='Comma-separated bigrams to exclude in same-finger hurdle positions (top-to-bottom, same column)')
+    parser.add_argument('--exclude-adjacent-hurdles', type=str,
+                        help='Comma-separated bigrams to exclude in adjacent-finger hurdle positions: [0,21], [3,22], [6,27], [9,28], [1,22], [2,21], [7,28], [8,27]')
 
     # Position constraint options
     parser.add_argument('--forbidden-letters', type=str,
@@ -576,6 +759,16 @@ def main():
             hurdle_patterns = filter_tool.generate_hurdle_exclusion_patterns(args.exclude_hurdles)
             exclude_patterns.extend(hurdle_patterns)
 
+        # Add same-finger hurdle bigrams if specified (top-to-bottom, same column)
+        if args.exclude_same_finger_hurdles:
+            same_finger_patterns = filter_tool.generate_same_finger_hurdle_exclusion_patterns(args.exclude_same_finger_hurdles)
+            exclude_patterns.extend(same_finger_patterns)
+
+        # Add adjacent-finger hurdle bigrams if specified (specific position pairs)
+        if args.exclude_adjacent_hurdles:
+            adjacent_finger_patterns = filter_tool.generate_adjacent_finger_hurdle_exclusion_patterns(args.exclude_adjacent_hurdles)
+            exclude_patterns.extend(adjacent_finger_patterns)
+
         if args.verbose:
             if exclude_patterns:
                 print(f"Total exclude patterns: {len(exclude_patterns)}")
@@ -585,6 +778,10 @@ def main():
                 print(f"Forbidden: letters '{args.forbidden_letters}' in positions '{args.forbidden_positions}'")
             if args.exclude_hurdles:
                 print(f"Excluding hurdle bigrams (top-to-bottom on same hand): {args.exclude_hurdles}")
+            if args.exclude_same_finger_hurdles:
+                print(f"Excluding same-finger hurdle bigrams (top-to-bottom, same column): {args.exclude_same_finger_hurdles}")
+            if args.exclude_adjacent_hurdles:
+                print(f"Excluding adjacent-finger hurdle bigrams: {args.exclude_adjacent_hurdles}")
 
         # Apply filtering
         filtered_df = filter_tool.filter_layouts(
