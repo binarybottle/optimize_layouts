@@ -41,13 +41,21 @@ Examples:
         --negative-metrics scissors skipgrams \
         --plot --sort-by comfort --summary sorted_by_comfort.csv
 
-    # Keyboard layout optimization study command (4 metrics, no engram_outside, engram_order):
+    # Keyboard layout optimization study command
+    # 4 metrics:
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
         --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
         --report --plot --verbose \
         --sort-by average_score
+    # 3 metrics:
+    poetry run python3 layouts_compare.py \
+            --tables ../output/layouts_filter_patterns.csv \
+            --metrics engram_row_separation engram_same_row engram_same_finger \
+            --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
+            --report --plot --verbose \
+            --sort-by average_score
 
     # Compare layouts against Engram (example with many metrics):
     poetry run python3 layouts_compare.py \

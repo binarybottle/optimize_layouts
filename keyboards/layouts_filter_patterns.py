@@ -55,14 +55,14 @@ Usage:
     SAME_FINGER_BIGRAMS="$BIGRAMS25,$BIGRAMS50"
     HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
     SAME_FINGER_HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75,$BIGRAMS90"
-    #ADJACENT_FINGER_HURDLE_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75"
-    #   --exclude-adjacent-hurdles "$ADJACENT_FINGER_HURDLE_BIGRAMS"
+    SCISSOR_BIGRAMS="$BIGRAMS25,$BIGRAMS50,$BIGRAMS75,$BIGRAMS90"
     poetry run python3 layouts_filter_patterns.py \
         --input ../output/layouts_consolidate_moo_solutions.csv \
         --output ../output/layouts_filter_patterns.csv --report \
         --exclude-vertical-bigrams "$SAME_FINGER_BIGRAMS" \
         --exclude-hurdles "$HURDLE_BIGRAMS" \
-        --exclude-same-finger-hurdles "$SAME_FINGER_HURDLE_BIGRAMS"
+        --exclude-same-finger-hurdles "$SAME_FINGER_HURDLE_BIGRAMS" \
+        --exclude-scissor-hurdles "$SCISSOR_BIGRAMS"
 
 """
 
@@ -588,6 +588,75 @@ class LayoutPatternFilter:
         
         return patterns
 
+    def generate_scissor_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+        """
+        Generate exclusion patterns for bigrams that create adjacent-finger scissor hurdle motions.
+        Scissor hurdles are top-to-bottom movements on adjacent columns (adjacent fingers)
+        in which the shorter finger reaches up and the longer finger reaches down.
+        
+        # Keyboard layout:
+        ┌───┬───┬───┬───┬───┬───┬───┬───┬───┬───┐
+        │ 0 │ 1 │ 2 │ 3 │   │   │ 6 │ 7 │ 8 │ 9 │
+        ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+        │10 │11 │12 │13 │   │   │16 │17 │18 │19 │
+        ├───┼───┼───┼───┼───┼───┼───┼───┼───┼───┤
+        │20 │21 │22 │23 │   │   │26 │27 │28 │29 │
+        └───┴───┴───┴───┴───┴───┴───┴───┴───┴───┘
+        
+        For instance, if "th" is in the list:
+        - Excludes 't' at position 3 (R) with 'h' at position 22 (C)
+        - Excludes 'h' at position 0 (Q) with 't' at position 21 (X)
+        
+        Args:
+            bigrams_str: Comma-separated string of bigrams (e.g., "th,he,in,ed,er,an")
+        
+        Returns:
+            List of regex patterns to exclude adjacent-finger hurdle bigram placements
+        """
+        if not bigrams_str:
+            return []
+        
+        bigrams = [b.strip() for b in bigrams_str.split(',') if b.strip()]
+        patterns = []
+        
+        # Define adjacent-finger hurdle position pairs: (top_pos, bottom_pos)
+        adjacent_finger_pairs = [
+            (0, 21),   # Q-X (left pinky to left ring)
+            (3, 22),   # R-C (left index to left middle)
+            (6, 27),   # Y-M (right index to right middle)
+            (9, 28),   # P-. (right pinky to right ring)
+        ]
+        
+        for bigram in bigrams:
+            if len(bigram) != 2:
+                continue
+            
+            char1, char2 = bigram[0].lower(), bigram[1].lower()
+            
+            for top_pos, bottom_pos in adjacent_finger_pairs:
+                # Skip if positions are outside layout bounds
+                if bottom_pos >= len(self.QWERTY_ORDER):
+                    continue
+                
+                # char1 on top, char2 on bottom
+                if top_pos == 0:
+                    pattern1 = f"^{char1}.{{{bottom_pos-1}}}{char2}"
+                else:
+                    pattern1 = f"^.{{{top_pos}}}{char1}.{{{bottom_pos-top_pos-1}}}{char2}"
+                
+                # char2 on top, char1 on bottom (reverse direction)
+                if top_pos == 0:
+                    pattern2 = f"^{char2}.{{{bottom_pos-1}}}{char1}"
+                else:
+                    pattern2 = f"^.{{{top_pos}}}{char2}.{{{bottom_pos-top_pos-1}}}{char1}"
+                
+                patterns.extend([pattern1, pattern2])
+        
+        if self.verbose:
+            print(f"Generated {len(patterns)} adjacent-finger hurdle exclusion patterns for {len(bigrams)} bigrams (top-to-bottom, adjacent columns)")
+        
+        return patterns
+
     def print_position_map(self):
         """Print the QWERTY position mapping for reference."""
         print("QWERTY Position Reference:")
@@ -680,6 +749,8 @@ def main():
                         help='Comma-separated bigrams to exclude in same-finger hurdle positions (top-to-bottom, same column)')
     parser.add_argument('--exclude-adjacent-hurdles', type=str,
                         help='Comma-separated bigrams to exclude in adjacent-finger hurdle positions: [0,21], [3,22], [6,27], [9,28], [1,22], [2,21], [7,28], [8,27]')
+    parser.add_argument('--exclude-scissor-hurdles', type=str,
+                        help='Comma-separated bigrams to exclude in scissor hurdle positions (adjacent fingers, shorter reaches up): [0,21], [3,22], [6,27], [9,28]')
 
     # Position constraint options
     parser.add_argument('--forbidden-letters', type=str,
@@ -769,6 +840,11 @@ def main():
             adjacent_finger_patterns = filter_tool.generate_adjacent_finger_hurdle_exclusion_patterns(args.exclude_adjacent_hurdles)
             exclude_patterns.extend(adjacent_finger_patterns)
 
+        # Add scissor hurdle bigrams if specified (specific position pairs)
+        if args.exclude_scissor_hurdles:
+            scissor_hurdle_patterns = filter_tool.generate_scissor_hurdle_exclusion_patterns(args.exclude_scissor_hurdles)
+            exclude_patterns.extend(scissor_hurdle_patterns)
+
         if args.verbose:
             if exclude_patterns:
                 print(f"Total exclude patterns: {len(exclude_patterns)}")
@@ -782,6 +858,8 @@ def main():
                 print(f"Excluding same-finger hurdle bigrams (top-to-bottom, same column): {args.exclude_same_finger_hurdles}")
             if args.exclude_adjacent_hurdles:
                 print(f"Excluding adjacent-finger hurdle bigrams: {args.exclude_adjacent_hurdles}")
+            if args.exclude_scissor_hurdles:
+                print(f"Excluding scissor hurdle bigrams: {args.exclude_scissor_hurdles}")
 
         # Apply filtering
         filtered_df = filter_tool.filter_layouts(
