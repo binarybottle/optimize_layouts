@@ -23,7 +23,7 @@ Usage:
     # To generate an ortholinear HTML image:
     python display_layout.py \
         --letters "byou'\"dngvhiae,.trsckjxw-?mlfpqz" \
-        --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['"
+        --positions "QWERTYUIOPASDFGHJKL;ZXCVBNM,./['" \
         --html-ortho
 
     # Arbitrary letters and positions:
