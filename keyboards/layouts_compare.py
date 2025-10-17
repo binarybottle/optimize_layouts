@@ -558,10 +558,12 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
                 metric_values, layout_qwerty = layout_lookup[layout_name]
                 all_data.append(metric_values)
                 # Prefer layout_qwerty if available, otherwise use layout name
-                if layout_qwerty and layout_qwerty not in ('nan', '', 'None'):
+                if layout_name and layout_name not in ('nan', '', 'None'):
+                    layout_labels.append(layout_name)
+                elif layout_qwerty and layout_qwerty not in ('nan', '', 'None'):
                     layout_labels.append(layout_qwerty)
                 else:
-                    layout_labels.append(layout_name)
+                    layout_labels.append("layout")
     else:
         # Original behavior: sort within each table
         all_data = []
