@@ -64,7 +64,7 @@ Examples:
         --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
         --sort-by average_score --report --plot --verbose \
         --positive-metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \
-                dvorak7_distribution dvorak7_strength dvorak7_middle dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward \
+                dvorak7_distribution dvorak7_strength dvorak7_home dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward \
                 comfort \
         --negative-metrics same-finger_bigrams skipgrams lateral_stretch_bigrams scissors \
                 distance same_finger same_hand
