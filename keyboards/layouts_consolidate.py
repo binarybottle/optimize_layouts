@@ -145,7 +145,6 @@ def parse_individual_moo_file(filepath: str, debug: bool = False) -> pd.DataFram
         # Add metadata columns with safe string conversion
         df['config_id'] = safe_string_conversion(config_id)
         df['source_file'] = safe_string_conversion(filename)
-        df['source_rank'] = df['rank']  # Preserve original rank from source file
         
         # Remove the original 'rank' column to avoid confusion with global rankings
         df = df.drop('rank', axis=1)
@@ -473,6 +472,13 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
         print("Warning: No Pareto solutions to save")
         return
     
+    # Define columns to exclude from output
+    exclude_cols = ['combined_score', 'layout']
+    
+    # Filter out excluded columns from the dataframe
+    columns_to_keep = [col for col in pareto_solutions.columns if col not in exclude_cols]
+    pareto_solutions = pareto_solutions[columns_to_keep].copy()
+    
     # Add layout_qwerty column if items and positions exist
     if 'items' in pareto_solutions.columns and 'positions' in pareto_solutions.columns:
         print("Adding layout_qwerty column...")
@@ -485,8 +491,7 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
     standard_cols = ['config_id', 'items', 'positions', 'layout_qwerty']
     
     # Identify objective columns (exclude known metadata columns)
-    metadata_cols = ['config_id', 'source_rank', 'items', 'positions', 'layout_qwerty', 
-                     'source_file', 'layout', 'combined_score']
+    metadata_cols = ['config_id', 'items', 'positions', 'layout_qwerty', 'source_file']
     objective_cols = [col for col in pareto_solutions.columns if col not in metadata_cols]
     
     # Final standardized column ordering
@@ -496,10 +501,6 @@ def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str,
     for col in standard_cols:
         if col in pareto_solutions.columns:
             ordered_cols.append(col)
-    
-    # Add source_rank after standard columns
-    if 'source_rank' in pareto_solutions.columns:
-        ordered_cols.append('source_rank')
     
     # Add objective columns (sorted for consistency)
     ordered_cols.extend(sorted(objective_cols))

@@ -69,8 +69,7 @@ Examples:
         --negative-metrics same-finger_bigrams skipgrams lateral_stretch_bigrams scissors \
                 distance same_finger same_hand
 
-                
-
+            
 Input format examples:
   
   Preferred format:
@@ -180,9 +179,11 @@ def load_layout_data(file_path: str, verbose: bool = False) -> pd.DataFrame:
             print(f"Columns: {list(df.columns)}")
         
         # Check required columns with automatic format detection
-        if 'layout' not in df.columns:
-            raise ValueError("Missing required column: 'layout'")
-        
+        if 'layout' not in df.columns and 'layout_qwerty' in df.columns:
+            df['layout'] = df['layout_qwerty']
+            if verbose:
+                print("  Using 'layout_qwerty' as 'layout' column")
+
         # Detect and handle different layout column formats
         letters_col = None
         positions_col = None
@@ -250,7 +251,7 @@ def find_available_metrics(dfs: List[pd.DataFrame], verbose: bool = False) -> Li
     all_metrics = set()
     for df in dfs:
         for col in df.columns:
-            if col not in ['layout', 'letters', 'positions'] and pd.api.types.is_numeric_dtype(df[col]):
+            if col not in ['layout', 'layout_qwerty','letters', 'positions'] and pd.api.types.is_numeric_dtype(df[col]):
                 all_metrics.add(col)
     
     # Convert to sorted list (alphabetical order)
