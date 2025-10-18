@@ -15,7 +15,7 @@ Usage:
     # Keyboard layout optimization study command:
     poetry run python3 layouts_filter_scores.py \
         --input ../output/layouts_filter_patterns.csv \
-        --top-percent 75 --plot --report --verbose
+        --top-percent 25 --plot --report --verbose
 
 """
 import pandas as pd

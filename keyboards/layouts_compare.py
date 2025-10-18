@@ -41,21 +41,21 @@ Examples:
         --negative-metrics scissors skipgrams \
         --plot --sort-by comfort --summary sorted_by_comfort.csv
 
-    # Keyboard layout optimization study command
-    # 4 metrics:
+    # Keyboard layout optimization study commands:
+    # Step 2:
     poetry run python3 layouts_compare.py \
         --tables ../output/layouts_filter_patterns.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
         --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
         --report --plot --verbose \
-        --sort-by average_score
-    # 3 metrics:
+        --sort-by average_score       
+    # Step 3:
     poetry run python3 layouts_compare.py \
-            --tables ../output/layouts_filter_patterns.csv \
-            --metrics engram_row_separation engram_same_row engram_same_finger \
-            --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
-            --report --plot --verbose \
-            --sort-by average_score
+        --tables ../output/layouts_consolidate.csv \
+        --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
+        --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
+        --report --plot --verbose \
+        --sort-by average_score
 
     # Compare layouts against Engram (example with many metrics):
     poetry run python3 layouts_compare.py \
@@ -81,8 +81,9 @@ Input format examples:
   2438,etaoinsrhldcum,KJ;ASDVRLFUEIM,0.742,0.960
 
 Summary output:
-  CSV with columns: index, layout, [layout_qwerty, positions], average_score, [metric_values]
+  CSV with columns: index, layout, [layout_qwerty, positions], average_score, balanced_average, [metric_values]
   Layouts ordered by average performance across selected metrics (higher = better)
+  balanced_average penalizes layouts with wide tradeoffs (mean - 0.5 × std_dev)
 """
 
 import argparse
@@ -419,8 +420,15 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         valid_metrics = [metric for metric in metrics if metric in summary_df.columns]
         if valid_metrics:
             summary_df['average_score'] = summary_df[valid_metrics].mean(axis=1)
+            # Calculate balanced average with std dev penalty (α = 0.5)
+            # This penalizes layouts with wide tradeoffs across objectives
+            summary_df['balanced_average'] = (
+                summary_df[valid_metrics].mean(axis=1) - 
+                0.5 * summary_df[valid_metrics].std(axis=1)
+            )
         else:
             summary_df['average_score'] = 0
+            summary_df['balanced_average'] = 0
         
         # Sort by specified metric if requested (descending - best first)
         if sort_by and sort_by in summary_df.columns:
@@ -428,7 +436,7 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
         # Otherwise preserve original table order (no sorting by default)
         
         # Prepare output columns in requested order:
-        # layout, layout_qwerty (or letters+positions), average_score, then original metrics
+        # layout, layout_qwerty (or letters+positions), average_score, balanced_average, then original metrics
         output_columns = ['layout']
         
         # Add layout string column(s) - detect if letters is full QWERTY layout or MOO format
@@ -443,8 +451,9 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
                 # MOO format or other - keep both letters and positions
                 output_columns.extend(['letters', 'positions'])
         
-        # Add average score column
+        # Add average score columns
         output_columns.append('average_score')
+        output_columns.append('balanced_average')
         
         # Add original metric columns
         output_columns.extend(metrics)
@@ -476,6 +485,8 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     # Round average scores to remove floating point precision issues
     if 'average_score' in combined_summary.columns:
         combined_summary['average_score'] = combined_summary['average_score'].round(4)
+    if 'balanced_average' in combined_summary.columns:
+        combined_summary['balanced_average'] = combined_summary['balanced_average'].round(4)
     
     # Add index column (1-based)
     combined_summary.insert(0, 'index', range(1, len(combined_summary) + 1))
@@ -500,19 +511,33 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     display_cols.append(sort_col)
     if sort_col != 'average_score' and 'average_score' in combined_summary.columns:
         display_cols.append('average_score')
+    if 'balanced_average' in combined_summary.columns and 'balanced_average' not in display_cols:
+        display_cols.append('balanced_average')
     
     top_layouts = combined_summary[display_cols].head(10)
     for i, (_, row) in enumerate(top_layouts.iterrows(), 1):
         if 'table' in row:
             if sort_col != 'average_score' and 'average_score' in row:
-                print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
+                if 'balanced_average' in row:
+                    print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}, Balanced: {row['balanced_average']:.3f}")
+                else:
+                    print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
             else:
-                print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}")
+                if 'balanced_average' in row:
+                    print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}, Balanced: {row['balanced_average']:.3f}")
+                else:
+                    print(f"  {i:2d}. {row['layout']} ({row['table']}) - {sort_col}: {row[sort_col]:.3f}")
         else:
             if sort_col != 'average_score' and 'average_score' in row:
-                print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
+                if 'balanced_average' in row:
+                    print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}, Balanced: {row['balanced_average']:.3f}")
+                else:
+                    print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}, Avg: {row['average_score']:.3f}")
             else:
-                print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}")
+                if 'balanced_average' in row:
+                    print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}, Balanced: {row['balanced_average']:.3f}")
+                else:
+                    print(f"  {i:2d}. {row['layout']} - {sort_col}: {row[sort_col]:.3f}")
     
     return combined_summary
 
@@ -1308,6 +1333,8 @@ def generate_report(dfs: List[pd.DataFrame], table_names: List[str],
             if 'table' in summary_df.columns:
                 display_cols.append('table')
             display_cols.append('average_score')
+            if 'balanced_average' in summary_df.columns:
+                display_cols.append('balanced_average')
             display_cols.extend([m for m in metrics if m in summary_df.columns][:3])
             
             top_20 = summary_df[display_cols].head(20)
