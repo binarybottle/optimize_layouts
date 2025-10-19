@@ -57,19 +57,42 @@ Examples:
         --report --plot --verbose \
         --sort-by average_score
 
-    # Compare layouts against Engram (example with many metrics):
+    # Compare layouts against Engram:
+    # All scores:
     poetry run python3 layouts_compare.py \
         --tables ../output/engram_en/scores_31_layouts.csv \
                  ../output/engram_en/scores_engram.csv \
-        --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
+        --output ../output/layouts_compare_all_scores --summary ../output/layouts_compare_all_scores.csv \
         --sort-by average_score --report --plot --verbose \
-        --positive-metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger engram_order engram_outside \
-                dvorak7_distribution dvorak7_strength dvorak7_home dvorak7_vspan dvorak7_columns dvorak7_remote dvorak7_inward \
-                comfort \
-        --negative-metrics same-finger_bigrams skipgrams lateral_stretch_bigrams scissors \
-                distance same_finger same_hand
-
-            
+        --positive-metrics key_preference row_separation same_row same_finger outside_homeblock trigram_sequence \
+            dvorak_distribution dvorak_row_span dvorak_homeblocks dvorak_remote_fingers \
+            comfort \
+        --negative-metrics distance \
+                SFBs_1u SFBs_2u SFSs_1u SFSs_2u LSBs_1u LSBs_2u skipgrams_1u skipgrams_2u
+    # Engram scores:
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/scores_31_layouts.csv \
+                 ../output/engram_en/scores_engram.csv \
+        --output ../output/layouts_compare_engram_scores --summary ../output/layouts_compare_engram_scores.csv \
+        --sort-by average_score --report --plot --verbose \
+        --positive-metrics key_preference row_separation same_row same_finger outside_homeblock trigram_sequence
+    # Dvorak scores:
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/scores_31_layouts.csv \
+                 ../output/engram_en/scores_engram.csv \
+        --output ../output/layouts_compare_dvorak_scores --summary ../output/layouts_compare_dvorak_scores.csv \
+        --sort-by average_score --report --plot --verbose \
+        --positive-metrics dvorak_distribution dvorak_row_span dvorak_homeblocks dvorak_remote_fingers 
+    # All non-Engram and non-Dvorak scores:
+    poetry run python3 layouts_compare.py \
+        --tables ../output/engram_en/scores_31_layouts.csv \
+                 ../output/engram_en/scores_engram.csv \
+        --output ../output/layouts_compare_misc_scores --summary ../output/layouts_compare_misc_scores.csv \
+        --sort-by average_score --report --plot --verbose \
+        --positive-metrics comfort \
+        --negative-metrics distance \
+                SFBs_1u SFBs_2u SFSs_1u SFSs_2u LSBs_1u LSBs_2u skipgrams_1u skipgrams_2u
+                
 Input format examples:
   
   Preferred format:
@@ -541,26 +564,25 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     
     return combined_summary
 
-def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[str], 
+def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str], 
                        metrics: List[str], output_path: Optional[str] = None,
                        summary_df: Optional[pd.DataFrame] = None,
-                       sort_by: Optional[str] = None) -> None:
+                       sort_by: Optional[str] = None,
+                       is_normalized: bool = True) -> None:
     """Create heatmap visualization with layouts on y-axis and metrics on x-axis.
     
     Args:
-        normalized_dfs: Already normalized dataframes (0-1 scale)
-        summary_df: Pre-sorted summary dataframe for ordering (if None, sorts within tables)
+        dfs: Dataframes (normalized or raw depending on is_normalized)
+        is_normalized: If True, data is 0-1 normalized. If False, uses raw values.
     """
     
-    # If we have a summary_df, use its ordering; otherwise sort within each table
+    # [Layout ordering logic remains the same - using summary_df or sorting within tables]
     if summary_df is not None and len(summary_df) > 0:
-        # Use the order from summary_df
         all_data = []
-        layout_labels = []  # Will use layout name if available, else layout_qwerty
+        layout_labels = []
         
-        # Create a lookup for quick access to layout data
         layout_lookup = {}
-        for df, table_name in zip(normalized_dfs, table_names):
+        for df, table_name in zip(dfs, table_names):
             for _, row in df.iterrows():
                 layout_name = row.get('layout', '')
                 if layout_name:
@@ -571,19 +593,16 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
                             metric_values.append(row[metric])
                             valid_count += 1
                         else:
-                            metric_values.append(0.0)
+                            metric_values.append(0.0 if is_normalized else np.nan)
                     if valid_count >= len(metrics) * 0.5:
-                        # Store both metrics and layout_qwerty
                         layout_qwerty = row.get('layout_qwerty', '') or row.get('letters', '')
                         layout_lookup[layout_name] = (metric_values, layout_qwerty)
         
-        # Add layouts in summary order
         for _, row in summary_df.iterrows():
             layout_name = row.get('layout', '')
             if layout_name in layout_lookup:
                 metric_values, layout_qwerty = layout_lookup[layout_name]
                 all_data.append(metric_values)
-                # Prefer layout_qwerty if available, otherwise use layout name
                 if layout_name and layout_name not in ('nan', '', 'None'):
                     layout_labels.append(layout_name)
                 elif layout_qwerty and layout_qwerty not in ('nan', '', 'None'):
@@ -591,17 +610,14 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
                 else:
                     layout_labels.append("layout")
     else:
-        # Original behavior: sort within each table
         all_data = []
-        layout_labels = []  # Will use layout name if available, else layout_qwerty
+        layout_labels = []
         
-        for i, (df, table_name) in enumerate(zip(normalized_dfs, table_names)):
-            # Collect data for this table
+        for i, (df, table_name) in enumerate(zip(dfs, table_names)):
             table_data = []
             table_layout_labels = []
             
             for _, row in df.iterrows():
-                # Get metric values for this layout
                 metric_values = []
                 valid_count = 0
                 
@@ -610,14 +626,12 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
                         metric_values.append(row[metric])
                         valid_count += 1
                     else:
-                        metric_values.append(0.0)  # Default for missing data
+                        metric_values.append(0.0 if is_normalized else np.nan)
                 
-                # Skip layouts with too much missing data
                 if valid_count < len(metrics) * 0.5:
                     continue
                 
                 table_data.append(metric_values)
-                # Prefer layout_qwerty if available, otherwise use layout name
                 layout_qwerty = row.get('layout_qwerty', '') or row.get('letters', '')
                 layout_name = row.get('layout', f'Layout_{len(table_layout_labels)+1}')
                 if layout_qwerty and layout_qwerty not in ('nan', '', 'None'):
@@ -628,22 +642,18 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
             if not table_data:
                 continue
             
-            # Convert to numpy array for sorting
             table_matrix = np.array(table_data)
             
-            # Sort this table's layouts by specified metric or average performance (descending)
             if sort_by and sort_by in metrics:
                 sort_metric_idx = metrics.index(sort_by)
                 sort_values = table_matrix[:, sort_metric_idx]
             else:
-                sort_values = np.mean(table_matrix, axis=1)
-            sort_indices = np.argsort(sort_values)[::-1]  # Descending order
+                sort_values = np.nanmean(table_matrix, axis=1)
+            sort_indices = np.argsort(sort_values)[::-1]
             
-            # Apply sorting
             sorted_table_data = table_matrix[sort_indices]
             sorted_table_labels = [table_layout_labels[idx] for idx in sort_indices]
             
-            # Add to combined data
             all_data.extend(sorted_table_data.tolist())
             layout_labels.extend(sorted_table_labels)
     
@@ -651,46 +661,58 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
         print("No valid data found for heatmap")
         return
     
-    # Convert to numpy array
     data_matrix = np.array(all_data)
     
     # Set up the plot
     fig, ax = plt.subplots(figsize=(max(12, len(metrics) * 0.8), max(8, len(layout_labels) * 0.3)))
     
-    # Create heatmap
-    im = ax.imshow(data_matrix, cmap='viridis', aspect='equal', vmin=0, vmax=1)
+    # Create heatmap with appropriate scaling
+    if is_normalized:
+        # Normalized: use 0-1 scale with viridis
+        im = ax.imshow(data_matrix, cmap='viridis', aspect='equal', vmin=0, vmax=1)
+        cbar_label = 'Normalized Score (0 = worst, 1 = best)'
+    else:
+        # Raw: auto-scale to data range with RdYlGn (red=low, yellow=mid, green=high)
+        im = ax.imshow(data_matrix, cmap='RdYlGn', aspect='equal')
+        cbar_label = 'Raw Metric Value'
     
     # Set ticks and labels
     ax.set_xticks(range(len(metrics)))
     ax.set_yticks(range(len(layout_labels)))
     
-    # Format metric labels
     metric_display_names = []
     for metric in metrics:
-        # Clean up scorer names for display
         display_name = metric.replace('_', ' ').title()
         metric_display_names.append(display_name)
     
     ax.set_xticklabels(metric_display_names, rotation=45, ha='right', fontsize=9)
-    # Use monospace font for layout strings (when they're layout_qwerty format)
-    # For layout names, use normal font
     ax.set_yticklabels(layout_labels, fontsize=7, fontfamily='monospace')
     
     # Add colorbar
     cbar = plt.colorbar(im, ax=ax, shrink=0.8)
-    cbar.set_label('Normalized Score (0 = worst, 1 = best)', rotation=270, labelpad=20)
+    cbar.set_label(cbar_label, rotation=270, labelpad=20)
     
     # Add value annotations for smaller matrices
     if len(layout_labels) <= 20 and len(metrics) <= 15:
         for i in range(len(layout_labels)):
             for j in range(len(metrics)):
                 value = data_matrix[i, j]
-                # Use white text for dark cells, black for light cells
-                text_color = 'white' if value < 0.5 else 'black'
-                ax.text(j, i, f'{value:.2f}', ha='center', va='center', 
-                       color=text_color, fontsize=7, weight='bold')
+                if is_normalized:
+                    text_color = 'white' if value < 0.5 else 'black'
+                    text = f'{value:.2f}'
+                else:
+                    # For raw values, use adaptive coloring based on colormap
+                    vmin, vmax = im.get_clim()
+                    normalized_val = (value - vmin) / (vmax - vmin) if vmax > vmin else 0.5
+                    text_color = 'white' if normalized_val < 0.5 else 'black'
+                    text = f'{value:.2f}'
+                
+                if not np.isnan(value):
+                    ax.text(j, i, text, ha='center', va='center', 
+                           color=text_color, fontsize=7, weight='bold')
     
     # Title with sorting info
+    data_type = "Normalized" if is_normalized else "Raw"
     if summary_df is not None and len(summary_df) > 0:
         if sort_by and sort_by in metrics:
             sort_info = f" (sorted by {sort_by})"
@@ -702,40 +724,39 @@ def create_heatmap_plot(normalized_dfs: List[pd.DataFrame], table_names: List[st
         else:
             sort_info = ""
     
-    title = f'Keyboard Layout Comparison Heatmap{sort_info}\n{len(layout_labels)} layouts across {len(metrics)} metrics'
-    
+    title = f'Keyboard Layout Comparison Heatmap - {data_type}{sort_info}\n{len(layout_labels)} layouts across {len(metrics)} metrics'
     ax.set_title(title, fontsize=14, fontweight='bold', pad=20)
     
-    # Labels
     ax.set_xlabel('Scoring Methods', fontsize=12)
     ax.set_ylabel('Keyboard Layouts', fontsize=12)
     
-    # Adjust layout
     plt.tight_layout()
     
     # Save or show
     if output_path:
-        # Modify output path for heatmap
+        suffix = '_normalized' if is_normalized else '_raw'
         if output_path.endswith('.png'):
-            heatmap_path = output_path.replace('.png', '_heatmap.png')
+            heatmap_path = output_path.replace('.png', f'_heatmap{suffix}.png')
         else:
-            heatmap_path = output_path + '_heatmap.png'
+            heatmap_path = output_path + f'_heatmap{suffix}.png'
         plt.savefig(heatmap_path, dpi=300, bbox_inches='tight', 
                    facecolor='white', edgecolor='none')
-        print(f"Heatmap saved to {heatmap_path}")
+        print(f"Heatmap ({data_type}) saved to {heatmap_path}")
     else:
         plt.show()
     
     plt.close()
 
-def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[str], 
+
+def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str], 
                         metrics: List[str], output_path: Optional[str] = None,
-                        summary_df: Optional[pd.DataFrame] = None) -> None:
+                        summary_df: Optional[pd.DataFrame] = None,
+                        is_normalized: bool = True) -> None:
     """Create parallel coordinates plot with performance-based coloring.
     
     Args:
-        normalized_dfs: Already normalized dataframes (0-1 scale)
-        summary_df: Pre-sorted summary dataframe for coloring (if None, uses table-based colors)
+        dfs: Dataframes (normalized or raw depending on is_normalized)
+        is_normalized: If True, data is 0-1 normalized. If False, uses raw values.
     """
     
     # Set up the plot
@@ -743,84 +764,91 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
     
     # Determine coloring scheme
     use_performance_colors = summary_df is not None and len(summary_df) > 0
-    use_two_table_colors = len(normalized_dfs) == 2 and use_performance_colors
+    use_two_table_colors = len(dfs) == 2 and use_performance_colors
     
-    # Define colormaps and color ranges upfront for clarity
     if use_performance_colors:
-        # Create performance-based color mapping
         layout_to_position = {}
-        layout_to_table = {}  # Track which table each layout belongs to
+        layout_to_table = {}
         
         for idx, (_, row) in enumerate(summary_df.iterrows()):
             layout_name = row['layout']
-            layout_to_position[layout_name] = idx  # 0 = best performance
+            layout_to_position[layout_name] = idx
             if 'table' in row:
                 layout_to_table[layout_name] = row['table']
         
         total_layouts = len(layout_to_position)
         
         if use_two_table_colors:
-            # Two-table mode: grayscale + vibrant red
             print(f"Using two-table coloring: {table_names[0]} (grayscale), {table_names[1]} (red)")
             
-            # Grayscale colormap for first table
             gray_colormap = cm.Grays
-            gray_min = 0.3  # Light gray (worst)
-            gray_max = 0.9  # Dark gray (best) - avoid pure black
+            gray_min = 0.3
+            gray_max = 0.9
             
-            # Create custom red colormap for second table using pure saturated colors
-            # This creates a gradient from light pink to bright saturated red
             red_colors = [
-                (1.0, 0.8, 0.8),  # Light pink (worst)
-                (1.0, 0.4, 0.4),  # Medium red
-                (1.0, 0.0, 0.0),  # Pure red
-                (0.8, 0.0, 0.0),  # Dark saturated red (best)
+                (1.0, 0.8, 0.8),
+                (1.0, 0.4, 0.4),
+                (1.0, 0.0, 0.0),
+                (0.8, 0.0, 0.0),
             ]
             red_colormap = LinearSegmentedColormap.from_list('custom_red', red_colors)
-            red_min = 0.0  # Light pink (worst)
-            red_max = 1.0  # Dark saturated red (best)
+            red_min = 0.0
+            red_max = 1.0
             
         else:
-            # Single-table mode: use grayscale gradient
             print(f"Using performance-based coloring (grayscale) for {total_layouts} layouts")
             
-            # Use grayscale colormap for single table
             gray_colormap = cm.Grays
-            gray_min = 0.3  # Light gray (worst)
-            gray_max = 0.9  # Dark gray (best) - avoid pure black
+            gray_min = 0.3
+            gray_max = 0.9
     else:
-        # Use original table-based coloring
-        colors = get_table_colors(len(normalized_dfs))
+        colors = get_table_colors(len(dfs))
     
-    # Plot parameters
     x_positions = range(len(metrics))
     
+    # Calculate y-axis limits for raw data
+    if not is_normalized:
+        all_values = []
+        for df in dfs:
+            for metric in metrics:
+                if metric in df.columns:
+                    valid_vals = df[metric].dropna()
+                    all_values.extend(valid_vals.tolist())
+        
+        if all_values:
+            y_min = min(all_values)
+            y_max = max(all_values)
+            y_padding = (y_max - y_min) * 0.05
+            y_limits = (y_min - y_padding, y_max + y_padding)
+        else:
+            y_limits = (0, 1)
+    
     # Plot each table's data
-    for i, (df, table_name) in enumerate(zip(normalized_dfs, table_names)):
+    for i, (df, table_name) in enumerate(zip(dfs, table_names)):
         valid_layout_count = 0
         
         if not use_performance_colors:
             color = colors[i] if i < len(colors) else colors[-1]
         
         for _, row in df.iterrows():
-            y_values = [row.get(metric, 0) for metric in metrics]
+            y_values = [row.get(metric, np.nan) for metric in metrics]
             
-            # Skip rows with too much missing data
             valid_values = [val for val in y_values if pd.notna(val)]
-            if len(valid_values) < len(metrics) * 0.5:  # Need at least 50% valid data
+            if len(valid_values) < len(metrics) * 0.5:
                 continue
             
-            # Replace NaN values with 0
-            y_values = [val if pd.notna(val) else 0 for val in y_values]
+            # For raw data, keep NaN as NaN; for normalized, replace with 0
+            if not is_normalized:
+                pass  # Keep NaN values
+            else:
+                y_values = [val if pd.notna(val) else 0 for val in y_values]
             
-            # Determine line color
             if use_performance_colors:
                 layout_name = row.get('layout', '')
                 if layout_name in layout_to_position:
                     position = layout_to_position[layout_name]
                     
                     if use_two_table_colors:
-                        # Determine which table this layout belongs to
                         table_idx = None
                         if layout_name in layout_to_table:
                             layout_table = layout_to_table[layout_name]
@@ -829,21 +857,16 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
                             table_idx = i
                         
                         if table_idx == 0:
-                            # First table: grayscale (dark gray = best)
                             color_intensity = gray_max - (position / max(1, total_layouts - 1)) * (gray_max - gray_min)
                             color = gray_colormap(color_intensity)
                         else:
-                            # Second table: red (saturated red = best)
                             color_intensity = red_max - (position / max(1, total_layouts - 1)) * (red_max - red_min)
                             color = red_colormap(color_intensity)
                     else:
-                        # Single table: grayscale gradient (dark gray = best)
                         color_intensity = gray_max - (position / max(1, total_layouts - 1)) * (gray_max - gray_min)
                         color = gray_colormap(color_intensity)
                 else:
-                    # Fallback color for layouts not in summary
                     color = 'gray'
-            # else: color already set above for table-based coloring
             
             ax.plot(x_positions, y_values, color=color, alpha=0.7, linewidth=1.5)
             valid_layout_count += 1
@@ -852,28 +875,32 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
         if not use_performance_colors:
             ax.plot([], [], color=color, linewidth=3, label=f"{table_name} ({valid_layout_count} layouts)")
         elif use_two_table_colors:
-            # Add legend entries for both tables
             if i == 0:
                 ax.plot([], [], color=gray_colormap(gray_max), linewidth=3, label=f"{table_names[0]} - Best")
                 ax.plot([], [], color=gray_colormap(gray_min), linewidth=3, label=f"{table_names[0]} - Worst")
             else:
                 ax.plot([], [], color=red_colormap(red_max), linewidth=3, label=f"{table_names[1]} - Best")
                 ax.plot([], [], color=red_colormap(red_min), linewidth=3, label=f"{table_names[1]} - Worst")
-        elif i == 0:  # Single table - only add one legend entry for performance-based coloring
-            # Create legend showing color gradient (grayscale)
+        elif i == 0:
             ax.plot([], [], color=gray_colormap(gray_max), linewidth=3, label=f"Best performing layouts")
             ax.plot([], [], color=gray_colormap(gray_min), linewidth=3, label=f"Worst performing layouts")
 
     # Customize the plot
     ax.set_xlim(-0.5, len(metrics) - 0.5)
-    ax.set_ylim(-0.05, 1.05)
+    
+    if is_normalized:
+        ax.set_ylim(-0.05, 1.05)
+        ylabel = 'Normalized Score (0 = worst, 1 = best)'
+        ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    else:
+        ax.set_ylim(y_limits)
+        ylabel = 'Raw Metric Value'
+        # Auto-generate y-ticks for raw data
     
     # Set x-axis labels
     metric_display_names = []
     for metric in metrics:
-        # Clean up scorer names for display
         display_name = metric.replace('_', ' ').title()
-        # Split long names
         if len(display_name) > 12:
             words = display_name.split()
             if len(words) > 1:
@@ -884,26 +911,21 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
     ax.set_xticks(x_positions)
     ax.set_xticklabels(metric_display_names, rotation=45, ha='right', fontsize=10)
     
-    # Add vertical grid lines for each metric
+    # Add vertical grid lines
     for x in x_positions:
         ax.axvline(x, color='gray', alpha=0.3, linewidth=0.5)
     
-    # Set y-axis
-    ax.set_ylabel('Normalized Score (0 = worst, 1 = best)', fontsize=12)
-    ax.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+    ax.set_ylabel(ylabel, fontsize=12)
     ax.grid(True, alpha=0.3)
     
-    # Title and legend
+    # Title
+    data_type = "Normalized" if is_normalized else "Raw"
     if use_performance_colors:
         if use_two_table_colors:
-            # Two tables with different colors
             if summary_df is not None and 'average_score' in summary_df.columns:
-                # Check if we sorted by a specific metric
                 sort_metric = None
                 for metric in metrics:
                     if metric in summary_df.columns:
-                        # Compare if this metric's values match the order
-                        # Sort the entire DataFrame by this metric, then extract the column
                         sorted_values = summary_df.sort_values(by=metric, ascending=False)[metric].reset_index(drop=True)
                         current_values = summary_df[metric].reset_index(drop=True)
                         if sorted_values.equals(current_values):
@@ -917,13 +939,9 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
             else:
                 title_suffix = f'\n{table_names[0]} (grayscale) vs {table_names[1]} (red): dark gray/saturated red = best'
         elif summary_df is not None and 'average_score' in summary_df.columns:
-            # Single table
-            # Check if we sorted by a specific metric
             sort_metric = None
             for metric in metrics:
                 if metric in summary_df.columns:
-                    # Compare if this metric's values match the order
-                    # Sort the entire DataFrame by this metric, then extract the column
                     sorted_values = summary_df.sort_values(by=metric, ascending=False)[metric].reset_index(drop=True)
                     current_values = summary_df[metric].reset_index(drop=True)
                     if sorted_values.equals(current_values):
@@ -939,25 +957,24 @@ def create_parallel_plot(normalized_dfs: List[pd.DataFrame], table_names: List[s
     else:
         title_suffix = f'\nParallel coordinates across {len(metrics)} scoring methods'
     
-    ax.set_title(f'Keyboard Layout Comparison{title_suffix}', 
+    ax.set_title(f'Keyboard Layout Comparison - {data_type}{title_suffix}', 
                 fontsize=16, fontweight='bold', pad=20)
 
-    # Show legend
-    if len(normalized_dfs) > 1 or len(normalized_dfs[0]) <= 10 or use_performance_colors:
+    if len(dfs) > 1 or len(dfs[0]) <= 10 or use_performance_colors:
         ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left', fontsize=10)
     
     plt.tight_layout()
     
     # Save or show
     if output_path:
-        # Modify output path for parallel plot
+        suffix = '_normalized' if is_normalized else '_raw'
         if output_path.endswith('.png'):
-            parallel_path = output_path.replace('.png', '_parallel.png')
+            parallel_path = output_path.replace('.png', f'_parallel{suffix}.png')
         else:
-            parallel_path = output_path + '_parallel.png'
+            parallel_path = output_path + f'_parallel{suffix}.png'
         plt.savefig(parallel_path, dpi=300, bbox_inches='tight', 
                 facecolor='white', edgecolor='none')
-        print(f"Parallel plot saved to {parallel_path}")
+        print(f"Parallel plot ({data_type}) saved to {parallel_path}")
     else:
         plt.show()
     
@@ -1592,9 +1609,9 @@ Supported CSV formats (auto-detected):
                                       args.summary if args.summary else None,
                                       args.sort_by)
     
-    # Always create core plots (parallel and heatmap)
+    # Create core plots - BOTH raw and normalized versions
     if args.verbose:
-        print(f"\nCreating core visualization plots...")
+        print(f"\nCreating core visualization plots (raw and normalized)...")
         print(f"Tables: {len(dfs)}")
         print(f"Total layouts: {sum(len(df) for df in dfs)}")
         print(f"Metrics to plot: {len(all_metrics)} - {', '.join(all_metrics)}")
@@ -1603,22 +1620,19 @@ Supported CSV formats (auto-detected):
                 print(f"Sorting by: {args.sort_by}")
             else:
                 print(f"Warning: sort-by metric '{args.sort_by}' not in selected metrics, using average")
-        print(f"Summary has {len(summary_df)} layouts" if summary_df is not None else "Summary is None")
-        if summary_df is not None and len(summary_df) > 0:
-            print(f"Using performance-based coloring for parallel plot")
-            print(f"Sample layouts from summary: {list(summary_df['layout'].head(3))}")
     
     # Determine output path
     plot_output = args.output if args.output else str(output_dir / 'layouts_compare.png')
     
-    # Pass normalized_dfs to avoid re-normalization
-    # Generate parallel coordinates plot
-    create_parallel_plot(normalized_dfs, table_names, all_metrics, plot_output, summary_df)
+    # Generate RAW (unnormalized) plots
+    create_parallel_plot(dfs, table_names, all_metrics, plot_output, summary_df, is_normalized=False)
+    create_heatmap_plot(dfs, table_names, all_metrics, plot_output, summary_df, args.sort_by, is_normalized=False)
     
-    # Generate heatmap plot  
-    create_heatmap_plot(normalized_dfs, table_names, all_metrics, plot_output, summary_df, args.sort_by)
+    # Generate NORMALIZED plots
+    create_parallel_plot(normalized_dfs, table_names, all_metrics, plot_output, summary_df, is_normalized=True)
+    create_heatmap_plot(normalized_dfs, table_names, all_metrics, plot_output, summary_df, args.sort_by, is_normalized=True)
     
-    # Generate additional plots if requested
+    # Generate additional plots if requested (these use original data)
     if args.plot:
         if args.verbose:
             print(f"\nCreating additional visualization plots...")
@@ -1633,6 +1647,14 @@ Supported CSV formats (auto-detected):
         generate_report(dfs, table_names, all_metrics, summary_df, output_dir)
     
     print(f"\nAnalysis complete!")
+    print(f"\nGenerated plots:")
+    print(f"  - Parallel coordinate plot (raw): *_parallel_raw.png")
+    print(f"  - Parallel coordinate plot (normalized): *_parallel_normalized.png")
+    print(f"  - Heatmap (raw): *_heatmap_raw.png")
+    print(f"  - Heatmap (normalized): *_heatmap_normalized.png")
+    if args.plot:
+        print(f"  - Additional plots: scatter, pareto2d, correlation, stability")
+
 
 if __name__ == "__main__":
     main()
