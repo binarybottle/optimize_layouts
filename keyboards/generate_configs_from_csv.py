@@ -20,20 +20,24 @@ Usage:
     python generate_configs_from_csv.py --input-file ../output/global_moo_solutions.csv --remove-positions "A;"
 
     # Keyboard layout optimization study commands:
-    # For each Step, modify default_objectives, default_weights, and default_maximize accordingly.
+    # For each Step, modify 24-letter language letters, default_objectives, default_weights, and default_maximize accordingly.
     # Step 2: Optimally (re)arrange the next 10 most frequent letters (after unassigning 2 letters) to fill the top 18 keys.
     poetry run python3 generate_configs_from_csv.py \
-        --input-file ../output/moo_results_E_on_left_config_20251011_123131.csv \
+        --input-file ../output/engram_en/step1_10in10/moo_results_E_on_left_config_20251011_123131.csv \
         --remove-positions "A;"
+    poetry run python3 generate_configs_from_csv.py \
+        --input-file ../output/engram_es/step1_10in10/moo_results_E_on_left_config_20251020_114628.csv \
+        --remove-positions "A;"
+
     # Step 3: Optimally (re)arrange the 10 least frequent of the 24 letters (after unassigning 4 letters).
     poetry run python3 generate_configs_from_csv.py \
-        --input-file ../output/layouts_filter_patterns_step2.csv \
+        --input-file ../output/engram_en/step1_10in18/layouts_filter_patterns_step2.csv \
         --remove-positions "WOC," \
         --layout-size 24
-    # Step 4: Optimally assign the 2 least frequent of 26 letters to the 2 least preferred keys.
     poetry run python3 generate_configs_from_csv.py \
-        --input-file ../output/layouts_filter_patterns_step3.csv \
-        --layout-size 26
+        --input-file ../output/engram_es/step1_10in18/layouts_filter_patterns_step2.csv \
+        --remove-positions "WOC," \
+        --layout-size 24
 
 See **README.md** for instructions to run batches of config files in parallel.
 
@@ -161,10 +165,11 @@ def generate_config_content(items_assigned, positions_assigned, items_to_assign,
 # Paths
 #-----------------------------------------------------------------------
 paths:
-  item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
+  #item_pair_score_table:        "input/frequency/english-letter-pair-counts-google-ngrams_normalized.csv"
+  item_pair_score_table:        "input/frequency/spanish-letter-pair-counts-leipzig_normalized.csv"
   position_pair_score_table:    "input/engram_2key_scores.csv"
-  item_triple_score_table:      "input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
-  position_triple_score_table:  "input/engram_3key_order_scores.csv"
+  item_triple_score_table:      "" #"input/frequency/english-letter-triple-counts-google-ngrams_normalized.csv"
+  position_triple_score_table:  "" #"input/engram_3key_order_scores.csv"
   layout_results_folder:        "output/layouts"
 
 #-----------------------------------------------------------------------
@@ -176,10 +181,9 @@ moo:
     - "engram_row_separation"
     - "engram_same_row"
     - "engram_same_finger"
-    - "engram_order"
-    - "engram_outside"
-  default_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
-  default_maximize: [true, true, true, true, true, true]
+    #- "engram_order"
+  default_weights: [1.0, 1.0, 1.0, 1.0] #, 1.0]
+  default_maximize: [true, true, true, true] #, true]
   default_max_solutions: 10000
   default_time_limit: 100000
   show_progress_bar: true
@@ -187,18 +191,22 @@ moo:
 
 #-----------------------------------------------------------------------
 # Optimization settings
+#
+# Example keyboard layout optimization problem:
+#   Items:     etaoinsrhldcumfpgwybvkxjqz  # Spanish: eaonisrldctumpbgvqyhfjzxkw
+#   Positions: FJDKEISLVMRUWOA;C,Z/QPX.'[
 #-----------------------------------------------------------------------
 #   _to_assign:    Items to arrange in available positions
 #   _assigned:     Items already assigned to positions
 #   _to_constrain: Subset of items_to_assign to arrange in positions_to_constrain,
 #                  and subset of positions_to_assign to constrain items_to_constrain
 optimization:   
-  items_assigned:          "{items_assigned}"
-  positions_assigned:      "{positions_assigned}"
-  items_to_assign:         "{items_to_assign}"
-  positions_to_assign:     "{positions_to_assign}"
-  items_to_constrain:      "{least_frequent_items}"   
-  positions_to_constrain:  "{worst_positions}"  
+  items_assigned:          ""
+  items_to_assign:         "eaonisrldc"  # "etaoinsrhl"
+  items_to_constrain:      "ea"          # "et"   
+  positions_assigned:      ""
+  positions_to_assign:     "ASDFJKL;EI"
+  positions_to_constrain:  "DFJK"  
 
 #-----------------------------------------------------------------------
 # Visualization settings
@@ -323,8 +331,8 @@ def main():
                 layout_size = 26
             elif args.layout_size == 24:
                 all_positions = "FJDKEISLVMRUWOA;C,Z/QPX."
-                all_items = "etaoinsrhldcumfpgwybvkxj"   # English: 24 letters in order
-                #all_items = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
+                #all_items = "etaoinsrhldcumfpgwybvkxj"   # English: 24 letters in order
+                all_items = "eaonisrldctumpbgvqyhfjzx"  # Spanish: 24 letters in order
                 # To constrain:
                 least_frequent_items = ""  # "xj"  # English
                 least_frequent_items = ""  # "zx"  # Spanish
@@ -332,8 +340,8 @@ def main():
                 layout_size = 24
             else:
                 all_positions = "FJDKEISLVMRUWOA;C,"  # Z/QPX."
-                all_items     = "etaoinsrhldcumfpgw"  # ybvkxj"  # English: 18 letters in order
-                #all_items    = "eaonisrldctumpbgvq"  # yhfjzx"  # Spanish: 18 letters in order
+                #all_items     = "etaoinsrhldcumfpgw"  # ybvkxj"  # English: 18 letters in order
+                all_items    = "eaonisrldctumpbgvq"  # yhfjzx"  # Spanish: 18 letters in order
                 # To constrain:
                 least_frequent_items = ""  # "xj"  # English
                 least_frequent_items = ""  # "zx"  # Spanish
