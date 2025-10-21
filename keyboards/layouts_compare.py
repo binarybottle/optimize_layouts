@@ -51,7 +51,7 @@ Examples:
         --sort-by average_score       
     # Step 3:
     poetry run python3 layouts_compare.py \
-        --tables ../output/layouts_consolidate.csv \
+        --tables ../output/layouts_consolidate_moo_solutions.csv \
         --metrics engram_key_preference engram_row_separation engram_same_row engram_same_finger \
         --output ../output/layouts_compare --summary ../output/layouts_compare.csv \
         --report --plot --verbose \

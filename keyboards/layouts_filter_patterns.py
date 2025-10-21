@@ -46,7 +46,7 @@ Positions are indexed from 0, so 'A' is position 10, ';' is position 19, 'R' is 
 
 Usage:
 
-    # Keyboard layout optimization study command:
+    # Keyboard layout optimization study command (Step 2):
     # Don't permit common bigrams to be stacked vertically or to require hurdles.
     BIGRAMS25="th,he,in,er,an,re,on,at,en,nd,ti,es,or"
     BIGRAMS50="te,of,ed,is,it,al,ar,st,to,nt,ng,se,ha,as,ou,io,le,ve,co,me,de,hi,ri,ro,ic,ne,ea"
@@ -61,6 +61,20 @@ Usage:
         --exclude-vertical-bigrams "$SAME_FINGER_BIGRAMS" \
         --exclude-hurdles "$HURDLE_BIGRAMS" \
         --exclude-same-finger-hurdles "$SAME_FINGER_HURDLE_BIGRAMS"
+    # Spanish:
+    BIGRAMS50="de,en,es,la,on,er,ra,el,ar,ue,re,os,an,co,ci,as,nt,ta,te,io,al,or,do,ad,qu,st,na,un,ro,se,to,ca,in,ia"
+    BIGRAMS75="de,en,es,la,on,er,ra,el,ar,ue,re,os,an,co,ci,as,nt,ta,te,io,al,or,do,ad,qu,st,na,un,ro,se,to,ca,in,ia,ri,lo,no,ma,da,ti,ic,pa,ie,po,ac,tr,si,le,me,di,id,ec,pr,ne,li,is,nd,mo,so,mi,pe,om,sa,am,nc,su,ha,ni,em,ce,cu,vi,ab"
+    BIGRAMS90="de,en,es,la,on,er,ra,el,ar,ue,re,os,an,co,ci,as,nt,ta,te,io,al,or,do,ad,qu,st,na,un,ro,se,to,ca,in,ia,ri,lo,no,ma,da,ti,ic,pa,ie,po,ac,tr,si,le,me,di,id,ec,pr,ne,li,is,nd,mo,so,mi,pe,om,sa,am,nc,su,ha,ni,em,ce,cu,vi,ab,it,ol,rt,ba,ve,at,im,mp,ed,ll,eg,bi,gu,ga,il,ir,ur,oc,tu,va,go,ua,br,ct,pu,fi,us,ch,ns,ui,od,mu,et,sp,iv,za,ob,mb,ho,gr,ul,ot,rr,rm,ig,bl,fu,jo,uc,vo,ea,lu,ev,nu,ex,be,sc,fe,ap"
+    SAME_FINGER_BIGRAMS="$BIGRAMS50"
+    HURDLE_BIGRAMS="$BIGRAMS90"
+    SAME_FINGER_HURDLE_BIGRAMS="$BIGRAMS90"
+    poetry run python3 layouts_filter_patterns.py \
+        --input ../output/layouts_consolidate_moo_solutions.csv \
+        --output ../output/layouts_filter_patterns.csv --report \
+        --exclude-vertical-bigrams "$SAME_FINGER_BIGRAMS" \
+        --exclude-hurdles "$HURDLE_BIGRAMS" \
+        --exclude-same-finger-hurdles "$SAME_FINGER_HURDLE_BIGRAMS"
+
 
 """
 
