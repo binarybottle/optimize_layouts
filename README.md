@@ -47,6 +47,7 @@ the best trade-offs across an arbitrary number of competing criteria.
   ```
 
 ## Architecture
+  ```
 optimize_layouts/
 ├── README.md                            # This file
 │ 
@@ -92,7 +93,7 @@ optimize_layouts/
     ├── display_layouts.py               # Keyboard visualization from table of layouts
     ├── generate_configs1.py             # Generate config files for parallel optimization phase 1
     └── generate_configs2.py             # Generate config files for parallel optimization phase 2
-
+  ```
 
 ## Inputs
 The system accepts normalized score files in CSV format.
