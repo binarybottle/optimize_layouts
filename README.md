@@ -8,7 +8,7 @@ A streamlined framework for finding Pareto-optimal layouts using weighted multi-
 
 This framework discovers Pareto-optimal layouts by optimizing multiple objectives simultaneously.
 It combines direct key-pair score lookup with multi-objective search to find layouts that represent 
-the best trade-offs across an arbitrary number of competing criteria.
+the best trade-offs across an arbitrary number of competing criteria. This work was part of a study described in a peer-reviewed manuscript in the International Journal of Human-Computer Interaction titled "Optimizing comfortable keyboard layouts using human typing preferences and language-dependent n-grams: the Engram Study" (http://dx.doi.org/10.1080/10447318.2026.2665409).
 
 ## Multi-Objective Optimization (MOO) with exhaustive search
   ```bash
