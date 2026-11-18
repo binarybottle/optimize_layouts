@@ -17,7 +17,6 @@ Features:
 
 import yaml
 import os
-from typing import Set, Optional, List, Union
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,27 +48,27 @@ class OptimizationConfig:
     
     # Set-based properties for validation and lookup
     @property
-    def items_to_assign_set(self) -> Set[str]:
+    def items_to_assign_set(self) -> set[str]:
         return set(self.items_to_assign)
     
     @property
-    def positions_to_assign_set(self) -> Set[str]:
+    def positions_to_assign_set(self) -> set[str]:
         return set(self.positions_to_assign)
     
     @property
-    def items_assigned_set(self) -> Set[str]:
+    def items_assigned_set(self) -> set[str]:
         return set(self.items_assigned) if self.items_assigned else set()
     
     @property
-    def positions_assigned_set(self) -> Set[str]:
+    def positions_assigned_set(self) -> set[str]:
         return set(self.positions_assigned) if self.positions_assigned else set()
     
     @property
-    def items_to_constrain_set(self) -> Set[str]:
+    def items_to_constrain_set(self) -> set[str]:
         return set(self.items_to_constrain) if self.items_to_constrain else set()
     
     @property
-    def positions_to_constrain_set(self) -> Set[str]:
+    def positions_to_constrain_set(self) -> set[str]:
         return set(self.positions_to_constrain) if self.positions_to_constrain else set()
 
     
@@ -79,21 +78,21 @@ class PathConfig:
     position_pair_score_table: str
     item_pair_score_table: str
     layout_results_folder: str
-    item_triple_score_table: Optional[str] = None
-    position_triple_score_table: Optional[str] = None
+    item_triple_score_table: str | None = None
+    position_triple_score_table: str | None = None
     
 @dataclass
 class MOOConfig:
     """Multi-objective optimization specific configuration."""
     
     # Default optimization settings
-    default_objectives: List[str]
-    default_weights: Optional[List[float]] = None
-    default_maximize: Optional[List[bool]] = None
+    default_objectives: list[str]
+    default_weights: list[float] | None = None
+    default_maximize: list[bool] | None = None
     
     # Search limits (can be numbers or "Inf")
-    default_max_solutions: Union[int, str] = 100
-    default_time_limit: Union[float, str] = 3600.0
+    default_max_solutions: int | str = 100
+    default_time_limit: float | str = 3600.0
     
     # Default file paths for validation
     default_position_pair_score_table: str = "input/engram_2key_scores.csv"
@@ -141,7 +140,7 @@ def load_config(config_path: str = "config.yaml") -> Config:
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
     
     try:
-        with open(config_path, 'r') as f:
+        with open(config_path) as f:
             raw_config = yaml.safe_load(f)
     except yaml.YAMLError as e:
         raise ValueError(f"Error parsing YAML configuration: {e}")
@@ -314,8 +313,8 @@ def print_config_summary(config: Config) -> None:
     print(f"  Visualization: keyboard={config.visualization.print_keyboard}, verbose={config.visualization.verbose_output}")
 
 
-def validate_files_exist(config: Config, position_pair_score_table: Optional[str] = None, 
-                        item_pair_score_table: Optional[str] = None) -> None:
+def validate_files_exist(config: Config, position_pair_score_table: str | None = None, 
+                        item_pair_score_table: str | None = None) -> None:
     """
     Validate that external files required for MOO exist.
     

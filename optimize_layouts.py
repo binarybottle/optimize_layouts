@@ -51,7 +51,6 @@ import time
 import sys
 import pandas as pd
 import datetime
-from typing import List, Dict, Tuple
 from pathlib import Path
 
 # Local imports
@@ -59,7 +58,7 @@ from config import Config, load_config, print_config_summary
 from moo_scoring import WeightedMOOScorer, validate_item_pair_scoring_consistency
 from moo_search import moo_search, analyze_pareto_front, validate_pareto_front
 
-def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str: str = None) -> Tuple[List[str], List[float], List[bool]]:
+def parse_objectives(objectives_str: str, weights_str: str = None, maximize_str: str = None) -> tuple[list[str], list[float], list[bool]]:
     """
     Parse objectives configuration from command line arguments.
     
@@ -114,7 +113,7 @@ def parse_inf_value(value, default_val):
     return value or default_val
 
 
-def validate_inputs(config: Config, objectives: List[str], position_pair_score_table: str,
+def validate_inputs(config: Config, objectives: list[str], position_pair_score_table: str,
                    item_pair_score_table_path: str, position_triple_score_table: str = None) -> None:
     """
     Validate all input files and configuration.
@@ -178,8 +177,8 @@ def validate_inputs(config: Config, objectives: List[str], position_pair_score_t
         raise ValueError("Need at least 2 items for meaningful optimization")
     
 
-def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[str], 
-                     weights: List[float] = None, maximize: List[bool] = None) -> str:
+def save_moo_results(pareto_front: list[dict], config: Config, objectives: list[str], 
+                     weights: list[float] = None, maximize: list[bool] = None) -> str:
     """
     Save MOO results to CSV file with comprehensive information including configuration metadata.
     """
@@ -255,7 +254,7 @@ def save_moo_results(pareto_front: List[Dict], config: Config, objectives: List[
     return str(filepath)
 
 
-def print_results_summary(pareto_front: List[Dict], objectives: List[str], 
+def print_results_summary(pareto_front: list[dict], objectives: list[str], 
                          search_mode, search_stats, config: Config) -> None:
     """Print comprehensive summary of optimization results."""
     print(f"\n" + "="*80)
@@ -291,15 +290,15 @@ def print_results_summary(pareto_front: List[Dict], objectives: List[str],
         print("Warning: Pareto front contains dominated solutions")
 
 
-def run_moo_optimization(config: Config, objectives: List[str], position_pair_score_table: str,
-                        weights: List[float], maximize: List[bool],
+def run_moo_optimization(config: Config, objectives: list[str], position_pair_score_table: str,
+                        weights: list[float], maximize: list[bool],
                         item_pair_score_table: str, 
                         position_triple_score_table: str = None,
                         item_triple_score_table: str = None,
                         max_solutions: int = None, 
                         time_limit: float = None,
                         search_mode: str = 'branch-bound',
-                        verbose=False) -> Tuple[List[Dict], object]:
+                        verbose=False) -> tuple[list[dict], object]:
     """
     Run multi-objective optimization with selectable search algorithm.
     """

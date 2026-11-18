@@ -83,7 +83,6 @@ import numpy as np
 import argparse
 import re
 from pathlib import Path
-from typing import List, Set, Tuple
 import sys
 from datetime import datetime
 
@@ -112,7 +111,7 @@ class LayoutPatternFilter:
             
         return df
     
-    def get_position_indices(self, position_chars: str) -> List[int]:
+    def get_position_indices(self, position_chars: str) -> list[int]:
         """Convert position characters to indices in layout_qwerty string."""
         indices = []
         for char in position_chars:
@@ -138,7 +137,7 @@ class LayoutPatternFilter:
         
         return True  # No forbidden combinations found
     
-    def apply_regex_filters(self, df: pd.DataFrame, exclude_patterns: List[str], include_patterns: List[str]) -> pd.DataFrame:
+    def apply_regex_filters(self, df: pd.DataFrame, exclude_patterns: list[str], include_patterns: list[str]) -> pd.DataFrame:
         """Apply regex filters to layout_qwerty column."""
         mask = pd.Series([True] * len(df), index=df.index)
         
@@ -209,7 +208,7 @@ class LayoutPatternFilter:
         
         return df[valid_mask].copy()
     
-    def filter_layouts(self, exclude_patterns: List[str] = None, include_patterns: List[str] = None,
+    def filter_layouts(self, exclude_patterns: list[str] = None, include_patterns: list[str] = None,
                       forbidden_letters: str = None, forbidden_positions: str = None) -> pd.DataFrame:
         """Apply all filtering criteria."""
         exclude_patterns = exclude_patterns or []
@@ -254,7 +253,7 @@ class LayoutPatternFilter:
         
         return filtered_df
 
-    def generate_vertical_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+    def generate_vertical_exclusion_patterns(self, bigrams_str: str) -> list[str]:
         """
         Generate exclusion patterns for bigrams that should not be vertically stacked.
         Checks same-column placement across all row pairs: top-home, home-bottom, and top-bottom.
@@ -354,7 +353,7 @@ class LayoutPatternFilter:
         
         return patterns
 
-    def generate_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+    def generate_hurdle_exclusion_patterns(self, bigrams_str: str) -> list[str]:
         """
         Generate exclusion patterns for bigrams that create top-to-bottom movements on same hand.
         Excludes any bigram where one letter is on the top row and the other is on the bottom row
@@ -438,7 +437,7 @@ class LayoutPatternFilter:
         
         return patterns
 
-    def generate_same_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+    def generate_same_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> list[str]:
         """
         Generate exclusion patterns for bigrams that create same-finger hurdle movements.
         Same-finger hurdles are top-to-bottom movements in the same column (same finger).
@@ -513,7 +512,7 @@ class LayoutPatternFilter:
         
         return patterns
 
-    def generate_adjacent_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+    def generate_adjacent_finger_hurdle_exclusion_patterns(self, bigrams_str: str) -> list[str]:
         """
         Generate exclusion patterns for bigrams that create adjacent-finger hurdle motions.
         Adjacent-finger hurdles are top-to-bottom movements on adjacent columns (adjacent fingers).
@@ -600,7 +599,7 @@ class LayoutPatternFilter:
         
         return patterns
 
-    def generate_scissor_hurdle_exclusion_patterns(self, bigrams_str: str) -> List[str]:
+    def generate_scissor_hurdle_exclusion_patterns(self, bigrams_str: str) -> list[str]:
         """
         Generate exclusion patterns for bigrams that create adjacent-finger scissor hurdle motions.
         Scissor hurdles are top-to-bottom movements on adjacent columns (adjacent fingers)
@@ -737,7 +736,7 @@ class LayoutPatternFilter:
         
         return str(report_path)
 
-def parse_patterns(pattern_string: str) -> List[str]:
+def parse_patterns(pattern_string: str) -> list[str]:
     """Parse comma-separated pattern string into list."""
     if not pattern_string:
         return []

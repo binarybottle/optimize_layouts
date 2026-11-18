@@ -22,7 +22,6 @@ import pandas as pd
 import numpy as np
 import argparse
 from pathlib import Path
-from typing import List
 import sys
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -117,7 +116,7 @@ class MOOLayoutFilter:
         
         return df
     
-    def _detect_objectives(self) -> List[str]:
+    def _detect_objectives(self) -> list[str]:
         """Detect objective columns (numeric columns that are optimization targets)."""
         # Common objective patterns in MOO keyboard optimization
         potential_objectives = []

@@ -17,7 +17,6 @@ import pandas as pd
 from pathlib import Path
 import tempfile
 import shutil
-from typing import Dict, List
 import sys
 
 # Import the modules to test

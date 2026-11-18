@@ -24,7 +24,6 @@ Usage:
 
 import pandas as pd
 import numpy as np
-from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -46,13 +45,13 @@ class WeightedMOOScorer:
     Multi-objective scorer supporting both bigram and trigram objectives.
     """
     
-    def __init__(self, objectives: List[str], position_pair_score_table: str,
-                 items: List[str], positions: List[str], 
-                 weights: Optional[List[float]] = None, 
-                 maximize: Optional[List[bool]] = None,
+    def __init__(self, objectives: list[str], position_pair_score_table: str,
+                 items: list[str], positions: list[str], 
+                 weights: list[float] | None = None, 
+                 maximize: list[bool] | None = None,
                  item_pair_score_table: str = "input/normalized-english-letter-pair-counts-google-ngrams.csv",
-                 position_triple_score_table: Optional[str] = None,
-                 item_triple_score_table: Optional[str] = None,
+                 position_triple_score_table: str | None = None,
+                 item_triple_score_table: str | None = None,
                  verbose: bool = False):
         """
         Initialize weighted MOO scorer with bigram and trigram support.
@@ -130,7 +129,7 @@ class WeightedMOOScorer:
             position_matrix=np.ones((n_positions, n_positions), dtype=np.float32)
         )
 
-    def _load_position_pair_scores(self, position_pair_score_table: str) -> Dict[str, Dict[str, float]]:
+    def _load_position_pair_scores(self, position_pair_score_table: str) -> dict[str, dict[str, float]]:
         """Load position-pair scores for bigram objectives from CSV table."""
         if not Path(position_pair_score_table).exists():
             raise FileNotFoundError(f"Position-pair table not found: {position_pair_score_table}")
@@ -162,7 +161,7 @@ class WeightedMOOScorer:
         
         return position_pair_scores
 
-    def _load_position_triple_scores(self, position_triple_score_table: str) -> Dict[str, Dict[str, float]]:
+    def _load_position_triple_scores(self, position_triple_score_table: str) -> dict[str, dict[str, float]]:
         """Load position-triple scores for trigram objectives from CSV table."""
         if not Path(position_triple_score_table).exists():
             print(f"    Warning: Position-triple table not found: {position_triple_score_table}")
@@ -197,7 +196,7 @@ class WeightedMOOScorer:
         
         return position_triple_scores
 
-    def _load_item_pair_scores(self, item_pair_score_table: str) -> Dict[str, float]:
+    def _load_item_pair_scores(self, item_pair_score_table: str) -> dict[str, float]:
         """Load item-pair frequencies for bigram weighting."""
         if not Path(item_pair_score_table).exists():
             print(f"    Warning: Item-pair score file not found: {item_pair_score_table}")
@@ -225,7 +224,7 @@ class WeightedMOOScorer:
         
         return frequencies
 
-    def _load_item_triple_scores(self, item_triple_score_table: str) -> Dict[str, float]:
+    def _load_item_triple_scores(self, item_triple_score_table: str) -> dict[str, float]:
         """Load item-triple frequencies for trigram weighting."""
         if not Path(item_triple_score_table).exists():
             print(f"    Warning: Item-triple score file not found: {item_triple_score_table}")
@@ -253,14 +252,14 @@ class WeightedMOOScorer:
         
         return frequencies
     
-    def _find_column(self, df: pd.DataFrame, candidates: List[str]) -> Optional[str]:
+    def _find_column(self, df: pd.DataFrame, candidates: list[str]) -> str | None:
         """Find first matching column name from candidates."""
         for col in candidates:
             if col in df.columns:
                 return col
         return None
     
-    def score_layout(self, mapping: np.ndarray, return_components: bool = False) -> List[float]:
+    def score_layout(self, mapping: np.ndarray, return_components: bool = False) -> list[float]:
         """
         Score layout for all objectives using appropriate bigram/trigram scoring.
 
@@ -340,8 +339,8 @@ class WeightedMOOScorer:
             return self._calculate_trigram_unweighted_score(
                 placed_items, placed_positions, position_triple_scores)
     
-    def _calculate_bigram_weighted_score(self, items: List[str], positions: List[str], 
-                                        position_pair_scores: Dict[str, float]) -> float:
+    def _calculate_bigram_weighted_score(self, items: list[str], positions: list[str], 
+                                        position_pair_scores: dict[str, float]) -> float:
         """Calculate score using item-pair score weighting."""
         weighted_total = 0.0
         item_pair_score_total = 0.0
@@ -360,8 +359,8 @@ class WeightedMOOScorer:
         
         return weighted_total / item_pair_score_total if item_pair_score_total > 0 else 0.0
     
-    def _calculate_bigram_unweighted_score(self, items: List[str], positions: List[str],
-                                          position_pair_scores: Dict[str, float]) -> float:
+    def _calculate_bigram_unweighted_score(self, items: list[str], positions: list[str],
+                                          position_pair_scores: dict[str, float]) -> float:
         """Calculate score without item_pair_score weighting."""
         total_score = 0.0
         pair_count = 0
@@ -376,8 +375,8 @@ class WeightedMOOScorer:
         
         return total_score / pair_count if pair_count > 0 else 0.0
 
-    def _calculate_trigram_weighted_score(self, items: List[str], positions: List[str], 
-                                         position_triple_scores: Dict[str, float]) -> float:
+    def _calculate_trigram_weighted_score(self, items: list[str], positions: list[str], 
+                                         position_triple_scores: dict[str, float]) -> float:
         """Calculate trigram score using item-triple score weighting."""
         weighted_total = 0.0
         item_triple_score_total = 0.0
@@ -397,8 +396,8 @@ class WeightedMOOScorer:
         
         return weighted_total / item_triple_score_total if item_triple_score_total > 0 else 0.0
 
-    def _calculate_trigram_unweighted_score(self, items: List[str], positions: List[str],
-                                           position_triple_scores: Dict[str, float]) -> float:
+    def _calculate_trigram_unweighted_score(self, items: list[str], positions: list[str],
+                                           position_triple_scores: dict[str, float]) -> float:
         """Calculate trigram score without item_triple_score weighting."""
         total_score = 0.0
         triple_count = 0
@@ -414,7 +413,7 @@ class WeightedMOOScorer:
         
         return total_score / triple_count if triple_count > 0 else 0.0
     
-    def get_objective_stats(self) -> Dict[str, Dict[str, float]]:
+    def get_objective_stats(self) -> dict[str, dict[str, float]]:
         """Get statistics about objective score ranges for analysis."""
         stats = {}
         
@@ -449,9 +448,9 @@ class WeightedMOOScorer:
         pass
 
 
-def validate_item_pair_scoring_consistency(items: str, positions: str, objectives: List[str],
+def validate_item_pair_scoring_consistency(items: str, positions: str, objectives: list[str],
                                          position_pair_score_table: str, item_pair_score_table: str,
-                                         verbose: bool = False) -> Dict[str, float]:
+                                         verbose: bool = False) -> dict[str, float]:
     """
     Validate that WeightedMOOScorer produces consistent results.
     

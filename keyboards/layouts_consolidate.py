@@ -40,7 +40,6 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import argparse
-from typing import List, Dict, Tuple
 import time
 import glob
 
@@ -290,7 +289,7 @@ def load_all_solutions(input_dir: str, file_pattern: str = "moo_results_config_*
     return combined_df
 
 def is_dominated(solution_a: pd.Series, solution_b: pd.Series, 
-                objectives: List[str], maximize: List[bool]) -> bool:
+                objectives: list[str], maximize: list[bool]) -> bool:
     """
     Check if solution_a is dominated by solution_b.
     
@@ -327,8 +326,8 @@ def is_dominated(solution_a: pd.Series, solution_b: pd.Series,
     return better_in_at_least_one and not worse_in_any
 
 def fast_pareto_filter_numpy(solutions: pd.DataFrame, 
-                             objectives: List[str],
-                             maximize: List[bool]) -> pd.DataFrame:
+                             objectives: list[str],
+                             maximize: list[bool]) -> pd.DataFrame:
     """
     Fast Pareto filtering using numpy operations.
     """
@@ -376,8 +375,8 @@ def fast_pareto_filter_numpy(solutions: pd.DataFrame,
     return pareto_solutions
 
 def hierarchical_pareto_filter(solutions: pd.DataFrame,
-                              objectives: List[str], 
-                              maximize: List[bool],
+                              objectives: list[str], 
+                              maximize: list[bool],
                               sample_size: int = 50000) -> pd.DataFrame:
     """
     Hierarchical approach for large datasets: filter in stages to reduce computational burden.
@@ -419,8 +418,8 @@ def hierarchical_pareto_filter(solutions: pd.DataFrame,
     return current_pareto
 
 def smart_objective_filtering(solutions: pd.DataFrame,
-                            objectives: List[str],
-                            maximize: List[bool],
+                            objectives: list[str],
+                            maximize: list[bool],
                             percentile_threshold: float = 0.1) -> pd.DataFrame:
     """
     Pre-filter solutions by keeping only top percentile in each objective.
@@ -449,8 +448,8 @@ def smart_objective_filtering(solutions: pd.DataFrame,
     return filtered_solutions
 
 def optimized_pareto_selection(solutions: pd.DataFrame,
-                              objectives: List[str],
-                              maximize: List[bool],
+                              objectives: list[str],
+                              maximize: list[bool],
                               chunk_size: int = 50000) -> pd.DataFrame:
     """
     Optimized Pareto filtering with smart pre-filtering and hierarchical processing.
@@ -471,7 +470,7 @@ def optimized_pareto_selection(solutions: pd.DataFrame,
         return fast_pareto_filter_numpy(solutions, objectives, maximize)
 
 def save_pareto_results(pareto_solutions: pd.DataFrame, output_path: str, 
-                       processing_stats: Dict) -> None:
+                       processing_stats: dict) -> None:
     """Save Pareto results with metadata and standardized column ordering."""
     if len(pareto_solutions) == 0:
         print("Warning: No Pareto solutions to save")
