@@ -26,7 +26,6 @@ Usage:
 import numpy as np
 import time
 import gc
-from typing import List, Dict, Tuple, Optional
 from numba import jit
 from math import factorial
 from tqdm import tqdm
@@ -92,7 +91,7 @@ def validate_constraints_jit(mapping: np.ndarray, constrained_items: np.ndarray,
     return True
 
 
-def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
+def pareto_dominates(obj1: list[float], obj2: list[float]) -> bool:
     """
     Check if obj1 Pareto dominates obj2.
     
@@ -115,7 +114,7 @@ def pareto_dominates(obj1: List[float], obj2: List[float]) -> bool:
     return at_least_one_better
 
 
-def update_pareto_front(pareto_front: List[Dict], new_solution: Dict) -> List[Dict]:
+def update_pareto_front(pareto_front: list[dict], new_solution: dict) -> list[dict]:
     """
     Update Pareto front with a new solution.
     
@@ -170,7 +169,7 @@ class MOOUpperBoundCalculator:
         self.true_max_position_scores = self._calculate_true_max_position_scores()
         self.true_max_item_weights = self._calculate_true_max_item_weights()
     
-    def _calculate_true_max_position_scores(self) -> Dict[str, float]:
+    def _calculate_true_max_position_scores(self) -> dict[str, float]:
         """Calculate the actual maximum position score for each objective."""
         max_scores = {}
         
@@ -184,7 +183,7 @@ class MOOUpperBoundCalculator:
                 
         return max_scores
     
-    def _calculate_true_max_item_weights(self) -> Dict[str, float]:
+    def _calculate_true_max_item_weights(self) -> dict[str, float]:
         """Calculate the actual maximum item weighting scores."""
         max_weights = {}
         
@@ -201,7 +200,7 @@ class MOOUpperBoundCalculator:
         return max_weights
     
     def calculate_upper_bound_vector(self, partial_mapping: np.ndarray, 
-                                   used_positions: np.ndarray) -> List[float]:
+                                   used_positions: np.ndarray) -> list[float]:
         """
         Calculate mathematically sound upper bounds.
         
@@ -228,7 +227,7 @@ class MOOUpperBoundCalculator:
         return bound_vector
     
     def _calculate_exact_one_item_bound(self, partial_mapping: np.ndarray, 
-                                      used_positions: np.ndarray) -> List[float]:
+                                      used_positions: np.ndarray) -> list[float]:
         """
         Exactly calculate the maximum possible score when 1 item remains.
         This is computationally feasible and gives tight, valid bounds.
@@ -257,7 +256,7 @@ class MOOUpperBoundCalculator:
         return best_scores
     
     def _calculate_conservative_multi_item_bound(self, partial_mapping: np.ndarray, 
-                                               unassigned_count: int) -> List[float]:
+                                               unassigned_count: int) -> list[float]:
         """
         Calculate conservative but mathematically sound bounds for multiple unassigned items.
         
@@ -343,7 +342,7 @@ class MOOUpperBoundCalculator:
             
         return weighted_bound
     
-    def _calculate_current_bigram_score(self, partial_mapping: np.ndarray, obj_name: str) -> Tuple[float, float]:
+    def _calculate_current_bigram_score(self, partial_mapping: np.ndarray, obj_name: str) -> tuple[float, float]:
         """Calculate current bigram score and weight from partial assignment."""
         position_pair_scores = self.scorer.position_pair_scores[obj_name]
         
@@ -395,9 +394,9 @@ class MOOUpperBoundCalculator:
         self._cache.clear()
 
 
-def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int] = None, 
-                           time_limit: Optional[float] = None, progress_bar: bool = True,
-                           verbose: bool = False) -> Tuple[List[Dict], SearchStats]:
+def branch_bound_moo_search(config: Config, scorer, max_solutions: int | None = None, 
+                           time_limit: float | None = None, progress_bar: bool = True,
+                           verbose: bool = False) -> tuple[list[dict], SearchStats]:
     """
     Branch-and-bound multi-objective search with upper bound pruning.
     
@@ -492,7 +491,7 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     stats = SearchStats()
     start_time = time.time()
     
-    def dfs_search_with_pruning(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: Optional[tqdm]):
+    def dfs_search_with_pruning(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: tqdm | None):
         """Depth-first search with upper bound pruning."""
         nonlocal pareto_front
         
@@ -635,9 +634,9 @@ def branch_bound_moo_search(config: Config, scorer, max_solutions: Optional[int]
     return pareto_front, stats
 
 
-def exhaustive_moo_search(config: Config, scorer, search_mode: str, max_solutions: Optional[int] = None, 
-                         time_limit: Optional[float] = None, progress_bar: bool = True,
-                         verbose: bool = False) -> Tuple[List[Dict], SearchStats]:
+def exhaustive_moo_search(config: Config, scorer, search_mode: str, max_solutions: int | None = None, 
+                         time_limit: float | None = None, progress_bar: bool = True,
+                         verbose: bool = False) -> tuple[list[dict], SearchStats]:
     """
     Exhaustive multi-objective search (complete enumeration).
     
@@ -730,7 +729,7 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str, max_solution
     stats = SearchStats()
     start_time = time.time()
     
-    def dfs_search_exhaustive(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: Optional[tqdm]):
+    def dfs_search_exhaustive(mapping: np.ndarray, used: np.ndarray, depth: int, pbar: tqdm | None):
         """Depth-first exhaustive search without pruning."""
         nonlocal pareto_front
         
@@ -857,9 +856,9 @@ def exhaustive_moo_search(config: Config, scorer, search_mode: str, max_solution
     return pareto_front, stats
 
 
-def moo_search(config: Config, scorer, max_solutions: Optional[int] = None, 
-               time_limit: Optional[float] = None, progress_bar: bool = True,
-               verbose: bool = False, search_mode: str = 'exhaustive') -> Tuple[List[Dict], SearchStats]:
+def moo_search(config: Config, scorer, max_solutions: int | None = None, 
+               time_limit: float | None = None, progress_bar: bool = True,
+               verbose: bool = False, search_mode: str = 'exhaustive') -> tuple[list[dict], SearchStats]:
     """
     Multi-objective Pareto search with selectable algorithm.
     
@@ -900,7 +899,7 @@ def moo_search(config: Config, scorer, max_solutions: Optional[int] = None,
         raise ValueError(f"Unknown search mode: {search_mode}. Use 'exhaustive' or 'branch-bound'")
 
 
-def analyze_pareto_front(pareto_front: List[Dict], objective_names: Optional[List[str]] = None) -> None:
+def analyze_pareto_front(pareto_front: list[dict], objective_names: list[str] | None = None) -> None:
     """
     Print analysis of the Pareto front.
     
@@ -948,7 +947,7 @@ def analyze_pareto_front(pareto_front: List[Dict], objective_names: Optional[Lis
         print(f"  {i}. {items_str} -> {positions_str} | [{obj_str}]")
 
 
-def validate_pareto_front(pareto_front: List[Dict]) -> bool:
+def validate_pareto_front(pareto_front: list[dict]) -> bool:
     """
     Validate that the Pareto front contains only non-dominated solutions.
     

@@ -14,7 +14,6 @@ import pandas as pd
 from pathlib import Path
 import tempfile
 import time
-from typing import Dict, List, Tuple
 import sys
 from itertools import permutations
 
@@ -225,8 +224,8 @@ def create_test_config_bb(temp_dir: Path, pp_file: Path, ip_file: Path,
     return MockConfig(config_dict)
 
 
-def compare_pareto_fronts(front1: List[Dict], front2: List[Dict], 
-                          tolerance: float = 1e-9) -> Tuple[bool, str]:
+def compare_pareto_fronts(front1: list[dict], front2: list[dict], 
+                          tolerance: float = 1e-9) -> tuple[bool, str]:
     """
     Compare two Pareto fronts for equivalence.
     

@@ -119,7 +119,6 @@ from matplotlib.colors import LinearSegmentedColormap
 import seaborn as sns
 from pathlib import Path
 import sys
-from typing import List, Dict, Tuple, Optional
 from collections import defaultdict
 from datetime import datetime
 
@@ -140,7 +139,7 @@ PLOT_COLORS = [
     '#bcbd22',  # Olive
 ]
 
-def get_colors(n_colors: int) -> List[str]:
+def get_colors(n_colors: int) -> list[str]:
     """Get high-contrast colors, cycling if needed."""
     if n_colors <= len(PLOT_COLORS):
         return PLOT_COLORS[:n_colors]
@@ -269,7 +268,7 @@ def load_layout_data(file_path: str, verbose: bool = False) -> pd.DataFrame:
         print(f"Error loading {file_path}: {e}")
         sys.exit(1)
 
-def find_available_metrics(dfs: List[pd.DataFrame], verbose: bool = False) -> List[str]:
+def find_available_metrics(dfs: list[pd.DataFrame], verbose: bool = False) -> list[str]:
     """Find which scorer metrics are available in the data."""
     # Get all columns that appear to be numeric metrics (excluding 'layout', 'letters', 'positions')
     all_metrics = set()
@@ -288,8 +287,8 @@ def find_available_metrics(dfs: List[pd.DataFrame], verbose: bool = False) -> Li
     
     return available_metrics
 
-def filter_and_order_metrics(dfs: List[pd.DataFrame], requested_metrics: Optional[List[str]] = None, 
-                           verbose: bool = False) -> List[str]:
+def filter_and_order_metrics(dfs: list[pd.DataFrame], requested_metrics: list[str] | None = None, 
+                           verbose: bool = False) -> list[str]:
     """Filter and order metrics based on user specification."""
     # Get all available metrics
     available_metrics = find_available_metrics(dfs, verbose)
@@ -323,8 +322,8 @@ def filter_and_order_metrics(dfs: List[pd.DataFrame], requested_metrics: Optiona
     
     return filtered_metrics
 
-def normalize_data(dfs: List[pd.DataFrame], positive_metrics: List[str], 
-                  negative_metrics: List[str]) -> List[pd.DataFrame]:
+def normalize_data(dfs: list[pd.DataFrame], positive_metrics: list[str], 
+                  negative_metrics: list[str]) -> list[pd.DataFrame]:
     """Normalize all data across tables for fair comparison.
     
     Args:
@@ -392,7 +391,7 @@ def normalize_data(dfs: List[pd.DataFrame], positive_metrics: List[str],
     
     return normalized_dfs
 
-def get_table_colors(num_tables: int) -> List[str]:
+def get_table_colors(num_tables: int) -> list[str]:
     """Get color scheme based on number of tables."""
     if num_tables == 1:
         return ['gray']
@@ -407,9 +406,9 @@ def get_table_colors(num_tables: int) -> List[str]:
         cmap = plt.cm.Set3
         return [cmap(i / num_tables) for i in range(num_tables)]
 
-def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str], 
-                         metrics: List[str], summary_output: Optional[str] = None,
-                         sort_by: Optional[str] = None) -> pd.DataFrame:
+def create_sorted_summary(dfs: list[pd.DataFrame], table_names: list[str], 
+                         metrics: list[str], summary_output: str | None = None,
+                         sort_by: str | None = None) -> pd.DataFrame:
     """Create summary table sorted by specified metric or average performance."""
     
     all_summaries = []
@@ -564,10 +563,10 @@ def create_sorted_summary(dfs: List[pd.DataFrame], table_names: List[str],
     
     return combined_summary
 
-def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str], 
-                       metrics: List[str], output_path: Optional[str] = None,
-                       summary_df: Optional[pd.DataFrame] = None,
-                       sort_by: Optional[str] = None,
+def create_heatmap_plot(dfs: list[pd.DataFrame], table_names: list[str], 
+                       metrics: list[str], output_path: str | None = None,
+                       summary_df: pd.DataFrame | None = None,
+                       sort_by: str | None = None,
                        is_normalized: bool = True) -> None:
     """Create heatmap visualization with layouts on y-axis and metrics on x-axis.
     
@@ -748,9 +747,9 @@ def create_heatmap_plot(dfs: List[pd.DataFrame], table_names: List[str],
     plt.close()
 
 
-def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str], 
-                        metrics: List[str], output_path: Optional[str] = None,
-                        summary_df: Optional[pd.DataFrame] = None,
+def create_parallel_plot(dfs: list[pd.DataFrame], table_names: list[str], 
+                        metrics: list[str], output_path: str | None = None,
+                        summary_df: pd.DataFrame | None = None,
                         is_normalized: bool = True) -> None:
     """Create parallel coordinates plot with performance-based coloring.
     
@@ -980,9 +979,9 @@ def create_parallel_plot(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def plot_objective_scatter(dfs: List[pd.DataFrame], table_names: List[str],
-                          metrics: List[str], output_path: Optional[str] = None,
-                          sort_by: Optional[str] = None) -> None:
+def plot_objective_scatter(dfs: list[pd.DataFrame], table_names: list[str],
+                          metrics: list[str], output_path: str | None = None,
+                          sort_by: str | None = None) -> None:
     """Create scatter plot of objective scores."""
     if not metrics:
         return
@@ -1043,8 +1042,8 @@ def plot_objective_scatter(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def plot_pareto_front_2d(dfs: List[pd.DataFrame], table_names: List[str],
-                        metrics: List[str], output_path: Optional[str] = None) -> None:
+def plot_pareto_front_2d(dfs: list[pd.DataFrame], table_names: list[str],
+                        metrics: list[str], output_path: str | None = None) -> None:
     """Create 2D Pareto front if we have exactly 2 objectives."""
     if len(metrics) != 2:
         return
@@ -1106,8 +1105,8 @@ def plot_pareto_front_2d(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def plot_correlation_matrix(dfs: List[pd.DataFrame], table_names: List[str],
-                           metrics: List[str], output_path: Optional[str] = None) -> None:
+def plot_correlation_matrix(dfs: list[pd.DataFrame], table_names: list[str],
+                           metrics: list[str], output_path: str | None = None) -> None:
     """Create correlation matrix of objectives."""
     if len(metrics) < 2:
         return
@@ -1140,8 +1139,8 @@ def plot_correlation_matrix(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def plot_stability_matrix(dfs: List[pd.DataFrame], table_names: List[str],
-                         output_path: Optional[str] = None) -> None:
+def plot_stability_matrix(dfs: list[pd.DataFrame], table_names: list[str],
+                         output_path: str | None = None) -> None:
     """Create letter-position stability heatmap.
     
     Only works with MOO format data (items + positions where positions are keyboard keys).
@@ -1288,8 +1287,8 @@ def plot_stability_matrix(dfs: List[pd.DataFrame], table_names: List[str],
     
     plt.close()
 
-def generate_report(dfs: List[pd.DataFrame], table_names: List[str], 
-                   metrics: List[str], summary_df: Optional[pd.DataFrame] = None,
+def generate_report(dfs: list[pd.DataFrame], table_names: list[str], 
+                   metrics: list[str], summary_df: pd.DataFrame | None = None,
                    output_dir: Path = Path('../output')) -> str:
     """Generate comprehensive analysis report."""
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -1440,7 +1439,7 @@ def generate_report(dfs: List[pd.DataFrame], table_names: List[str],
     print(f"\nAnalysis report saved: {report_path}")
     return str(report_path)
 
-def print_summary_stats(dfs: List[pd.DataFrame], table_names: List[str], metrics: List[str]) -> None:
+def print_summary_stats(dfs: list[pd.DataFrame], table_names: list[str], metrics: list[str]) -> None:
     """Print summary statistics for the loaded data."""
     print("\n" + "="*60)
     print("SUMMARY STATISTICS")
